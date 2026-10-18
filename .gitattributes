@@ -1,0 +1,2 @@
+# Prisma migration checksums must remain stable on Windows and in CI.
+prisma/migrations/**/migration.sql text eol=lf
