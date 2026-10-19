@@ -1,0 +1,8 @@
+{
+  "name": "bunny-library",
+  "main": "worker.mjs",
+  "account_id": "bb0d8a6aac4da656fc72c011819cafb7",
+  "compatibility_date": "2026-10-18",
+  "workers_dev": true,
+  "minify": true
+}

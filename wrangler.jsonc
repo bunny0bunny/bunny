@@ -1,6 +1,6 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "bunny-library",
+  "name": "bunny",
   "main": ".open-next/worker.js",
   "compatibility_date": "2026-10-18",
   "compatibility_flags": [
@@ -16,7 +16,7 @@
   "services": [
     {
       "binding": "WORKER_SELF_REFERENCE",
-      "service": "bunny-library"
+      "service": "bunny"
     }
   ],
   "vars": {
@@ -25,7 +25,12 @@
     "MEDIA_STORAGE_PREFIX": "prod",
     "MEDIA_UPLOADS_ENABLED": "1"
   },
-  "r2_buckets": [{ "binding": "MEDIA", "bucket_name": "bunny-chapters" }],
+  "r2_buckets": [
+    {
+      "binding": "MEDIA",
+      "bucket_name": "bunny-chapters"
+    }
+  ],
   "observability": {
     "enabled": false
   },

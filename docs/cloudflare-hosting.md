@@ -1,6 +1,6 @@
 # Cloudflare hosting
 
-Status (2026-10-19): Preparing share images as static PNGs reduced the complete minified Worker from **3,677.22 to 2,929.51 KiB gzip**, below the free 3 MiB limit. The application is deployed at [the client Workers URL](https://bunny-library.bunny-library-bb0d8a6a.workers.dev); remote database, home, series, reader, share images and anonymous access checks passed. GitHub automatic builds are not connected. No paid plan has been activated. R2 chapter uploads remain a separate, unfinished feature.
+Status (2026-10-19): The client app is deployed as Worker `bunny` at [the client Workers URL](https://bunny.bunny-library-bb0d8a6a.workers.dev). The PDF/R2 release is2958.61KiB gzip, below the free3MiB limit; browser PDF upload, team approval and private R2 previews were verified, including a hosted21MiB synthetic PDF. GitHub main builds are connected and the prior feature release passed. No paid processing plan has been activated. The previous `bunny-library` Worker is a small redirect preserving old bookmarks and account-link paths/query strings; its source/config lives in `infra/legacy-redirect`.
 
 Evidence: [hosting verification report](superpowers/reports/2026-10-19-cloudflare-hosting-verification.md).
 
@@ -73,3 +73,7 @@ CI consumes committed assets without database access. New works without a prepar
 ## Upload limitation
 
 R2 credentials being valid does not make admin uploads work. The application currently has no PDF upload pipeline or direct-to-R2 upload endpoint. On Workers, creating a non-novel chapter creates an empty draft instead of attempting persistent filesystem writes. The approved upload feature still needs implementation, preview, authorization, storage validation and editorial approval integration before chapter uploads can be presented as working.
+
+## Canonical URL changes
+
+Keep `APP_ORIGIN` and `NEXTAUTH_URL` equal to the canonical Worker origin in encrypted runtime settings and private local environment files. Keep the `WORKER_SELF_REFERENCE` service name equal to the app Worker name in `wrangler.jsonc`. Renaming the existing Worker through its immutable ID preserves its identity; do not deploy the application to the legacy redirect Worker. Existing host-scoped sessions require signing in on the new host.
