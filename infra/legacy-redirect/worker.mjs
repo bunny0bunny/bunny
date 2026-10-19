@@ -1,5 +1,5 @@
 // Preserve existing bookmarks and account links after the Worker rename.
-const origin = "https://bunny.bunny-library-bb0d8a6a.workers.dev";
+const origin = "https://bunny.bunny-library.workers.dev";
 export default {
   fetch(request) {
     const current = new URL(request.url);

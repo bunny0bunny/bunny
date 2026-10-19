@@ -1,6 +1,6 @@
 # Cloudflare hosting
 
-Status (2026-10-19): The client app is deployed as Worker `bunny` at [the client Workers URL](https://bunny.bunny-library-bb0d8a6a.workers.dev). The PDF/R2 release is2958.61KiB gzip, below the free3MiB limit; browser PDF upload, team approval and private R2 previews were verified, including a hosted21MiB synthetic PDF. GitHub main builds are connected and the prior feature release passed. No paid processing plan has been activated. The previous `bunny-library` Worker is a small redirect preserving old bookmarks and account-link paths/query strings; its source/config lives in `infra/legacy-redirect`.
+Status (2026-10-19): The client app is deployed as Worker `bunny` at [the client Workers URL](https://bunny.bunny-library.workers.dev). The PDF/R2 release is2958.61KiB gzip, below the free3MiB limit; browser PDF upload, team approval and private R2 previews were verified, including a hosted21MiB synthetic PDF. GitHub main builds are connected and the prior feature release passed. No paid processing plan has been activated. The previous `bunny-library` Worker is a small redirect preserving old bookmarks and account-link paths/query strings; its source/config lives in `infra/legacy-redirect`.
 
 Evidence: [hosting verification report](superpowers/reports/2026-10-19-cloudflare-hosting-verification.md).
 
@@ -77,3 +77,5 @@ R2 credentials being valid does not make admin uploads work. The application cur
 ## Canonical URL changes
 
 Keep `APP_ORIGIN` and `NEXTAUTH_URL` equal to the canonical Worker origin in encrypted runtime settings and private local environment files. Keep the `WORKER_SELF_REFERENCE` service name equal to the app Worker name in `wrangler.jsonc`. Renaming the existing Worker through its immutable ID preserves its identity; do not deploy the application to the legacy redirect Worker. Existing host-scoped sessions require signing in on the new host.
+
+Account subdomain shortened on 2026-10-20 to `bunny-library`. Former `*.bunny-library-bb0d8a6a.workers.dev` addresses no longer route; use the current URL for bookmarks and request fresh account emails when needed.
