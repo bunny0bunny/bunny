@@ -8,7 +8,7 @@ export function BrandMark({ className = "size-11", alt = "", resolution = 128 }:
       width={resolution}
       height={resolution}
       alt={alt}
-      className={`shrink-0 object-contain dark:mix-blend-lighten ${className}`}
+      className={`shrink-0 object-contain ${className}`}
       unoptimized
     />
   );
