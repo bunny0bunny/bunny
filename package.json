@@ -20,7 +20,8 @@
     "db:reset": "node scripts/with-env.mjs prisma migrate reset",
     "cf:build": "node scripts/cloudflare-build.mjs",
     "cf:preview": "node scripts/cloudflare-artifacts.mjs && wrangler dev",
-    "cf:deploy": "node scripts/cloudflare-artifacts.mjs && wrangler deploy"
+    "cf:deploy": "node scripts/cloudflare-artifacts.mjs && node node_modules/@opennextjs/cloudflare/dist/cli/index.js deploy",
+    "share:prepare": "node scripts/with-env.mjs bun scripts/prepare-share-images.tsx"
   },
   "dependencies": {
     "@fontsource/ibm-plex-sans-arabic": "^5.3.0",

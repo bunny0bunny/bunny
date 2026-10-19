@@ -28,6 +28,11 @@ const nextConfig: NextConfig = {
   ...(isCloudflare ? { images: { unoptimized: true } } : {}),
   webpack(config, { webpack, isServer, nextRuntime }) {
     if (isCloudflare) {
+      // Eliminate Node-only share-card generation before the Worker is bundled.
+      // This is a runtime target constant, never an application secret.
+      config.plugins.push(new webpack.DefinePlugin({
+        "process.env.BUNNY_RUNTIME": JSON.stringify("cloudflare"),
+      }));
       config.resolve.alias = {
         ...config.resolve.alias,
         "@prisma/client$": path.resolve(".generated/prisma-worker/client.ts"),
@@ -51,6 +56,10 @@ const nextConfig: NextConfig = {
                 if (resources.some(resource => resource.endsWith("/src/lib/db.ts")) ||
                     !resources.some(resource => resource.endsWith("/src/lib/db.worker.ts"))) {
                   throw new Error("Cloudflare build must include the Worker database client and exclude the Node database client");
+                }
+                if (resources.some(resource => /\/next\/dist\/(?:compiled\/@vercel\/og|server\/og)\//.test(resource) ||
+                    /\/(?:resvg|yoga)\.wasm(?:\?|$)/.test(resource))) {
+                  throw new Error("Cloudflare build must serve stored share images without the image-generation runtime");
                 }
               });
             });

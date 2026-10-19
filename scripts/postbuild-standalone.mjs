@@ -12,6 +12,12 @@ import { existsSync, cpSync } from "node:fs";
 
 const root = process.cwd();
 
+if (process.env.BUNNY_RUNTIME === "cloudflare") {
+  // OpenNext collects .next/static and public directly; avoid a second copy.
+  console.log("[postbuild] OpenNext manages Cloudflare assets — skipping standalone asset copy");
+  process.exit(0);
+}
+
 if (!existsSync(`${root}/.next/standalone`)) {
   console.log("[postbuild] no .next/standalone — skipping asset copy (hosted platform)");
   process.exit(0);

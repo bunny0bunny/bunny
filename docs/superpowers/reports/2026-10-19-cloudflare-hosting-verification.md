@@ -1,6 +1,6 @@
 # Cloudflare hosting verification — 2026-10-19
 
-The client repository now has a reviewable OpenNext/Workers preparation branch. It has **not** been published as the application, and GitHub automatic deployment is **not** configured.
+The client application is now deployed at https://bunny-library.bunny-library-bb0d8a6a.workers.dev. GitHub automatic deployment is **not** configured. No paid plan was activated.
 
 ## Confirmed
 
@@ -19,13 +19,26 @@ The client repository now has a reviewable OpenNext/Workers preparation branch. 
 
 Wrangler dry-run measured **4,037.55 KiB gzip** initially and **3,677.22 KiB gzip** with additional minification. The latter is approximately 3.59 MiB, above the free 3 MiB compressed Worker limit. No paid subscription has been activated.
 
-The measured modules include the Prisma query compiler, share-image rendering WASM and the application. Replacing dynamic social share images with static branded images is a possible further optimization, but its final size has not been tested. It must not be promised to fit before rebuilding and measuring.
+The approved follow-up replaced Worker-time social image generation with prepared per-work PNGs, preserving the existing design. The complete build now measures **2,929.51 KiB gzip**, under 3,072 KiB by 142.49 KiB. Its compiler rejects the image renderer/WASM in the Worker graph. Thirteen PNGs (12 public works and a brand fallback) total 1,131,530 bytes as separate static assets. Re-running preparation skipped all unchanged images.
 
-## Remaining before publishing
+The full OpenNext build and TypeScript checks passed. Fourteen focused share-image/database tests passed with 70 assertions; focused lint passed. Claude's consolidated review found no must-fix issues; its optional temporary-file cleanup improvement was applied and checked. Node-only image rendering was exercised by actual preparation; a full ordinary Node release build has not been repeated.
 
-1. Choose the hosting constraint: approve Workers Paid, try a smaller bundle with static social images, or retain another host while using R2 for media. Do not activate billing silently.
-2. Set minimal encrypted runtime bindings and the real canonical HTTPS origin, then deploy and test the remote application. The original root metadata lacks `metadataBase`; fix canonical share URLs before release. A positive real-account login/session test remains required.
-3. Complete the Node regression release build after the final implementation choice. Do not treat local workerd tests as evidence of remote CPU limits or deliverability.
+Direct Wrangler deployment on Windows attempted an npm adapter hand-off and failed before upload. Running the installed OpenNext CLI directly succeeded; `cf:deploy` now uses that entry point while retaining artifact checks.
+
+## Remote deployment evidence
+
+- Cloudflare accepted the application with **17 ms startup**, version `219d9c32-03f3-4d77-9fc2-35411258a0c0` before adding the runtime bindings. Nine minimal encrypted runtime bindings were then installed; no credentials were printed or committed.
+- Remote health returned 200 with database `ok`; home, public series and the webtoon reader returned 200 with document CSP.
+- The actual series PNG and unknown-series fallback both returned 200 and matched their stored asset SHA-256 exactly. Series metadata used the real HTTPS Workers origin.
+- A cover asset returned 200. Anonymous admin redirected to login; studio's streamed document contained the login redirect. Environment-file requests returned 404. The excluded PDF URL returned HTML rather than PDF bytes.
+- Remote CSRF and credentials submission returned the expected 302 credentials rejection for a nonexistent account, with no session cookie issued and no mail sent. This is not a positive login or password-hashing capacity test.
+- These are functional request checks, not sustained load/CPU measurements or a successful real-account login test. Free-plan headroom is limited; future application code can exceed it. Prepared cards require the documented manual content preparation command until publishing automation is implemented.
+
+## Remaining before full launch
+
+1. Verify a positive real-account login/session and remaining account flows on the actual deployment before calling the whole product production-ready. No mail was sent during this hosting phase.
+2. Complete the ordinary Node regression release build if releasing the Node target; the current verified deployment is Workers.
+3. Check sustained traffic/CPU and asset/storage allowances before a public launch. Successful functional requests do not establish capacity or mail deliverability.
 4. Connect the Cloudflare GitHub App only to `bunny0bunny/bunny`, configure `main` and the documented build/deploy commands, then verify the exact commit-triggered deployment. Wrangler OAuth currently lacks Builds API access; dashboard login is also required in the controlled browser.
 5. Implement the separately approved PDF/R2 upload pipeline. Credentials and a reachable bucket do not make admin uploads functional. Worker chapter creation currently leaves an empty draft instead of writing placeholder files to disk.
 

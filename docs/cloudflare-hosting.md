@@ -1,6 +1,6 @@
 # Cloudflare hosting
 
-Status (2026-10-19): OpenNext build and local Workers acceptance checks passed. The minified complete bundle is **3,677.22 KiB gzip**, above the free 3 MiB limit. No application deployment, paid-plan activation or GitHub automatic-build connection has been completed. R2 chapter uploads remain a separate, unfinished feature.
+Status (2026-10-19): Preparing share images as static PNGs reduced the complete minified Worker from **3,677.22 to 2,929.51 KiB gzip**, below the free 3 MiB limit. The application is deployed at [the client Workers URL](https://bunny-library.bunny-library-bb0d8a6a.workers.dev); remote database, home, series, reader, share images and anonymous access checks passed. GitHub automatic builds are not connected. No paid plan has been activated. R2 chapter uploads remain a separate, unfinished feature.
 
 Evidence: [hosting verification report](superpowers/reports/2026-10-19-cloudflare-hosting-verification.md).
 
@@ -55,6 +55,20 @@ Install dependencies with the committed lockfile. Runtime secrets belong to Work
 - SMTP connection/authentication works; do not send test messages without explicit authorization.
 - Original PDF inputs and environment files are unavailable over HTTP.
 - A GitHub push produces a successful build/deployment for that exact commit.
+
+## Prepared social share images
+
+Cloudflare serves prepared 1200×630 PNG cards instead of loading the image renderer on every request. These are social link preview images; reader pages, covers and R2 chapter media are separate. The Node runtime retains dynamic rendering.
+
+After preparing or changing public content, run locally with the client's database environment:
+
+```sh
+bun run share:prepare
+```
+
+Commit `public/share/manifest.json` and the generated PNGs with the content release. The command reads only public works with an already published, due chapter, writes images before replacing the manifest, and skips unchanged valid images. It does not write to the database. Editorial changes create a new content-addressed image; `bun run share:prepare --force` also refreshes rating snapshots. Old images are retained to keep existing links valid.
+
+CI consumes committed assets without database access. New works without a prepared image receive the library brand card until preparation runs. This command is currently manual; automatic generation from the admin/R2 publishing pipeline is not implemented. A compiler guard rejects accidental inclusion of the image renderer/WASM in the Worker.
 
 ## Upload limitation
 
