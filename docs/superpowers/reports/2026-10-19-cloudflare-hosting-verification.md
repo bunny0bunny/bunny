@@ -36,7 +36,7 @@ Direct Wrangler deployment on Windows attempted an npm adapter hand-off and fail
 
 ## Remaining before full launch
 
-1. Verify a positive real-account login/session and remaining account flows on the actual deployment before calling the whole product production-ready. No mail was sent during this hosting phase.
+1. Complete the remaining account flows before calling the whole product production-ready. A subsequent mail-recovery check sent one authorized activation email; the user confirmed receipt, successful activation and login on the actual deployment. See [signup recovery evidence](2026-10-19-signup-mail-recovery.md). This is human confirmation, not an automated login/load test.
 2. Complete the ordinary Node regression release build if releasing the Node target; the current verified deployment is Workers.
 3. Check sustained traffic/CPU and asset/storage allowances before a public launch. Successful functional requests do not establish capacity or mail deliverability.
 4. Connect the Cloudflare GitHub App only to `bunny0bunny/bunny`, configure `main` and the documented build/deploy commands, then verify the exact commit-triggered deployment. Wrangler OAuth currently lacks Builds API access; dashboard login is also required in the controlled browser.

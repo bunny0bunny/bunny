@@ -57,19 +57,21 @@ export async function registerReaderService(input: {
 
   // CAS inside serializable transaction
   let tokenCreated = false;
+  let verificationNickname = nickname;
   const MAX_RETRIES = 5;
   for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
     try {
       await db.$transaction(
         async (tx) => {
           const existing = await tx.profile.findUnique({ where: { email } });
-          if (existing) {
-            // NEVER overwrite password of existing account (verified or unverified)
-            // But return generic success to avoid disclosing account existence
+          if (existing?.emailVerifiedAt || existing?.disabledAt) {
+            // Keep the same public response without reviving disabled accounts.
             return;
           }
 
-          const profile = await tx.profile.create({
+          // A pending account can recover its activation link by signing up again.
+          // Reuse it unchanged: signup must never replace its password or identity.
+          const profile = existing ?? await tx.profile.create({
             data: {
               email,
               nickname,
@@ -80,6 +82,7 @@ export async function registerReaderService(input: {
               authVersion: 0,
             },
           });
+          verificationNickname = profile.nickname;
 
           // Invalidate any older verify tokens for this email
           await tx.accountToken.updateMany({
@@ -120,7 +123,7 @@ export async function registerReaderService(input: {
     await sendAccountMail({
       to: email,
       subject: "تأكيد بريدك الإلكتروني في مكتبة باني",
-      text: `مرحبًا ${nickname}،\n\nيرجى تأكيد حسابك من خلال الرابط التالي:\n${verifyUrl}\n\nصلاحية هذا الرابط ٢٤ ساعة.`,
+      text: `مرحبًا ${verificationNickname}،\n\nيرجى تأكيد حسابك من خلال الرابط التالي:\n${verifyUrl}\n\nصلاحية هذا الرابط ٢٤ ساعة.`,
     });
   }
 
