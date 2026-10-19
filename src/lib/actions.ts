@@ -271,7 +271,7 @@ const createChapterSchema = z.object({
   workflow: z.enum(["draft", "review", "published"]),
   isPremiumDemo: z.boolean(),
   readingDirection: z.enum(["rtl", "ltr"]),
-  pageCount: z.number().int().min(1).max(30),
+  pageCount: z.number().int().min(1).max(30).optional().default(1),
   scheduledFor: z.string().datetime({ offset: true }).nullable().optional(),
   novelBody: z.string().max(60000).optional(),
 });
@@ -333,51 +333,7 @@ export async function createChapter(input: unknown): Promise<ActionResult & { id
     throw err;
   }
 
-  // Workers cannot persist files in public/. Create an empty draft until the
-  // separate R2 upload flow supplies real pages; never invent published content.
-  if (series.format === "novel" || process.env.BUNNY_RUNTIME === "cloudflare") {
-    revalidatePath("/admin/chapters");
-    revalidatePath(`/series/${series.slug}`);
-    return { ok: true, id: chapter.id };
-  }
-
-  // Placeholder abstract pages (deterministic per chapter) — real uploads land in Release B.
-  const isManga = series.format === "manga";
-  const baseDir = isManga ? `/art/pages/${series.slug}/c${d.number}` : `/art/panels/${series.slug}/c${d.number}`;
-  const sourceDir = isManga ? `/art/pages/${series.slug}` : `/art/panels/${series.slug}`;
-  const fs = await import("fs/promises");
-  let template = "";
-  try {
-    const dirs = await fs.readdir(`public${sourceDir}`);
-    const templateChapter = dirs.filter((x) => x.startsWith("c")).sort()[0];
-    if (templateChapter) template = `public${sourceDir}/${templateChapter}`;
-  } catch {}
-
-  const height = isManga ? 1200 : 1100;
-  for (let p = 0; p < d.pageCount; p++) {
-    let imagePath = `${baseDir}/p${String(p + 1).padStart(2, "0")}.webp`;
-    try {
-      await fs.access(`public${imagePath}`);
-    } catch {
-      // copy from an existing template chapter so the reader has real abstract art
-      const files = template ? await fs.readdir(template).catch(() => []) : [];
-      if (files.length) {
-        const src = `${template}/p${String((p % files.length) + 1).padStart(2, "0")}.webp`;
-        const dest = `public${imagePath}`;
-        await fs.mkdir(`public${baseDir}`, { recursive: true });
-        await fs.copyFile(src, dest).catch(() => {});
-      }
-      try {
-        await fs.access(`public${imagePath}`);
-      } catch {
-        imagePath = `/art/covers/${series.slug}.webp`; // ultimate fallback: cover
-      }
-    }
-    await db.chapterPage.create({
-      data: { chapterId: chapter.id, pageIndex: p, imagePath, width: 800, height },
-    });
-  }
-
+  // Visual chapters start empty; the reviewed PDF upload supplies real pages.
   revalidatePath("/admin/chapters");
   revalidatePath(`/admin/series/${series.id}`);
   revalidatePath(`/series/${series.slug}`);

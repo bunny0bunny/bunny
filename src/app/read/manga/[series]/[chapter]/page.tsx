@@ -46,6 +46,7 @@ export default async function MangaReaderPage({
         id: p.id,
         pageIndex: p.pageIndex,
         imagePath: p.imagePath,
+        fallbackImagePath: p.fallbackImagePath,
         width: p.width,
         height: p.height,
       }))}

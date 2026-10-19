@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useRef, useState, useTransition } from "react";
+import { PdfUploadPanel } from "./pdf-upload-panel";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -49,11 +50,12 @@ type PageItem = {
   height: number;
 };
 
-type WorkingRevision = {
+export type WorkingRevision = {
   id: string;
   chapterId: string;
   revisionNumber: number;
   version: number;
+  pendingUploadId?: string | null;
   status: "draft" | "review" | "changes_requested" | "approved" | "scheduled" | "published" | "withdrawn";
   titleAr: string;
   readingDirection: "rtl" | "ltr";
@@ -145,16 +147,20 @@ export function EditorialEditor({
   publishedSnapshot,
   events,
   currentActorRole,
+  uploadsEnabled,
 }: {
   chapter: ChapterMeta;
   initialRevision: WorkingRevision;
   publishedSnapshot: PublishedRevision;
   events: EditorialEvent[];
   currentActorRole: "contributor" | "editor" | "admin";
+  uploadsEnabled: boolean;
 }) {
   const router = useRouter();
   const { toast } = useToast();
   const [isPending, startTransition] = useTransition();
+  const [uploadBusy, setUploadBusy] = useState(false);
+  const uploadBusyRef = useRef(false);
 
   // Working state
   const [revision, setRevision] = useState<WorkingRevision>(initialRevision);
@@ -194,11 +200,15 @@ export function EditorialEditor({
   const isEditor = currentActorRole === "editor" || isAdmin;
   const isVisual = chapter.format !== "novel";
   const isReadOnlyStatus = revision.status === "published" || revision.status === "withdrawn";
+  const uploadBlocked = uploadBusy || Boolean(revision.pendingUploadId);
+  const actionsBlocked = isPending || uploadBlocked;
+  const importedPages = pages.some((page) => page.imagePath.startsWith("/api/media/"));
   const hasUnsavedChanges = titleAr.trim() !== revision.titleAr || readingDirection !== revision.readingDirection || isPremiumDemo !== revision.isPremiumDemo ||
     (chapter.format === "novel" ? novelBody !== (revision.novelBody ?? "") : JSON.stringify(pages.map(({ pageIndex, imagePath, width, height }) => [pageIndex, imagePath, width, height])) !== JSON.stringify((revision.pagesJson as typeof pages).map(({ pageIndex, imagePath, width, height }) => [pageIndex, imagePath, width, height])));
 
   // Reorder pages
   function movePage(index: number, direction: "up" | "down") {
+    if (actionsBlocked || importedPages || isReadOnlyStatus) return;
     if (direction === "up" && index === 0) return;
     if (direction === "down" && index === pages.length - 1) return;
     const targetIndex = direction === "up" ? index - 1 : index + 1;
@@ -212,6 +222,7 @@ export function EditorialEditor({
   }
 
   function removePage(index: number) {
+    if (actionsBlocked || importedPages || isReadOnlyStatus) return;
     if (pages.length <= 1) {
       toast({ title: "تنبيه", description: "يجب الإبقاء على صفحة واحدة على الأقل.", variant: "destructive" });
       return;
@@ -220,8 +231,29 @@ export function EditorialEditor({
     setPages(updated);
   }
 
+  function guardUpload() {
+    if (uploadBusyRef.current || revision.pendingUploadId || isPending) {
+      setErrorMessage("أكمل رفع PDF أو ألغِ المحاولة الحالية قبل تعديل النسخة أو تنفيذ إجراءات المراجعة والنشر.");
+      return true;
+    }
+    return false;
+  }
+
+  function applyUploadRevision(next: WorkingRevision) {
+    setRevision(next);
+    setTitleAr(next.titleAr);
+    setReadingDirection(next.readingDirection);
+    setIsPremiumDemo(next.isPremiumDemo);
+    setNovelBody(next.novelBody ?? "");
+    setPages(Array.isArray(next.pagesJson) ? next.pagesJson.map((page: PageItem, index: number) => ({ ...page, pageIndex: index })) : []);
+    setScheduleDatetime(next.scheduledFor ? localDatetime(next.scheduledFor) : "");
+    setErrorMessage(null);
+    router.refresh();
+  }
+
   // Save draft
   async function handleSaveDraft() {
+    if (guardUpload()) return;
     setErrorMessage(null);
     startTransition(async () => {
       const res = await updateDraftSnapshotAction({
@@ -254,6 +286,7 @@ export function EditorialEditor({
 
   // Fork / Open new draft if terminal
   async function handleOpenNewDraft() {
+    if (guardUpload()) return;
     setErrorMessage(null);
     startTransition(async () => {
       const res = await openOrCreateDraftAction({ chapterId: chapter.id });
@@ -280,6 +313,7 @@ export function EditorialEditor({
 
   // Submit for review
   async function handleSubmitForReview() {
+    if (guardUpload()) return;
     if (hasUnsavedChanges) { setErrorMessage("احفظ تغييرات المسودة أولًا."); return; }
     setErrorMessage(null);
     startTransition(async () => {
@@ -301,6 +335,7 @@ export function EditorialEditor({
 
   // Return for changes
   async function handleReturnForChanges() {
+    if (guardUpload()) return;
     if (hasUnsavedChanges) { setErrorMessage("احفظ تغييرات المسودة أولًا."); return; }
     if (!returnReason.trim()) {
       setErrorMessage("سبب طلب التعديلات مطلوب.");
@@ -328,6 +363,7 @@ export function EditorialEditor({
 
   // Recommend approval
   async function handleRecommendApproval() {
+    if (guardUpload()) return;
     if (hasUnsavedChanges) { setErrorMessage("احفظ تغييرات المسودة أولًا."); return; }
     setErrorMessage(null);
     startTransition(async () => {
@@ -350,6 +386,7 @@ export function EditorialEditor({
 
   // Approve revision (Admin)
   async function handleApproveRevision() {
+    if (guardUpload()) return;
     if (hasUnsavedChanges) { setErrorMessage("احفظ تغييرات المسودة أولًا."); return; }
     setErrorMessage(null);
     startTransition(async () => {
@@ -371,6 +408,7 @@ export function EditorialEditor({
 
   // Publish now (Admin)
   async function handlePublishNow() {
+    if (guardUpload()) return;
     if (hasUnsavedChanges) { setErrorMessage("احفظ تغييرات المسودة أولًا."); return; }
     setErrorMessage(null);
     startTransition(async () => {
@@ -392,6 +430,7 @@ export function EditorialEditor({
 
   // Schedule revision (Admin)
   async function handleSchedule() {
+    if (guardUpload()) return;
     if (hasUnsavedChanges) { setErrorMessage("احفظ تغييرات المسودة أولًا."); return; }
     if (!scheduleDatetime) {
       setErrorMessage("يرجى تحديد موعد الجدولة المستقبلي.");
@@ -423,6 +462,7 @@ export function EditorialEditor({
 
   // Cancel schedule (Admin)
   async function handleCancelSchedule() {
+    if (guardUpload()) return;
     if (hasUnsavedChanges) { setErrorMessage("احفظ تغييرات المسودة أولًا."); return; }
     setErrorMessage(null);
     startTransition(async () => {
@@ -444,6 +484,7 @@ export function EditorialEditor({
 
   // Withdraw chapter (Admin)
   async function handleWithdraw() {
+    if (guardUpload()) return;
     if (!publishedSnapshot) {
       setErrorMessage("لا توجد نسخة منشورة حاليًا لسحبها.");
       return;
@@ -533,7 +574,7 @@ export function EditorialEditor({
           {isReadOnlyStatus && (
             <Button
               onClick={handleOpenNewDraft}
-              disabled={isPending}
+              disabled={actionsBlocked}
               className="min-h-[44px] gap-2 bg-primary text-primary-foreground hover:bg-primary/90"
             >
               {isPending ? <Loader2 className="size-4 animate-spin" /> : <RotateCcw className="size-4" />}
@@ -545,8 +586,9 @@ export function EditorialEditor({
           <div className="flex rounded-lg border border-border/60 bg-secondary/40 p-1">
             <button
               type="button"
-              onClick={() => setActiveTab("edit")}
-              className={`min-h-[36px] rounded-md px-3 text-xs font-medium transition ${
+              disabled={uploadBusy}
+              onClick={() => { if (!uploadBusyRef.current) setActiveTab("edit"); }}
+              className={`min-h-[44px] rounded-md px-3 text-xs font-medium transition disabled:cursor-wait disabled:opacity-50 ${
                 activeTab === "edit" ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
               }`}
             >
@@ -554,8 +596,9 @@ export function EditorialEditor({
             </button>
             <button
               type="button"
-              onClick={() => setActiveTab("preview")}
-              className={`min-h-[36px] rounded-md px-3 text-xs font-medium transition ${
+              disabled={uploadBusy}
+              onClick={() => { if (!uploadBusyRef.current) setActiveTab("preview"); }}
+              className={`min-h-[44px] rounded-md px-3 text-xs font-medium transition disabled:cursor-wait disabled:opacity-50 ${
                 activeTab === "preview" ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
               }`}
             >
@@ -563,8 +606,9 @@ export function EditorialEditor({
             </button>
             <button
               type="button"
-              onClick={() => setActiveTab("history")}
-              className={`min-h-[36px] rounded-md px-3 text-xs font-medium transition ${
+              disabled={uploadBusy}
+              onClick={() => { if (!uploadBusyRef.current) setActiveTab("history"); }}
+              className={`min-h-[44px] rounded-md px-3 text-xs font-medium transition disabled:cursor-wait disabled:opacity-50 ${
                 activeTab === "history" ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
               }`}
             >
@@ -600,7 +644,7 @@ export function EditorialEditor({
                   variant="destructive"
                   size="sm"
                   onClick={handleWithdraw}
-                  disabled={isPending || !withdrawReason.trim()}
+                  disabled={actionsBlocked || !withdrawReason.trim()}
                   className="min-h-[44px] gap-1.5"
                 >
                   سحب الفصل من العرض
@@ -624,7 +668,7 @@ export function EditorialEditor({
                 <Input
                   value={titleAr}
                   onChange={(e) => setTitleAr(e.target.value)}
-                  disabled={isReadOnlyStatus || isPending}
+                  disabled={isReadOnlyStatus || actionsBlocked}
                   className="min-h-[44px] bg-background"
                   placeholder="أدخل عنوان الفصل…"
                 />
@@ -636,7 +680,7 @@ export function EditorialEditor({
                   <select
                     value={readingDirection}
                     onChange={(e) => setReadingDirection(e.target.value as "rtl" | "ltr")}
-                    disabled={isReadOnlyStatus || isPending}
+                    disabled={isReadOnlyStatus || actionsBlocked}
                     className="min-h-[44px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
                   >
                     <option value="rtl">من اليمين إلى اليسار (يابانية / RTL)</option>
@@ -651,13 +695,28 @@ export function EditorialEditor({
                     type="checkbox"
                     checked={isPremiumDemo}
                     onChange={(e) => setIsPremiumDemo(e.target.checked)}
-                    disabled={isReadOnlyStatus || isPending}
+                    disabled={isReadOnlyStatus || actionsBlocked}
                     className="size-5 rounded border-border accent-primary"
                   />
                   <span>قفل الفصل (تجربة حصرية / Premium Demo)</span>
                 </label>
               )}
             </div>
+
+            {isVisual && <PdfUploadPanel
+              revisionId={revision.id}
+              version={revision.version}
+              pendingUploadId={revision.pendingUploadId}
+              uploadsEnabled={uploadsEnabled}
+              disabled={isReadOnlyStatus || isPending}
+              unsaved={hasUnsavedChanges}
+              onBusyChange={(value) => { uploadBusyRef.current = value; setUploadBusy(value); }}
+              onStarted={(uploadId, version) => {
+                setRevision((current) => ({ ...current, version, pendingUploadId: uploadId, status: "draft", approvedAt: null, approvedById: null, scheduledFor: null }));
+                setScheduleDatetime("");
+              }}
+              onRevision={applyUploadRevision}
+            />}
 
             {/* Novel Body or Pages Tool */}
             {chapter.format === "novel" ? (
@@ -671,7 +730,7 @@ export function EditorialEditor({
                 <Textarea
                   value={novelBody}
                   onChange={(e) => setNovelBody(e.target.value)}
-                  disabled={isReadOnlyStatus || isPending}
+                  disabled={isReadOnlyStatus || actionsBlocked}
                   rows={14}
                   className="min-h-[200px] bg-background leading-relaxed"
                   placeholder="اكتب أو الصق نص الفصل هنا… (كل سطر جديد يمثل فقرة منفصلة)"
@@ -682,7 +741,7 @@ export function EditorialEditor({
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <h2 className="text-base font-bold text-foreground">صفحات الفصل ({pages.length})</h2>
                   <p className="text-xs text-muted-foreground">
-                    إعادة الترتيب والحذف متاحة لصفحات الفصل الحالية فقط (رفع الصفحات مغلق حاليًا).
+                    {importedPages ? "صفحات PDF للمعاينة؛ استبدل الملف كاملًا لتعديلها." : "يمكن ترتيب صفحات العرض القديمة أو حذفها، أو استبدالها بملف PDF كامل."}
                   </p>
                 </div>
 
@@ -709,15 +768,15 @@ export function EditorialEditor({
                           </span>
                         </div>
 
-                        {!isReadOnlyStatus && (
+                        {!isReadOnlyStatus && !importedPages && (
                           <div className="mt-2 flex items-center justify-between gap-1">
                             <div className="flex items-center gap-1">
                               <Button
                                 size="icon"
                                 variant="ghost"
                                 onClick={() => movePage(index, "up")}
-                                disabled={index === 0 || isPending}
-                                className="min-h-[36px] min-w-[36px]"
+                                disabled={index === 0 || actionsBlocked}
+                                className="min-h-[44px] min-w-[44px]"
                                 title="تحريك لأعلى"
                                 aria-label={`تحريك الصفحة ${index + 1} لأعلى`}
                               >
@@ -727,8 +786,8 @@ export function EditorialEditor({
                                 size="icon"
                                 variant="ghost"
                                 onClick={() => movePage(index, "down")}
-                                disabled={index === pages.length - 1 || isPending}
-                                className="min-h-[36px] min-w-[36px]"
+                                disabled={index === pages.length - 1 || actionsBlocked}
+                                className="min-h-[44px] min-w-[44px]"
                                 title="تحريك لأسفل"
                                 aria-label={`تحريك الصفحة ${index + 1} لأسفل`}
                               >
@@ -739,8 +798,8 @@ export function EditorialEditor({
                               size="icon"
                               variant="ghost"
                               onClick={() => removePage(index)}
-                              disabled={isPending}
-                              className="min-h-[36px] min-w-[36px] text-danger hover:bg-danger/10"
+                              disabled={actionsBlocked}
+                              className="min-h-[44px] min-w-[44px] text-danger hover:bg-danger/10"
                               title="حذف الصفحة من النسخة"
                               aria-label={`حذف الصفحة ${index + 1}`}
                             >
@@ -765,7 +824,7 @@ export function EditorialEditor({
               {!isReadOnlyStatus && (
                 <Button
                   onClick={handleSaveDraft}
-                  disabled={isPending}
+                  disabled={actionsBlocked}
                   className="min-h-[44px] w-full gap-2 bg-primary text-primary-foreground hover:bg-primary/90"
                 >
                   {isPending ? <Loader2 className="size-4 animate-spin" /> : <FileText className="size-4" />}
@@ -777,7 +836,7 @@ export function EditorialEditor({
               {(revision.status === "draft" || revision.status === "changes_requested") && (
                 <Button
                   onClick={handleSubmitForReview}
-                  disabled={isPending || hasUnsavedChanges}
+                  disabled={actionsBlocked || hasUnsavedChanges}
                   variant="outline"
                   className="min-h-[44px] w-full gap-2 border-primary/40 text-primary hover:bg-primary/10"
                 >
@@ -801,7 +860,7 @@ export function EditorialEditor({
                     />
                     <Button
                       onClick={handleReturnForChanges}
-                      disabled={isPending || hasUnsavedChanges || !returnReason.trim()}
+                      disabled={actionsBlocked || hasUnsavedChanges || !returnReason.trim()}
                       variant="outline"
                       size="sm"
                       className="min-h-[44px] w-full border-danger/40 text-danger hover:bg-danger/10"
@@ -820,7 +879,7 @@ export function EditorialEditor({
                     />
                     <Button
                       onClick={handleRecommendApproval}
-                      disabled={isPending || hasUnsavedChanges}
+                      disabled={actionsBlocked || hasUnsavedChanges}
                       variant="outline"
                       size="sm"
                       className="min-h-[44px] w-full border-gold/40 text-gold hover:bg-gold/10"
@@ -840,7 +899,7 @@ export function EditorialEditor({
                   {(revision.status === "draft" || revision.status === "review" || revision.status === "changes_requested") && (
                     <Button
                       onClick={handleApproveRevision}
-                      disabled={isPending || hasUnsavedChanges}
+                      disabled={actionsBlocked || hasUnsavedChanges}
                       variant="outline"
                       className="min-h-[44px] w-full gap-2 border-success/40 text-success hover:bg-success/10"
                     >
@@ -853,7 +912,7 @@ export function EditorialEditor({
                   {(revision.status === "approved" || revision.status === "scheduled") && (
                     <Button
                       onClick={handlePublishNow}
-                      disabled={isPending || hasUnsavedChanges}
+                      disabled={actionsBlocked || hasUnsavedChanges}
                       className="min-h-[44px] w-full gap-2 bg-success text-white hover:bg-success/90"
                     >
                       <Sparkles className="size-4" />
@@ -874,7 +933,7 @@ export function EditorialEditor({
                       />
                       <Button
                         onClick={handleSchedule}
-                        disabled={isPending || hasUnsavedChanges || !scheduleDatetime}
+                        disabled={actionsBlocked || hasUnsavedChanges || !scheduleDatetime}
                         variant="outline"
                         className="min-h-[44px] w-full gap-2 border-primary/40 text-primary hover:bg-primary/10"
                       >
@@ -888,7 +947,7 @@ export function EditorialEditor({
                   {revision.status === "scheduled" && (
                     <Button
                       onClick={handleCancelSchedule}
-                      disabled={isPending || hasUnsavedChanges}
+                      disabled={actionsBlocked || hasUnsavedChanges}
                       variant="ghost"
                       className="min-h-[44px] w-full text-xs text-muted-foreground hover:text-danger"
                     >

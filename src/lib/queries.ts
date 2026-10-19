@@ -8,6 +8,7 @@ import { scoreDocument, suggestTitle, tokenizeArabic } from "@/lib/arabic-search
 import type { Category, CommentStatus, Format, Role, SeriesStatus, Workflow } from "@/lib/constants";
 import { isStaffRole } from "@/lib/team-access";
 import { displayCover } from "@/lib/demo-cover-art";
+import { resolveReaderPageImages } from "@/lib/media/reader";
 
 /* ------------------------------------------------------------------ */
 /* Session / role helpers (application-level authorization — there is   */
@@ -316,15 +317,25 @@ export async function getChapterForReading(seriesSlug: string, chapterNumber: nu
     include: { pages: { orderBy: { pageIndex: "asc" } } },
   });
   if (!chapter) return null;
-  const siblings = await db.chapter.findMany({
+  const readerPages: (typeof chapter.pages[number] & { fallbackImagePath?: string })[] = chapter.pages;
+  const [siblings, pages] = await Promise.all([db.chapter.findMany({
     where: { seriesId: series.id, ...liveChapterWhere() },
     orderBy: { number: "asc" },
     select: { number: true, titleAr: true, isPremiumDemo: true },
-  });
+  }), chapter.isPremiumDemo ? readerPages : resolveReaderPageImages(chapter.id, readerPages, {
+    findAssets: (ids) => db.mediaAsset.findMany({
+      where: { id: { in: ids }, chapterId: chapter.id, readyAt: { not: null }, pageIndex: { gte: 0 }, mime: { in: ["image/webp", "image/jpeg"] } },
+      select: { id: true, chapterId: true, objectKey: true, readyAt: true, pageIndex: true, mime: true },
+    }),
+    getStorage: async () => {
+      const { getMediaStorage } = await import("@/lib/media/storage");
+      return getMediaStorage();
+    },
+  })]);
   const idx = siblings.findIndex((c) => c.number === chapter.number);
   return {
     series,
-    chapter,
+    chapter: { ...chapter, pages },
     prev: idx > 0 ? siblings[idx - 1] : null,
     next: idx >= 0 && idx < siblings.length - 1 ? siblings[idx + 1] : null,
     chapterList: siblings,

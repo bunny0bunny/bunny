@@ -15,6 +15,7 @@ node_modules
 
 # next.js
 /.next/
+/.next-media-qa/
 /out/
 
 # production
@@ -61,3 +62,6 @@ server.log
 .dev.vars*
 # Skills directory
 /skills/
+
+# Generated self-hosted PDF renderer assets
+/public/vendor/pdfjs/

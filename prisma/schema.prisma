@@ -141,6 +141,7 @@ model Profile {
   approvedRevisions     ChapterRevision[] @relation("RevisionApprovedBy")
   editorialEvents       ChapterEditorialEvent[]
   accountTokens         AccountToken[]
+  chapterUploads        ChapterUpload[]
 }
 
 model AccountToken {
@@ -250,6 +251,8 @@ model Chapter {
   progress         ReadingProgress[]
   comments         Comment[]
   revisions        ChapterRevision[]
+  uploads          ChapterUpload[]
+  mediaAssets      MediaAsset[]
   editorialEvents  ChapterEditorialEvent[]
 
   @@unique([seriesId, number])
@@ -287,6 +290,9 @@ model ChapterRevision {
   chapter          Chapter               @relation(fields: [chapterId], references: [id], onDelete: Cascade)
   approvedBy       Profile?              @relation("RevisionApprovedBy", fields: [approvedById], references: [id], onDelete: SetNull)
   events           ChapterEditorialEvent[]
+  pendingUploadId  String? @unique
+  pendingUpload    ChapterUpload? @relation("PendingChapterUpload", fields: [pendingUploadId], references: [id], onDelete: SetNull)
+  uploads          ChapterUpload[] @relation("RevisionUploads")
 
   @@unique([chapterId, revisionNumber])
   @@index([chapterId, status])
@@ -448,4 +454,55 @@ model Rating {
   series    Series   @relation(fields: [seriesId], references: [id], onDelete: Cascade)
 
   @@unique([profileId, seriesId])
+}
+
+
+enum ChapterUploadState {
+  uploading
+  ready
+  failed
+  cancelled
+  superseded
+}
+
+model ChapterUpload {
+  id String @id @default(cuid())
+  revisionId String
+  chapterId String
+  createdById String
+  state ChapterUploadState @default(uploading)
+  sourceName String
+  sourceBytes Int
+  expectedPages Int
+  reservedBytes Int @default(0)
+  revisionVersion Int
+  errorCode String?
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  revision ChapterRevision @relation("RevisionUploads", fields: [revisionId], references: [id], onDelete: Cascade)
+  pendingRevision ChapterRevision? @relation("PendingChapterUpload")
+  chapter Chapter @relation(fields: [chapterId], references: [id], onDelete: Cascade)
+  createdBy Profile @relation(fields: [createdById], references: [id], onDelete: Restrict)
+  assets MediaAsset[]
+  @@index([createdById, state, expiresAt])
+  @@index([revisionId])
+}
+
+model MediaAsset {
+  id String @id @default(cuid())
+  uploadId String
+  chapterId String
+  pageIndex Int
+  objectKey String @unique
+  mime String
+  bytes Int
+  width Int?
+  height Int?
+  readyAt DateTime?
+  createdAt DateTime @default(now())
+  upload ChapterUpload @relation(fields: [uploadId], references: [id], onDelete: Cascade)
+  chapter Chapter @relation(fields: [chapterId], references: [id], onDelete: Cascade)
+  @@unique([uploadId, pageIndex])
+  @@index([chapterId])
 }

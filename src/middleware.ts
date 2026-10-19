@@ -22,19 +22,23 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { getToken } from "next-auth/jwt";
 
-function buildCsp(nonce: string): string {
+function buildCsp(nonce: string, pathname: string): string {
   const isDev = process.env.NODE_ENV !== "production";
+  const pdfStudio = pathname.startsWith("/studio/chapters/");
+  const account = process.env.R2_ACCOUNT_ID;
+  const mediaOrigin = account && /^[a-f0-9]{32}$/.test(account) ? ` https://${account}.r2.cloudflarestorage.com` : "";
   return [
     "default-src 'self'",
     // CSP3 browsers obey nonce + 'strict-dynamic' and IGNORE 'self' /
     // 'unsafe-inline' when 'strict-dynamic' is present; 'unsafe-inline' is
     // kept only as the CSP2 fallback. 'unsafe-eval' is dev-only (React
     // refresh / bundler HMR).
-    `script-src 'self' 'nonce-${nonce}' 'strict-dynamic' 'unsafe-inline'${isDev ? " 'unsafe-eval'" : ""}`,
+    `script-src 'self' 'nonce-${nonce}' 'strict-dynamic' 'unsafe-inline'${isDev ? " 'unsafe-eval'" : ""}${pdfStudio ? " 'wasm-unsafe-eval'" : ""}`,
     // Next.js injects inline critical CSS; Radix UI sets inline style attrs.
     "style-src 'self' 'unsafe-inline'",
-    "img-src 'self' data: blob:",
-    "font-src 'self' data:",
+    `img-src 'self' data: blob:${mediaOrigin}`,
+    `font-src 'self' data:${pdfStudio ? " blob:" : ""}`,
+    ...(pdfStudio ? ["worker-src 'self'"] : []),
     "connect-src 'self'",
     "frame-ancestors 'none'",
     "object-src 'none'",
@@ -62,7 +66,7 @@ export async function middleware(request: NextRequest) {
 
   // ---- Per-request nonce-based CSP ----
   const nonce = Buffer.from(crypto.randomUUID()).toString("base64");
-  const csp = buildCsp(nonce);
+  const csp = buildCsp(nonce, request.nextUrl.pathname);
 
   // Request header: Next.js reads the CSP from here and stamps the nonce
   // on every script it renders for this request.

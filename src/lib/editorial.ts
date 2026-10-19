@@ -61,7 +61,7 @@ export function validatePagesSnapshot(pages: unknown): PageSnapshot[] | null {
   for (const [index, raw] of pages.entries()) {
     if (!raw || typeof raw !== "object") return null;
     const page = raw as Partial<PageSnapshot>;
-    if (typeof page.imagePath !== "string" || !/^\/art\/(pages|panels|covers)\//.test(page.imagePath) || /\.\.|[\\?#\u0000]/.test(page.imagePath) || page.imagePath.includes("//")) return null;
+    if (typeof page.imagePath !== "string" || !/^(?:\/art\/(?:pages|panels|covers)\/|\/api\/media\/[a-z0-9]+$)/.test(page.imagePath) || /\.\.|[\\?#\u0000]/.test(page.imagePath) || page.imagePath.includes("//")) return null;
     if (!Number.isInteger(page.width) || !Number.isInteger(page.height) || page.width! < 1 || page.height! < 1 || page.width! > 20000 || page.height! > 20000) return null;
     result.push({ pageIndex: index, imagePath: page.imagePath, width: page.width!, height: page.height! });
   }
@@ -75,7 +75,11 @@ async function pagesBelongToChapter(tx: Tx, chapterId: string, pages: PageSnapsh
   ]);
   const known = new Set(originals.map(page => `${page.imagePath}|${page.width}|${page.height}`));
   for (const revision of history) for (const page of validatePagesSnapshot(revision.pagesJson) ?? []) known.add(`${page.imagePath}|${page.width}|${page.height}`);
-  return pages.every(page => known.has(`${page.imagePath}|${page.width}|${page.height}`));
+  const media = pages.filter(page => page.imagePath.startsWith("/api/media/"));
+  const assets = media.length ? await tx.mediaAsset.findMany({ where: { id: { in: media.map(page => page.imagePath.slice(11)) }, chapterId, pageIndex: { gte: 0 }, readyAt: { not: null }, upload: { state: "ready" } } }) : [];
+  return pages.every(page => page.imagePath.startsWith("/api/media/")
+    ? assets.some(asset => asset.id === page.imagePath.slice(11) && asset.width === page.width && asset.height === page.height)
+    : known.has(`${page.imagePath}|${page.width}|${page.height}`));
 }
 
 export function validateRevisionContent(format: string, revision: { titleAr?: string; novelBody?: string | null; pagesJson?: unknown }) {
@@ -118,7 +122,7 @@ export async function openOrCreateDraft(chapterId: string): Promise<EditorialRes
   }, { invalidate: false });
 }
 
-async function editableRevision(tx: Tx, actor: Actor, input: VersionInput) {
+export async function editableRevision(tx: Tx, actor: Actor, input: VersionInput) {
   const revision = await tx.chapterRevision.findUnique({ where: { id: input.revisionId }, include: { chapter: { include: { series: true } } } });
   if (!revision) return { error: "not_found" } as const;
   if (!await checkStaffSeriesAccess(tx, actor, revision.chapter.seriesId)) return { error: "forbidden" } as const;
@@ -134,11 +138,16 @@ export async function updateDraftSnapshot(input: VersionInput & { titleAr?: stri
     const found = await editableRevision(tx, actor, input);
     if (found.error) return { ok: false, error: found.error };
     const revision = found.revision!;
+    if (revision.pendingUploadId) return { ok: false, error: "upload_pending" };
     if (input.isPremiumDemo !== undefined && actor.role !== "admin") return { ok: false, error: "forbidden" };
     if (input.titleAr !== undefined && (typeof input.titleAr !== "string" || input.titleAr.trim().length < 2 || input.titleAr.length > 300)) return { ok: false, error: "عنوان الفصل غير صالح" };
     if (input.novelBody !== undefined && (typeof input.novelBody !== "string" || input.novelBody.length > 60000)) return { ok: false, error: "نص الفصل يتجاوز الحد المسموح" };
     if (input.readingDirection !== undefined && !["rtl", "ltr"].includes(input.readingDirection)) return { ok: false, error: "اتجاه القراءة غير صالح" };
     const pages = input.pages === undefined ? null : validatePagesSnapshot(input.pages);
+    const currentPages = validatePagesSnapshot(revision.pagesJson);
+    if (input.pages !== undefined && (currentPages?.some(page => page.imagePath.startsWith("/api/media/")) || pages?.some(page => page.imagePath.startsWith("/api/media/"))) && JSON.stringify(pages) !== JSON.stringify(currentPages)) {
+      return { ok: false, error: "لتغيير صفحات الفصل، استبدل ملف PDF كاملًا" };
+    }
     if (input.pages !== undefined && (!pages || !await pagesBelongToChapter(tx, revision.chapterId, pages))) return { ok: false, error: "يمكن ترتيب صفحات هذا الفصل الموجودة فقط" };
     const revoked = ["approved", "scheduled"].includes(revision.status);
     const updated = await tx.chapterRevision.update({ where: { id: revision.id }, data: {
@@ -158,6 +167,7 @@ async function transition(input: VersionInput & { reason?: string; note?: string
     const found = await editableRevision(tx, actor, input);
     if (found.error) return { ok: false, error: found.error };
     const revision = found.revision!;
+    if (revision.pendingUploadId) return { ok: false, error: "upload_pending" };
     const allowed: Record<Transition, string[]> = { submit: ["draft", "changes_requested"], return: ["review", "approved", "scheduled"], recommend: ["review"], approve: ["draft", "review", "changes_requested"], schedule: ["approved", "scheduled"], cancel: ["scheduled"] };
     if (!allowed[action].includes(revision.status)) return { ok: false, error: "الإجراء غير متاح لحالة النسخة الحالية" };
     if (action === "return" && (!input.reason?.trim() || input.reason.length > 2000)) return { ok: false, error: "reason_required" };
@@ -165,6 +175,8 @@ async function transition(input: VersionInput & { reason?: string; note?: string
     if (["submit", "recommend", "approve", "schedule"].includes(action)) {
       const valid = validateRevisionContent(revision.chapter.series.format, revision);
       if (!valid.valid) return { ok: false, error: valid.error };
+      const pages = validatePagesSnapshot(revision.pagesJson);
+      if (revision.chapter.series.format !== "novel" && (!pages || !await pagesBelongToChapter(tx, revision.chapterId, pages))) return { ok: false, error: "invalid_media" };
     }
     if (action === "schedule" && (!(input.scheduledFor instanceof Date) || !Number.isFinite(input.scheduledFor.getTime()) || input.scheduledFor.getTime() <= Date.now())) return { ok: false, error: "موعد النشر يجب أن يكون في المستقبل" };
     if (["schedule", "cancel"].includes(action) && !revision.approvedAt) return { ok: false, error: "يلزم اعتماد النسخة أولًا" };
@@ -189,6 +201,7 @@ export const scheduleRevision = (input: VersionInput & { scheduledFor: Date }) =
 export const cancelScheduledRevision = (input: VersionInput) => transition(input, "cancel");
 
 async function publishProjection(tx: Tx, actor: Actor, revision: ChapterRevision, scheduled: boolean): Promise<EditorialResult> {
+  if (revision.pendingUploadId) return { ok: false, error: "upload_pending" };
   const chapter = await tx.chapter.findUniqueOrThrow({ where: { id: revision.chapterId }, include: { series: true } });
   if (!revision.approvedAt || !["approved", "scheduled"].includes(revision.status)) return { ok: false, error: "يلزم اعتماد النسخة قبل النشر" };
   const valid = validateRevisionContent(chapter.series.format, revision);
@@ -234,7 +247,8 @@ export async function withdrawPublishedChapter(input: { chapterId: string; expec
     if (chapter.workflow !== "published" || !active || active.id !== input.expectedRevisionId || active.version !== input.expectedVersion) return { ok: false, error: "conflict" };
     await tx.chapter.update({ where: { id: chapter.id }, data: { workflow: "draft", scheduledFor: null } });
     const withdrawn = await tx.chapterRevision.update({ where: { id: active.id }, data: { status: "withdrawn", version: { increment: 1 } } });
-    await tx.chapterRevision.updateMany({ where: { chapterId: chapter.id, status: { in: [...pendingStates] } }, data: { status: "draft", approvedAt: null, approvedById: null, scheduledFor: null, version: { increment: 1 } } });
+    await tx.chapterUpload.updateMany({ where: { chapterId: chapter.id, state: { in: ["uploading", "failed"] } }, data: { state: "cancelled", errorCode: "chapter_withdrawn" } });
+    await tx.chapterRevision.updateMany({ where: { chapterId: chapter.id, status: { in: [...pendingStates] } }, data: { pendingUploadId: null, status: "draft", approvedAt: null, approvedById: null, scheduledFor: null, version: { increment: 1 } } });
     await audit(tx, actor, withdrawn, "withdraw_chapter", input.reason.trim());
     return { ok: true, revision: withdrawn };
   });

@@ -317,7 +317,7 @@ export function ChapterForm({
   const [titleAr, setTitleAr] = useState("");
   const [workflow, setWorkflow] = useState<"draft" | "review">("draft");
   const [readingDirection, setReadingDirection] = useState<"rtl" | "ltr">("rtl");
-  const [pageCount, setPageCount] = useState("8");
+
   const [novelBody, setNovelBody] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -334,10 +334,10 @@ export function ChapterForm({
       seriesId,
       number: Number(number),
       titleAr,
-      workflow,
+      workflow: isNovel ? workflow : "draft",
       isPremiumDemo: false,
       readingDirection: isManga ? readingDirection : "rtl",
-      pageCount: Number(pageCount),
+
       scheduledFor: null,
       novelBody: isNovel ? novelBody : undefined,
     });
@@ -378,11 +378,7 @@ export function ChapterForm({
           <label className="text-sm font-medium">رقم الفصل *</label>
           <Input type="number" min={1} required value={number} onChange={(e) => setNumber(e.target.value)} className="min-h-[44px] bg-card" />
         </div>
-        <div className="space-y-1.5">
-          <label className="text-sm font-medium">{isManga ? "عدد الصفحات" : "عدد اللوحات"} *</label>
-          <Input type="number" min={1} max={30} required value={pageCount} onChange={(e) => setPageCount(e.target.value)} className="min-h-[44px] bg-card" />
-          <p className="text-[11px] text-muted-foreground">تُجهّز صفحات تلقائيًا؛ رفع ملفات الفصل غير متاح حاليًا.</p>
-        </div>
+
       </div>
       <div className="space-y-1.5">
         <label className="text-sm font-medium">عنوان الفصل *</label>
@@ -391,14 +387,14 @@ export function ChapterForm({
       <div className="grid gap-4 sm:grid-cols-2">
         <div className="space-y-1.5">
           <label className="text-sm font-medium">حالة سير العمل المبدئية *</label>
-          <Select value={workflow} onValueChange={(v) => setWorkflow(v as "draft" | "review")}>
+          <Select value={isNovel ? workflow : "draft"} disabled={!isNovel} onValueChange={(v) => setWorkflow(v as "draft" | "review")}>
             <SelectTrigger className="min-h-[44px] bg-card"><SelectValue /></SelectTrigger>
             <SelectContent>
               <SelectItem value="draft">مسودة (الافتراضي)</SelectItem>
               <SelectItem value="review">مراجعة</SelectItem>
             </SelectContent>
           </Select>
-          <p className="text-[11px] text-muted-foreground">النشر والجدولة يتمان عبر استوديو التحرير بعد اعتماد النسخة.</p>
+          <p className="text-[11px] text-muted-foreground">{isNovel ? "النشر والجدولة يتمان عبر استوديو التحرير بعد اعتماد النسخة." : "يُنشأ فصل مصوّر فارغ كمسودة. ارفع PDF في الاستوديو، ثم افحص المعاينة وأرسله للمراجعة."}</p>
         </div>
         {isManga && (
           <div className="space-y-1.5">

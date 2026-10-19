@@ -153,6 +153,7 @@ export default async function StudioChapterPage({
 
           {/* Client Editor Component */}
           <EditorialEditor
+            uploadsEnabled={process.env.MEDIA_UPLOADS_ENABLED === "1"}
             chapter={{
               id: chapter.id,
               number: chapter.number,
@@ -169,6 +170,7 @@ export default async function StudioChapterPage({
               chapterId: workingRevision.chapterId,
               revisionNumber: workingRevision.revisionNumber,
               version: workingRevision.version,
+              pendingUploadId: workingRevision.pendingUploadId,
               status: workingRevision.status,
               titleAr: workingRevision.titleAr,
               readingDirection: workingRevision.readingDirection,

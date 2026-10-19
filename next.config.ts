@@ -24,6 +24,7 @@ const securityHeaders = [
 
 const nextConfig: NextConfig = {
   output: "standalone",
+  ...(process.env.BUNNY_QA_DIST_DIR === "1" ? { distDir: ".next-media-qa" } : {}),
   reactStrictMode: true,
   ...(isCloudflare ? { images: { unoptimized: true } } : {}),
   webpack(config, { webpack, isServer, nextRuntime }) {
@@ -53,6 +54,9 @@ const nextConfig: NextConfig = {
             compiler.hooks.compilation.tap("BunnyWorkerDatabase", (compilation: any) => {
               compilation.hooks.finishModules.tap("BunnyWorkerDatabase", (modules: Iterable<{ resource?: string }>) => {
                 const resources = [...modules].map(module => module.resource?.replaceAll("\\", "/") ?? "");
+                if (resources.some(resource => /\/pdfjs-dist\/(?:build|legacy)\//.test(resource))) {
+                  throw new Error("PDF rendering must stay in the browser; serve the static PDF.js modules instead");
+                }
                 if (resources.some(resource => resource.endsWith("/src/lib/db.ts")) ||
                     !resources.some(resource => resource.endsWith("/src/lib/db.worker.ts"))) {
                   throw new Error("Cloudflare build must include the Worker database client and exclude the Node database client");

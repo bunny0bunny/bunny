@@ -11,7 +11,7 @@ import { readChapterLocal, writeLocal } from "@/lib/progress-local";
 import { restoreReaderScroll, selectReaderProgress, type ReaderProgress } from "@/lib/reader-progress";
 import type { CommentView } from "@/lib/queries";
 
-type Panel = { id: string; pageIndex: number; imagePath: string; width: number; height: number };
+type Panel = { id: string; pageIndex: number; imagePath: string; fallbackImagePath?: string; width: number; height: number };
 
 export function WebtoonReader({
   seriesSlug,
@@ -141,7 +141,7 @@ export function WebtoonReader({
         <div className="mx-auto" style={{ maxWidth: width }}>
           {!panels.length && <EmptyReaderContent format="webtoon" />}
           {panels.map((p) => (
-            <ReaderImage key={p.id} src={p.imagePath} alt={`لوحة ${p.pageIndex + 1} من ${panels.length}`} width={p.width} height={p.height} sizes={`(max-width: ${width}px) 100vw, ${width}px`} eager={p.pageIndex < 2} />
+            <ReaderImage key={p.id} src={p.imagePath} fallbackImagePath={p.fallbackImagePath} alt={`لوحة ${p.pageIndex + 1} من ${panels.length}`} width={p.width} height={p.height} sizes={`(max-width: ${width}px) 100vw, ${width}px`} eager={p.pageIndex < 2} />
           ))}
         </div>
 

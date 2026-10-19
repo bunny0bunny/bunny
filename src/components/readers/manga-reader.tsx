@@ -15,7 +15,7 @@ import { selectReaderProgress, type ReaderProgress } from "@/lib/reader-progress
 import { readerHref } from "@/lib/reader-route";
 import type { CommentView } from "@/lib/queries";
 
-type Page = { id: string; pageIndex: number; imagePath: string; width: number; height: number };
+type Page = { id: string; pageIndex: number; imagePath: string; fallbackImagePath?: string; width: number; height: number };
 
 export function MangaReader({
   seriesSlug,
@@ -171,7 +171,7 @@ export function MangaReader({
             role="application"
             aria-label={`صفحة ${index + 1} من ${total} — انقر يمين الشاشة أو يسارها للتنقل`}
           >
-            <ReaderImage key={page.id} src={page.imagePath} alt={`صفحة ${index + 1} من ${total}`} width={page.width} height={page.height} sizes="(max-width: 592px) 100vw, 560px" eager />
+            <ReaderImage key={page.id} src={page.imagePath} fallbackImagePath={page.fallbackImagePath} alt={`صفحة ${index + 1} من ${total}`} width={page.width} height={page.height} sizes="(max-width: 592px) 100vw, 560px" eager />
             {/* Subtle tap zones hint */}
             <div className="pointer-events-none absolute inset-y-0 start-0 w-1/2 opacity-0 transition hover:opacity-100">
               <div className="flex h-full items-center justify-start ps-3">
