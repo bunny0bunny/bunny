@@ -328,6 +328,7 @@ export const SERIES_B = [
   },
   {
     slug: "the-last-tide-season",
+    category: "manga",
     titleAr: "موسم المدّ الأخير",
     titleOriginal: "The Last Tide Season",
     format: "webtoon",

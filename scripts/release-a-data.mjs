@@ -83,6 +83,7 @@ export const SERIES = [
   },
   {
     slug: "wedding-of-the-red-moon",
+    category: "manga",
     titleAr: "زفاف القمر الأحمر",
     titleOriginal: "Wedding of the Red Moon",
     format: "webtoon",
@@ -110,6 +111,7 @@ export const SERIES = [
   },
   {
     slug: "city-pulse-zero",
+    category: "manhwa",
     titleAr: "نبض المدينة صفر",
     titleOriginal: "City Pulse Zero",
     format: "webtoon",
@@ -135,6 +137,7 @@ export const SERIES = [
   },
   {
     slug: "zainab-wardrobe",
+    category: "manhwa",
     titleAr: "خزانة زينب",
     titleOriginal: "Zainab's Wardrobe",
     format: "webtoon",
