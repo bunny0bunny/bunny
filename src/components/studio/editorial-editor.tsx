@@ -710,6 +710,7 @@ export function EditorialEditor({
               uploadsEnabled={uploadsEnabled}
               disabled={isReadOnlyStatus || isPending}
               unsaved={hasUnsavedChanges}
+              onSaveDraft={handleSaveDraft}
               onBusyChange={(value) => { uploadBusyRef.current = value; setUploadBusy(value); }}
               onStarted={(uploadId, version) => {
                 setRevision((current) => ({ ...current, version, pendingUploadId: uploadId, status: "draft", approvedAt: null, approvedById: null, scheduledFor: null }));

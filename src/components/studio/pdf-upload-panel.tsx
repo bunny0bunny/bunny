@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useId, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState, useSyncExternalStore } from "react";
 import { Button } from "@/components/ui/button";
 import { PDF_UPLOAD_LIMITS, type StartUploadResponse, type UploadStatus, type UploadStatusResponse } from "@/lib/media/contracts";
 import type { WorkingRevision } from "./editorial-editor";
@@ -12,6 +12,7 @@ type Props = {
   uploadsEnabled: boolean;
   disabled: boolean;
   unsaved: boolean;
+  onSaveDraft: () => void;
   onBusyChange: (busy: boolean) => void;
   onStarted: (uploadId: string, version: number) => void;
   onRevision: (revision: WorkingRevision) => void;
@@ -25,9 +26,14 @@ async function request<T extends { ok: boolean }>(path: string, options?: Reques
   return result as T;
 }
 const json = (value: unknown): RequestInit => ({ method: "POST", headers: { "Content-Type": "application/json", "X-Bunny-Upload": "1" }, body: JSON.stringify(value) });
+const subscribeReady = () => () => {};
+const clientReady = () => true;
+const serverReady = () => false;
 
 export function PdfUploadPanel(props: Props) {
   const inputId = useId();
+  const ready = useSyncExternalStore(subscribeReady, clientReady, serverReady);
+  const fileInput = useRef<HTMLInputElement | null>(null);
   const [file, setFile] = useState<File | null>(null);
   const [busy, setBusy] = useState(false);
   const [cancelling, setCancelling] = useState(false);
@@ -157,18 +163,28 @@ export function PdfUploadPanel(props: Props) {
     }
   }
 
-  const blocked = props.disabled || props.unsaved || busy || cancelling || Boolean(props.pendingUploadId) || !props.uploadsEnabled;
+  const pickerBlocked = !ready || props.disabled || busy || cancelling || Boolean(props.pendingUploadId) || !props.uploadsEnabled;
+  const blocked = pickerBlocked || props.unsaved;
   return (
     <section className="space-y-4 rounded-2xl border border-border/60 bg-card p-5" aria-labelledby={`${inputId}-heading`} aria-busy={busy || cancelling}>
       <h2 id={`${inputId}-heading`} className="text-base font-bold">رفع فصل من PDF</h2>
       <p className="text-sm leading-7 text-muted-foreground">تُجهّز الصفحات في متصفحك دون اشتراك. أبقِ هذه الصفحة مفتوحة حتى اكتمال الرفع. يبقى الملف الأصلي خاصًا، والصفحات مسودة للمعاينة والمراجعة؛ لن تُنشر تلقائيًا.</p>
       <p className="text-xs leading-6 text-muted-foreground">حتى 30 ميجابايت و200 صفحة. لتعديل الصفحات أو ترتيبها، عدّل PDF خارجيًا ثم استبدل الملف كاملًا.</p>
       {!props.uploadsEnabled && <p role="status" className="text-sm text-muted-foreground">رفع PDF غير مفعّل حاليًا على هذا الموقع.</p>}
-      {props.unsaved && <p className="text-sm text-gold">احفظ عنوان الفصل وتغييرات المسودة أولًا لبدء رفع PDF.</p>}
+      {props.unsaved && <div className="space-y-2 rounded-lg border border-gold/30 bg-gold/5 p-3">
+        <p id={`${inputId}-save-help`} className="text-sm leading-7 text-gold">يمكنك اختيار الملف الآن. احفظ تغييرات المسودة لتفعيل الرفع؛ سيبقى الملف الذي اخترته جاهزًا.</p>
+        <Button type="button" variant="outline" disabled={pickerBlocked} className="min-h-11" onClick={props.onSaveDraft}>حفظ تغييرات المسودة</Button>
+      </div>}
       {props.pendingUploadId && !busy && <div className="space-y-1 text-sm leading-7"><p>يوجد رفع غير مكتمل. لا يستمر تجهيز الصفحات بعد إغلاق التبويب. ألغِ المحاولة الحالية ثم ابدأ رفع الملف كاملًا من جديد.</p>{status && <><p className="text-muted-foreground">الصفحات المستلمة: {status.readyPages} من {status.expectedPages} · الملف الأصلي: {status.sourceReady ? "مستلم" : "لم يكتمل"} · {status.state === "failed" ? "تعذّرت المحاولة" : "بانتظار الإكمال أو الإلغاء"}{status.errorCode ? " — تحتاج المحاولة إلى إلغاء وإعادة رفع." : ""}</p><p className="text-xs text-muted-foreground">تنتهي مهلة المحاولة: {new Date(status.expiresAt).toLocaleString("ar-EG")}</p>{["ready", "cancelled", "superseded"].includes(status.state) && <Button type="button" variant="outline" className="min-h-11" onClick={() => window.location.reload()}>إعادة تحميل آخر نسخة محفوظة</Button>}</>}</div>}
       <div className="space-y-2">
         <label htmlFor={inputId} className="block text-sm font-medium">اختر ملف PDF للفصل</label>
-        <input id={inputId} type="file" accept="application/pdf,.pdf" disabled={blocked} onChange={(event) => { setFile(event.target.files?.[0] ?? null); setError(null); setMessage(""); }} className="block min-h-11 w-full min-w-0 rounded-md border border-input bg-background p-2 text-sm file:me-3 file:min-h-11 file:rounded-md file:border-0 file:bg-secondary file:px-3 file:text-foreground focus-visible:outline-2 focus-visible:outline-ring disabled:opacity-50" />
+        <input ref={fileInput} id={inputId} type="file" accept="application/pdf,.pdf" disabled={pickerBlocked} tabIndex={-1} onChange={(event) => { setFile(event.target.files?.[0] ?? null); setError(null); setMessage(""); }} className="sr-only" />
+        <div className="flex min-w-0 flex-wrap items-center gap-3 rounded-lg border border-input bg-background p-3">
+          <Button type="button" variant="secondary" disabled={pickerBlocked} className="min-h-11 shrink-0" aria-controls={inputId} aria-describedby={`${inputId}-file-status${props.unsaved ? ` ${inputId}-save-help` : ""}`} onClick={() => fileInput.current?.click()}>اختيار ملف PDF</Button>
+          <div id={`${inputId}-file-status`} role="status" aria-live="polite" className="min-w-0 flex-1 text-sm leading-6">
+            {file ? <><p dir="auto" className="break-all text-foreground">{file.name}</p><p className="text-xs text-muted-foreground">{(file.size / (1024 * 1024)).toLocaleString("ar-EG", { maximumFractionDigits: 1 })} ميجابايت</p></> : <p className="text-muted-foreground">لم يتم اختيار ملف بعد</p>}
+          </div>
+        </div>
       </div>
       <div role="status" aria-live="polite" className="space-y-2 text-sm">
         {message && <p>{message}</p>}
