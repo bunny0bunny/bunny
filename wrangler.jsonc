@@ -1,0 +1,30 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "bunny-library",
+  "main": ".open-next/worker.js",
+  "compatibility_date": "2026-10-18",
+  "compatibility_flags": [
+    "nodejs_compat",
+    "global_fetch_strictly_public"
+  ],
+  "workers_dev": true,
+  "minify": true,
+  "assets": {
+    "directory": ".open-next/assets",
+    "binding": "ASSETS"
+  },
+  "services": [
+    {
+      "binding": "WORKER_SELF_REFERENCE",
+      "service": "bunny-library"
+    }
+  ],
+  "vars": {
+    "BUNNY_RUNTIME": "cloudflare",
+    "ACCOUNT_MAIL_MODE": "smtp"
+  },
+  "observability": {
+    "enabled": false
+  },
+  "account_id": "bb0d8a6aac4da656fc72c011819cafb7"
+}

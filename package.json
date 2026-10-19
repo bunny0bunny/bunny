@@ -5,8 +5,8 @@
   "scripts": {
     "dev": "node scripts/dev.mjs",
     "dev:local": "node scripts/dev.mjs --local",
-    "postinstall": "prisma generate",
-    "build": "prisma generate && next build --webpack && node scripts/postbuild-standalone.mjs",
+    "postinstall": "prisma generate && node scripts/generate-worker-client.mjs",
+    "build": "prisma generate && node scripts/generate-worker-client.mjs && next build --webpack && node scripts/postbuild-standalone.mjs",
     "start": "NODE_ENV=production env -u DATABASE_URL -u DIRECT_URL bun .next/standalone/server.js 2>&1 | tee server.log",
     "lint": "eslint .",
     "test:reader": "node scripts/qa-reader.mjs",
@@ -17,10 +17,14 @@
     "db:migrate:dev": "node scripts/with-env.mjs prisma migrate dev",
     "db:seed": "node scripts/with-env.mjs bun prisma/seed.ts",
     "db:studio": "node scripts/with-env.mjs prisma studio",
-    "db:reset": "node scripts/with-env.mjs prisma migrate reset"
+    "db:reset": "node scripts/with-env.mjs prisma migrate reset",
+    "cf:build": "node scripts/cloudflare-build.mjs",
+    "cf:preview": "node scripts/cloudflare-artifacts.mjs && wrangler dev",
+    "cf:deploy": "node scripts/cloudflare-artifacts.mjs && wrangler deploy"
   },
   "dependencies": {
     "@fontsource/ibm-plex-sans-arabic": "^5.3.0",
+    "@prisma/adapter-neon": "6.19.3",
     "@prisma/client": "^6.19.3",
     "@radix-ui/react-avatar": "^1.1.10",
     "@radix-ui/react-checkbox": "^1.3.2",
@@ -37,7 +41,7 @@
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "lucide-react": "^0.525.0",
-    "next": "^16.3.6",
+    "next": "16.4.1",
     "next-auth": "^4.24.15",
     "nodemailer": "^10.1.0",
     "prisma": "^6.19.3",
@@ -51,6 +55,7 @@
     "zod": "^4.0.2"
   },
   "devDependencies": {
+    "@opennextjs/cloudflare": "1.20.12",
     "@playwright/test": "^1.64.0",
     "@tailwindcss/postcss": "^4",
     "@types/nodemailer": "^8.0.2",
@@ -60,10 +65,11 @@
     "docx": "^9.8.0",
     "embedded-postgres": "^18.4.0-beta.17",
     "eslint": "^9",
-    "eslint-config-next": "^16.3.6",
+    "eslint-config-next": "16.4.1",
     "tailwindcss": "^4",
     "tw-animate-css": "^1.3.5",
-    "typescript": "^5"
+    "typescript": "^5",
+    "wrangler": "4.151.1"
   },
   "engines": {
     "node": ">=20.9.0"

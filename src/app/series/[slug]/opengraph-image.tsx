@@ -22,11 +22,22 @@ const FORMAT_AR: Record<string, string> = FORMAT_LABELS;
 
 async function loadFonts() {
   const dir = path.join(process.cwd(), "public", "fonts");
+  async function loadFont(name: string) {
+    if (process.env.BUNNY_RUNTIME === "cloudflare") {
+      const { getCloudflareContext } = await import("@opennextjs/cloudflare");
+      const { env } = getCloudflareContext();
+      const assets = (env as unknown as { ASSETS: { fetch(request: Request): Promise<Response> } }).ASSETS;
+      const response = await assets.fetch(new Request(`https://assets.internal/fonts/${name}`));
+      if (!response.ok) throw new Error("Share card font is unavailable");
+      return response.arrayBuffer();
+    }
+    return readFile(path.join(dir, name));
+  }
   const [arabicRegular, arabicBold, latinRegular, latinBold] = await Promise.all([
-    readFile(path.join(dir, "ibm-plex-sans-arabic-arabic-400-normal.woff")),
-    readFile(path.join(dir, "ibm-plex-sans-arabic-arabic-700-normal.woff")),
-    readFile(path.join(dir, "ibm-plex-sans-arabic-latin-400-normal.woff")),
-    readFile(path.join(dir, "ibm-plex-sans-arabic-latin-700-normal.woff")),
+    loadFont("ibm-plex-sans-arabic-arabic-400-normal.woff"),
+    loadFont("ibm-plex-sans-arabic-arabic-700-normal.woff"),
+    loadFont("ibm-plex-sans-arabic-latin-400-normal.woff"),
+    loadFont("ibm-plex-sans-arabic-latin-700-normal.woff"),
   ]);
   return [
     { name: "BunnyArabic", data: arabicRegular, weight: 400 as const, style: "normal" as const },

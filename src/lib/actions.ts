@@ -333,8 +333,9 @@ export async function createChapter(input: unknown): Promise<ActionResult & { id
     throw err;
   }
 
-  // Novel chapters carry prose instead of generated pages.
-  if (series.format === "novel") {
+  // Workers cannot persist files in public/. Create an empty draft until the
+  // separate R2 upload flow supplies real pages; never invent published content.
+  if (series.format === "novel" || process.env.BUNNY_RUNTIME === "cloudflare") {
     revalidatePath("/admin/chapters");
     revalidatePath(`/series/${series.slug}`);
     return { ok: true, id: chapter.id };

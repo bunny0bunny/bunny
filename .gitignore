@@ -55,5 +55,9 @@ prompt
 
 server.log
 /.local-preview/
+/.generated/
+/.open-next/
+/.wrangler/
+.dev.vars*
 # Skills directory
 /skills/

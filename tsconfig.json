@@ -43,6 +43,10 @@
     "mini-services",
     "tests",
     "scripts",
-    "supabase-archive"
+    "supabase-archive",
+    ".local-preview",
+    ".open-next",
+    ".wrangler",
+    ".generated"
   ]
 }

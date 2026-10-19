@@ -3,6 +3,7 @@ import { writeFile, mkdir } from "node:fs/promises";
 import path from "node:path";
 import { randomBytes } from "node:crypto";
 import nodemailer from "nodemailer";
+import { workerSmtpSocket } from "./smtp-socket";
 
 export type AccountMailPayload = {
   to: string;
@@ -117,6 +118,7 @@ export async function sendAccountMail(payload: AccountMailPayload): Promise<Acco
 
   try {
     const transporter = nodemailer.createTransport({
+      ...(process.env.BUNNY_RUNTIME === "cloudflare" ? { getSocket: workerSmtpSocket(host, port) } : {}),
       host,
       port,
       secure,
