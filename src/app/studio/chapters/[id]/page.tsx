@@ -5,7 +5,7 @@ import { PenTool, ChevronLeft, ArrowRight, Eye, ShieldAlert } from "lucide-react
 import { SiteHeader, SiteFooter, BottomNav } from "@/components/library/chrome";
 import { currentProfileOrNull } from "@/lib/queries";
 import { isStaffRole, canManageSeries } from "@/lib/team-access";
-import { db } from "@/lib/db";
+import { db, withDatabaseScope } from "@/lib/db";
 import { openOrCreateDraft } from "@/lib/editorial";
 import { EditorialEditor } from "@/components/studio/editorial-editor";
 import { Button } from "@/components/ui/button";
@@ -21,6 +21,10 @@ export default async function StudioChapterPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
+  return withDatabaseScope(() => loadStudioChapterPage(params));
+}
+
+async function loadStudioChapterPage(params: Promise<{ id: string }>) {
   const { id: chapterId } = await params;
 
   // 1. Authenticate & Role Gate

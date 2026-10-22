@@ -13,6 +13,8 @@ export function createWorkerClient(databaseUrl = process.env.DATABASE_URL): Pris
   })
 }
 
-// This module holds only a proxy. Pools belong to individual awaited operations,
+// This module holds only a proxy. Pools belong to an explicit request scope or individual awaited operations,
 // including an entire interactive transaction, and disconnect before returning.
 export const db: PrismaClient = createWorkerDatabase(() => createWorkerClient())
+
+export { withWorkerDatabaseScope as withDatabaseScope } from "./worker-db-operations";

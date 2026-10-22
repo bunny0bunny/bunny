@@ -1,4 +1,5 @@
 import "server-only";
+import { withDatabaseScope } from "@/lib/db";
 import { Prisma } from "@prisma/client";
 import { withSerializableTx, editableRevision, checkStaffSeriesAccess, type EditorialResult } from "@/lib/editorial";
 import { getTrustedAppOrigin } from "@/lib/account-mail";
@@ -165,4 +166,4 @@ export function uploadResponse(result: EditorialResult) {
   const code = result.error ?? "unavailable";
   return Response.json({ ok: false, code, error: safeErrors[code] ?? "تعذّر الرفع؛ تحقق من الملف وحاول مجددًا" }, { status: code === "unauthenticated" ? 401 : code === "forbidden" ? 403 : code === "not_found" || code === "disabled" ? 404 : ["quota", "rate_limit"].includes(code) ? 429 : ["conflict", "in_progress", "incomplete", "expired"].includes(code) ? 409 : ["storage_failed", "unavailable"].includes(code) ? 503 : 400, headers: { "Cache-Control": "private, no-store" } });
 }
-export async function guardedUploadRoute(request: Request, action: () => Promise<EditorialResult>) { const error = uploadRequestGuard(request); if (error) return uploadResponse(fail(error)); try { return uploadResponse(await action()); } catch (error) { return uploadResponse(fail(error instanceof SyntaxError ? "invalid_input" : "unavailable")); } }
+export async function guardedUploadRoute(request: Request, action: () => Promise<EditorialResult>) { const error = uploadRequestGuard(request); if (error) return uploadResponse(fail(error)); try { return uploadResponse(await withDatabaseScope(action)); } catch (error) { return uploadResponse(fail(error instanceof SyntaxError ? "invalid_input" : "unavailable")); } }

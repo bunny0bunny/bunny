@@ -1,4 +1,4 @@
-import { db } from "@/lib/db";
+import { db, withDatabaseScope } from "@/lib/db";
 import { withSerializableTx, checkStaffSeriesAccess } from "@/lib/editorial";
 import { getMediaStorage } from "@/lib/media/storage";
 import { uploadResponse } from "@/lib/media/uploads";
@@ -7,6 +7,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ ass
   const { assetId } = await params;
   if (!/^[a-z0-9]+$/.test(assetId)) return uploadResponse({ ok: false, error: "not_found" });
   try {
+    return await withDatabaseScope(async () => {
     const asset = await db.mediaAsset.findUnique({ where: { id: assetId }, include: { chapter: true, upload: true } });
     if (!asset?.readyAt || asset.pageIndex < -1) return uploadResponse({ ok: false, error: "not_found" });
     let authorized = false;
@@ -23,5 +24,6 @@ export async function GET(_request: Request, { params }: { params: Promise<{ ass
     }
     const url = await (await getMediaStorage()).signGet(asset.objectKey, { expiresIn: 3600, ...(asset.pageIndex === -1 ? { downloadName: asset.upload.sourceName } : {}) });
     return new Response(null, { status: 307, headers: { Location: url, "Cache-Control": "private, no-store", "X-Content-Type-Options": "nosniff", ...(asset.pageIndex === -1 ? { "Content-Disposition": "attachment" } : {}) } });
+    });
   } catch { return uploadResponse({ ok: false, error: "unavailable" }); }
 }

@@ -67,3 +67,6 @@ export const db: PrismaClient = new Proxy({} as PrismaClient, {
     return typeof value === "function" ? value.bind(client) : value
   },
 })
+
+/** Node runtime already owns a reusable client; keep the same explicit boundary API. */
+export async function withDatabaseScope<R>(work: () => Promise<R>): Promise<R> { return work(); }
