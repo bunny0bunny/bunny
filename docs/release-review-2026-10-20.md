@@ -29,3 +29,7 @@ Cloudflare live tail recorded `outcome: exceededCpu`, `cpuTime: 10`, and `Worker
 Next work should profile and reduce CPU in authenticated studio/upload requests under the existing free-plan constraint, then rerun one complete replacement acceptance cycle. If the existing Next/OpenNext/Prisma workload cannot stay within the free budget, hosting/runtime architecture needs a separate decision; do not silently activate billing or weaken authorization checks. Official limits: https://developers.cloudflare.com/workers/platform/limits/ .
 
 Manual real-device acceptance (including Safari) remains outstanding. This session used Chromium viewport emulation only. Cleanup is an operator CLI, not an automatically scheduled job.
+
+## 2026-10-22 follow-up
+
+Upload deadline, cancellation, error classification and status recovery were repaired and the hosted25MiB slow-transfer → approval → reading → replacement acceptance cycle passed. See [upload recovery verification](upload-recovery-2026-10-22.md). Sampled upload CPU still exceeds the Workers Free budget; keep the release CPU blocker open despite the passing cycle.

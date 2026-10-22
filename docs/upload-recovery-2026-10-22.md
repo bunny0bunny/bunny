@@ -25,3 +25,15 @@ Previous live traces recorded `exceededCpu` at10ms under the Workers Free plan. 
 
 ## Review
 Antigravity headless execution was denied by its command permission policy; no permission bypass was attempted. Codex completed implementation and a single read-only Claude review checked the combined changes. Its medium findings (cleanup errors and the media route ownership gap) were addressed. The deliberately short cancellation wait can require a reload while a slower status reconciliation is pending; it preserves safety and avoids duplicate uploads.
+
+## Hosted acceptance outcome
+
+Commit `57a6c26` passed the connected Cloudflare build and deployment. A real hosted synthetic PDF of26,215,418 bytes was streamed slowly through the source endpoint; it completed with200 after28,976ms. Browser page conversion/upload, private preview, contributor submission, editor recommendation, admin approval/publication, anonymous reading, draft replacement preserving old public pages, and approved replacement publication/readability all passed. Both upload pipelines returned200 throughout. The source PDF returned403 to an anonymous reader. Six exact owned objects and all temporary series/accounts were removed. No user attempt was cancelled or replaced.
+
+Focused verification:16 Node tests,8 actual-component browser scenarios, TypeScript and scoped ESLint passed. The hosted synthetic test included desktop/mobile viewport capture; no physical mobile-device claim is made.
+
+### CPU blocker remains open
+
+Tagged live-tail samples had no `exceededCpu` or HTTP5xx outcomes during acceptance, but sampled upload invocations still used51–169ms CPU. This exceeds the documented10ms Workers Free budget, so this release does NOT establish reliable free-plan production capacity. Request-scoped ownership removes repeated initialization overhead but does not make the entire Next/OpenNext/Prisma/authentication pipeline fit10ms. Cloudflare can temporarily tolerate overruns; a successful burst is not a capacity guarantee. Closing this blocker requires a hosting/runtime architecture decision or further profiling and structural changes. No paid subscription was enabled.
+
+Private diagnostic artifacts live under `.local-preview/upload-fix/hosted/` and are not shipped to GitHub; no session cookies, env values or signed media URLs belong in reports.
