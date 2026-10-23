@@ -1,5 +1,8 @@
 # Content readiness package — 2026-10-23
 
+## Subsequent authorized publication
+Published with the UI/UX package at Worker version `5ad1fc44-a195-4f53-bdfb-46ef0f09122b` on https://bunny.bunny-library.workers.dev. Production build, secret/private-asset check and deployment passed. Hosted acceptance passed8 cover/storage/authorization/replacement checks with exact temporary fixture cleanup;41 Node regressions, TypeScript and7 public HTTP checks also passed. See `docs/ui-ux-readiness-2026-10-23.md` for evidence and remaining acceptance limits. No actual chapter publication, real-upload change, billing activation, email or demo deletion occurred. The original sections below record the earlier local package boundary.
+
 ## Implemented locally
 - Series creation accepts a staged independent image with an 800×1200 crop, keyboard position/zoom controls, explicit public-cover consent and optional omission. Creation navigates to the work manager; catalog visibility is correctly described as requiring a published chapter.
 - Administrators can explicitly select a chapter revision's ready first page, load it through a private same-origin proxy and crop/re-encode it as an independent JPEG. No source or draft media URL becomes a public cover.

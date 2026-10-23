@@ -1,5 +1,14 @@
 # UI/UX readiness review — 2026-10-23
 
+## Publication follow-up
+The user subsequently authorized publishing. Commits `44e33cb` and `deb4b3d` were pushed to the original GitHub main branch, built with `npm run cf:build`, checked for private PDFs and embedded environment secrets, and deployed with `npm run cf:deploy` to https://bunny.bunny-library.workers.dev. Both commands exited0. Cloudflare active version: `5ad1fc44-a195-4f53-bdfb-46ef0f09122b`.
+
+Fresh verification:41 Node tests passed, standalone TypeScript passed, and production compilation, build TypeScript and static generation passed. Seven hosted HTTP checks passed: home, manhwa discovery, no-results query, actual work details, actual webtoon reader, login return URL and404. The browser confirmed the new home wording, semantic chapter lists and reading navigation; the reader's comment sign-in preserves its location. At390×844, the hosted settings dialog has no horizontal overflow, an Arabic close control44×44 and no title overlap. Loaded reader images had no broken-image state and the observed browser error log was empty. Viewport override was reset.
+
+A hosted test using two temporary synthetic staff profiles and one unpublished temporary series passed8 cover checks: editor denied, administrator save, exact image bytes through the anonymous gateway, repeated save/replacement, old gateway404, readable replacement, stale-write409 and anonymous private-source denial. All exact owned cover objects, series, staff profiles and cover rate-limit records were removed. No real chapter was published, upload changed, email sent, billing activated or demo removed.
+
+Full authenticated local Next inspection was attempted again against a guarded loopback database; studio compilation/browser response could not be completed under local resource pressure, so owned audit services were stopped before the successful production build. This release verifies hosted cover storage and public reading, but does not add a complete hosted staff preparation→review→publication→replacement browser pass to the earlier component evidence. Workers Paid activation/CPU reliability and physical mobile/Safari acceptance remain open. The original sections below describe the earlier pre-publication review boundary.
+
 ## Refined working brief
 راجع مكتبة باني كرحلة مستخدم كاملة: اكتشاف العمل، البحث والفلاتر، تفاصيل العمل، القراءة، وتجهيز المحتوى ومراجعته. حافظ على التصميم العربي المعتمد. أصلح مشاكل الاستخدام والإتاحة التي يمكن إثباتها، واختبر السلوك قبل وبعد التصحيح. افصل ما اختُبر فعلًا عن الافتراضات، ولا تعتبر نجاح الاختبارات المحلية دليلًا على جاهزية الاستضافة. لا تنشر أو تغيّر الاشتراك أو تحذف محتوى أو تعدّل رفعًا حقيقيًا. اترك Workers والقبول النهائي على النسخة المنشورة لآخر مرحلة.
 
