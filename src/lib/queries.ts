@@ -221,6 +221,15 @@ export async function getTrendingSeries(limit = 8): Promise<SeriesCard[]> {
   return rows.map(toCard);
 }
 
+/** A direct start action must resolve a live, unlocked chapter; never assume chapter 1. */
+export async function getFirstReadableChapter(seriesId: string) {
+  return db.chapter.findFirst({
+    where: { seriesId, ...liveChapterWhere(), isPremiumDemo: false },
+    orderBy: { number: 'asc' },
+    select: { number: true },
+  });
+}
+
 export async function getNewestSeries(limit = 8): Promise<SeriesCard[]> {
   const rows = await db.series.findMany({ where: { chapters: { some: liveChapterWhere() } }, include: cardInclude, orderBy: { createdAt: "desc" }, take: limit });
   return rows.map(toCard);

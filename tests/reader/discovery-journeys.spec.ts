@@ -69,6 +69,6 @@ test("discovery journey: typing in chapter comments does not navigate the manga 
   await input.press("f");
   await expect(page.getByRole("dialog")).toBeVisible();
   await expect(page).toHaveURL(/\/read\/manga\/qa-reader-manga\/1$/);
-  await page.getByRole("dialog").getByRole("button", { name: "Close", exact: true }).click();
+  await page.getByRole("dialog").getByRole("button", { name: "إغلاق", exact: true }).click();
   await expect(page.getByRole("button", { name: "وضع القراءة العميقة", exact: true })).toBeVisible();
 });

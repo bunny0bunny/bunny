@@ -156,10 +156,12 @@ export function SeriesMetaBadges({
 export function Rail({
   title,
   href,
+  actionLabel = 'عرض الكل',
   children,
 }: {
   title: string;
   href?: string;
+  actionLabel?: string;
   children: React.ReactNode;
 }) {
   return (
@@ -167,8 +169,8 @@ export function Rail({
       <div className="mb-3.5 flex items-center justify-between px-1">
         <h2 className="text-lg font-bold text-foreground sm:text-xl">{title}</h2>
         {href && (
-          <Link href={href} className="text-sm font-medium text-muted-foreground transition hover:text-primary">
-            عرض الكل ←
+          <Link href={href} className="inline-flex min-h-11 items-center text-sm font-medium text-muted-foreground transition hover:text-primary">
+            {actionLabel} ←
           </Link>
         )}
       </div>

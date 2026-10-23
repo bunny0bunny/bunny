@@ -16,7 +16,7 @@ export default function NotFound() {
       <span className="grid size-16 place-items-center rounded-2xl border border-border bg-card text-muted-foreground">
         <BookX className="size-7" aria-hidden />
       </span>
-      <h1 className="mt-5 text-2xl font-bold text-foreground">هذه الرفّ فارغ</h1>
+      <h1 className="mt-5 text-2xl font-bold text-foreground">هذا الرفّ فارغ</h1>
       <p className="mt-2 max-w-sm text-sm leading-7 text-muted-foreground">
         الصفحة التي تبحث عنها غير موجودة — ربما انتقل العمل إلى رفٍّ آخر، أو أن الرابط القديم لم يعد صالحًا.
       </p>

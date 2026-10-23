@@ -1,6 +1,7 @@
 "use client";
 
-import { useRef, useState, useTransition } from "react";
+import { useId, useRef, useState, useTransition } from "react";
+import type { ChapterRevision } from '@prisma/client';
 import { PdfUploadPanel } from "./pdf-upload-panel";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -68,6 +69,11 @@ export type WorkingRevision = {
   createdAt: string;
   updatedAt: string;
 };
+
+function toWorkingRevision(revision: ChapterRevision): WorkingRevision {
+  const iso = (value: Date | string | null) => typeof value === 'string' ? value : value?.toISOString() ?? null;
+  return { ...revision, createdAt: iso(revision.createdAt)!, updatedAt: iso(revision.updatedAt)!, scheduledFor: iso(revision.scheduledFor), approvedAt: iso(revision.approvedAt) };
+}
 
 type PublishedRevision = {
   id: string;
@@ -156,6 +162,7 @@ export function EditorialEditor({
   currentActorRole: "contributor" | "editor" | "admin";
   uploadsEnabled: boolean;
 }) {
+  const editorId = useId();
   const router = useRouter();
   const { toast } = useToast();
   const [isPending, startTransition] = useTransition();
@@ -379,6 +386,7 @@ export function EditorialEditor({
         return;
       }
       toast({ title: "سُجلت التوصية", description: "تمت إضافة توصية بالاعتماد لصالح الإدارة." });
+      if (res.revision) setRevision(toWorkingRevision(res.revision));
       setRecommendNote("");
       router.refresh();
     });
@@ -485,6 +493,7 @@ export function EditorialEditor({
   // Withdraw chapter (Admin)
   async function handleWithdraw() {
     if (guardUpload()) return;
+    if (hasUnsavedChanges) { setErrorMessage('احفظ تغييرات المسودة قبل سحب الفصل.'); return; }
     if (!publishedSnapshot) {
       setErrorMessage("لا توجد نسخة منشورة حاليًا لسحبها.");
       return;
@@ -508,7 +517,10 @@ export function EditorialEditor({
       }
       toast({ title: "تم سحب الفصل", description: "أُخفي الفصل من واجهة القراء وأُعيد إلى حالة المسودة." });
       setWithdrawReason("");
-      router.refresh();
+      if (res.revision?.id === revision.id) setRevision(toWorkingRevision(res.revision));
+      // Withdrawal also invalidates any separate working draft and its version.
+      // Reload both the publication projection and the working copy together.
+      window.location.reload();
     });
   }
 
@@ -664,8 +676,9 @@ export function EditorialEditor({
               <h2 className="text-base font-bold text-foreground">بيانات النسخة التحريرية</h2>
 
               <div className="space-y-1.5">
-                <label className="text-sm font-medium">عنوان الفصل *</label>
+                <label htmlFor={`${editorId}-title`} className="text-sm font-medium">عنوان الفصل *</label>
                 <Input
+                  id={`${editorId}-title`}
                   value={titleAr}
                   onChange={(e) => setTitleAr(e.target.value)}
                   disabled={isReadOnlyStatus || actionsBlocked}
@@ -676,8 +689,9 @@ export function EditorialEditor({
 
               {chapter.format === "manga" && (
                 <div className="space-y-1.5">
-                  <label className="text-sm font-medium">اتجاه القراءة</label>
+                  <label htmlFor={`${editorId}-direction`} className="text-sm font-medium">اتجاه القراءة</label>
                   <select
+                    id={`${editorId}-direction`}
                     value={readingDirection}
                     onChange={(e) => setReadingDirection(e.target.value as "rtl" | "ltr")}
                     disabled={isReadOnlyStatus || actionsBlocked}
@@ -925,8 +939,9 @@ export function EditorialEditor({
                   {/* Schedule */}
                   {(revision.status === "approved" || revision.status === "scheduled") && (
                     <div className="space-y-2 pt-2">
-                      <label className="text-[11px] font-medium text-muted-foreground">تاريخ ووقت النشر المجدول</label>
+                      <label htmlFor={`${editorId}-schedule`} className="text-[11px] font-medium text-muted-foreground">تاريخ ووقت النشر المجدول</label>
                       <Input
+                        id={`${editorId}-schedule`}
                         type="datetime-local"
                         value={scheduleDatetime}
                         onChange={(e) => setScheduleDatetime(e.target.value)}
@@ -979,7 +994,7 @@ export function EditorialEditor({
               الفصل {chapter.number}: {titleAr}
             </h2>
             <p className="mt-1 text-xs text-muted-foreground">
-              العمل: {chapter.seriesTitleAr} · التنسيق: {chapter.format} · اتجاه القراءة: {readingDirection}
+              العمل: {chapter.seriesTitleAr} · التنسيق: {chapter.format === 'manga' ? 'صفحات مصوّرة' : chapter.format === 'webtoon' ? 'تمرير رأسي' : 'نص روائي'}{isVisual ? ` · اتجاه القراءة: ${readingDirection === 'rtl' ? 'من اليمين لليسار' : 'من اليسار لليمين'}` : ''}
             </p>
           </header>
 
@@ -997,6 +1012,7 @@ export function EditorialEditor({
             </div>
           ) : (
             <div className="mx-auto max-w-2xl space-y-4">
+              {pages.length === 0 && <p role="status" className="py-8 text-center text-sm leading-7 text-muted-foreground">مفيش صفحات جاهزة للمعاينة. ارجع للمحتوى وارفع ملف الفصل، وبعد اكتماله افتح المعاينة الخاصة.</p>}
               {pages.map((p, i) => (
                 <div key={i} className="overflow-hidden rounded-xl border border-border bg-background">
                   <img

@@ -29,7 +29,7 @@ export default function Error({
       </span>
       <h1 className="mt-5 text-2xl font-bold text-foreground">انقطع الخيط مؤقتًا</h1>
       <p className="mt-2 max-w-sm text-sm leading-7 text-muted-foreground">
-        حدث خطأ غير متوقع أثناء تجهيز هذه الصفحة. جرّب إعادة المحاولة — إن تكرر الأمر، فعادةً ما تكفي العودة لاحقًا بعد لحظات.
+        تعذّر تجهيز الصفحة. جرّب إعادة المحاولة أو ارجع للرئيسية. لو استمر الخطأ، حاول لاحقًا.
       </p>
       {error.digest && (
         <p className="mt-3 font-mono text-[11px] text-muted-foreground/70" dir="ltr">

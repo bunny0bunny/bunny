@@ -1,7 +1,7 @@
 "use client";
 
 import { useSyncExternalStore, useState, useTransition } from "react";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import Link from "next/link";
 import { useSession } from "next-auth/react";
 import { Flag, SendHorizonal, ShieldAlert, Heart } from "lucide-react";
@@ -53,6 +53,8 @@ export function CommentsSection({
 }) {
   const { status, data } = useSession();
   const router = useRouter();
+  const pathname = usePathname();
+  const loginHref = `/login?next=${encodeURIComponent(pathname)}`;
   const [pending, startTransition] = useTransition();
   const [body, setBody] = useState("");
   const [error, setError] = useState("");
@@ -144,7 +146,7 @@ export function CommentsSection({
         </div>
       ) : (
         <p className="rounded-2xl border border-dashed border-border/70 p-4 text-sm text-muted-foreground">
-          <Link href="/login" className="text-primary hover:underline">
+          <Link href={loginHref} className="text-primary hover:underline">
             سجّل الدخول
           </Link>{" "}
           للانضمام إلى النقاش.

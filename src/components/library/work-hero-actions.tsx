@@ -74,9 +74,10 @@ export function WorkHeroActions({
     };
   }, [chapters, mounted, serverProgress, slug, format]);
 
-  if (!chapters.length) {
+  if (!chapters.length || !chapters.some(chapter => !chapter.isPremiumDemo)) {
     return <div className="space-y-3">
-      <p className="text-sm text-muted-foreground">الفصول تُنشر قريبًا. أضف العمل لمكتبتك لمتابعته.</p>
+      <p className="text-sm text-muted-foreground">{chapters.length ? 'الفصول المتاحة حاليًا مقفلة. تقدر تتصفح قائمة الفصول أو تحفظ العمل لمتابعته.' : 'الفصول تُنشر قريبًا. أضف العمل لمكتبتك لمتابعته.'}</p>
+      {chapters.length > 0 && <Button asChild variant="outline" className="min-h-11"><Link href="#panel-chapters">عرض الفصول</Link></Button>}
       <div className="flex gap-2"><LibraryButton slug={slug} initialShelf={initialShelf} compact /><ShareButton slug={slug} titleAr={titleAr} compact /></div>
     </div>;
   }

@@ -46,7 +46,7 @@ import {
 const CATEGORY_ICONS = { manga: BookOpen, manhwa: Layers, novel: BookText, comic: Palette };
 
 const SORT_LABELS: Record<string, string> = {
-  popular: "الأكثر رواجًا",
+  popular: "الأكثر قراءة",
   newest: "آخر الفصول",
   rating: "الأعلى تقييمًا",
 };

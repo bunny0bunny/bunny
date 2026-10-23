@@ -18,9 +18,11 @@ import { readerHref } from "@/lib/reader-route";
 export function ContinueReadingHero({
   initialItems,
   guestFeatured,
+  guestReadHref,
 }: {
   initialItems: ContinueReadingItem[];
   guestFeatured?: SeriesCard | null;
+  guestReadHref?: string;
 }) {
   const { status } = useSession();
   const [localItems, setLocalItems] = useState<ContinueReadingItem[]>([]);
@@ -178,9 +180,9 @@ export function ContinueReadingHero({
                     size="lg"
                     className="gap-2 bg-primary px-6 text-primary-foreground shadow-[0_8px_24px_-8px_rgba(180,151,239,0.6)] hover:bg-primary/90"
                   >
-                    <Link href={`/series/${guestFeatured.slug}`}>
+                    <Link href={guestReadHref ?? `/series/${guestFeatured.slug}`}>
                       <Play className="size-4 fill-current" aria-hidden />
-                      <span>ابدأ القراءة</span>
+                      <span>{guestReadHref ? 'ابدأ القراءة' : 'عرض العمل'}</span>
                     </Link>
                   </Button>
 

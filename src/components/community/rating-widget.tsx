@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import Link from "next/link";
 import { useSession } from "next-auth/react";
 import { Star } from "lucide-react";
@@ -25,6 +25,8 @@ export function RatingWidget({
 }) {
   const { status } = useSession();
   const router = useRouter();
+  const pathname = usePathname();
+  const loginHref = `/login?next=${encodeURIComponent(pathname)}`;
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [hover, setHover] = useState(0);
@@ -33,7 +35,7 @@ export function RatingWidget({
 
   const cast = (value: number) => {
     if (status !== "authenticated") {
-      router.push("/login");
+      router.push(loginHref);
       return;
     }
     setError(null);
@@ -91,7 +93,7 @@ export function RatingWidget({
         </div>
       ) : (
         <p className="text-xs leading-6 text-muted-foreground">
-          <Link href="/login" className="text-primary hover:underline">
+          <Link href={loginHref} className="text-primary hover:underline">
             سجّل الدخول
           </Link>{" "}
           لتقييم هذا العمل ومشاركة رأيك مع القراء.

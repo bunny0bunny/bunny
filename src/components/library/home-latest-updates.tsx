@@ -101,15 +101,15 @@ export function HomeLatestUpdates({
                 </div>
 
                 {/* Chapter links (up to 2 newest links) */}
-                <div className="flex flex-wrap items-center gap-x-2" role="list" aria-label={`فصول ${item.series.titleAr}`}>
+                <ul className="flex flex-wrap items-center gap-x-2" aria-label={`فصول ${item.series.titleAr}`}>
                   {newest && (
+                    <li>
                     <Link
-                      role="listitem"
                       href={readerHref(item.series.format, item.series.slug, newest.number)}
                       className="inline-flex min-h-11 items-center gap-1.5 rounded-md px-1 text-xs font-medium text-foreground transition hover:text-primary focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary"
                     >
                       <span>الفصل {newest.number}</span>
-                      {newest.isPremiumDemo && <LockKeyhole className="size-3 text-gold" aria-label="فصل مقفل" />}
+                      {newest.isPremiumDemo && <><LockKeyhole className="size-3 text-gold" aria-hidden /><span className="sr-only">فصل مقفل</span></>}
                       <span className="sr-only"> — {newest.titleAr}، {item.series.titleAr}</span>
                       {isRecent && (
                         <span className="flex items-center gap-1 text-[10px] text-primary font-bold">
@@ -118,18 +118,20 @@ export function HomeLatestUpdates({
                         </span>
                       )}
                     </Link>
+                    </li>
                   )}
 
                   {second && (
+                    <li>
                     <Link
-                      role="listitem"
                       href={readerHref(item.series.format, item.series.slug, second.number)}
                       className="inline-flex min-h-11 items-center rounded-md px-1 text-xs text-muted-foreground transition hover:text-primary"
                     >
-                      الفصل {second.number}<span className="sr-only"> — {second.titleAr}، {item.series.titleAr}</span>
+                      الفصل {second.number}{second.isPremiumDemo && <><LockKeyhole className="size-3 text-gold" aria-hidden /><span className="sr-only">فصل مقفل</span></>}<span className="sr-only"> — {second.titleAr}، {item.series.titleAr}</span>
                     </Link>
+                    </li>
                   )}
-                </div>
+                </ul>
 
                 {/* Meta bottom row */}
                 <div className="flex items-center gap-2 text-[11px] text-muted-foreground pt-0.5">

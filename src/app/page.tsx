@@ -13,6 +13,7 @@ import {
   getLatestUpdates,
   getNewestSeries,
   getTrendingSeries,
+  getFirstReadableChapter,
   getSeriesBySlug,
   currentProfileOrNull,
   parseJsonArray,
@@ -20,6 +21,7 @@ import {
 } from "@/lib/queries";
 import { getForYouSeries } from "@/lib/foryou";
 import type { Category, Format } from "@/lib/constants";
+import { readerHref } from '@/lib/reader-route';
 
 export const dynamic = "force-dynamic";
 
@@ -37,6 +39,9 @@ export default async function HomePage() {
 
   // Guest featured series (first trending or newest series for guest hero without fake metrics)
   const guestFeatured = (trending[0] ?? newest[0] ?? null) as SeriesCard | null;
+  const firstChapter = guestFeatured ? await getFirstReadableChapter(guestFeatured.id) : null;
+  const guestReadHref = guestFeatured && firstChapter
+    ? readerHref(guestFeatured.format, guestFeatured.slug, firstChapter.number) : undefined;
 
   // Group latest updates by work (one card per work, up to 2 newest chapter links)
   const groupedMap = new Map<string, GroupedSeriesUpdate>();
@@ -114,6 +119,7 @@ export default async function HomePage() {
         <ContinueReadingHero
           initialItems={continueItems}
           guestFeatured={guestFeatured}
+          guestReadHref={guestReadHref}
         />
 
         <div className="mx-auto max-w-6xl px-4 sm:px-6">
@@ -137,7 +143,7 @@ export default async function HomePage() {
                 {editorialPicks.map(work => (
                   <Link key={work.slug} href={'/series/' + work.slug} className="group min-w-0 overflow-hidden rounded-lg border border-border bg-card/50 transition hover:border-primary/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary">
                     <div className="relative aspect-[4/5] overflow-hidden">
-                      <Image src={work.cover} alt={'غلاف ' + work.title} fill sizes="(max-width: 640px) 50vw, 220px" className="object-cover object-top transition duration-300 group-hover:scale-[1.03]" />
+                      <Image src={work.cover || '/art/covers/no-cover.svg'} alt={work.cover ? 'غلاف ' + work.title : 'الغلاف غير متاح — ' + work.title} fill sizes="(max-width: 640px) 50vw, 220px" className="object-cover object-top transition duration-300 group-hover:scale-[1.03]" />
                     </div>
                     <div className="p-3">
                       <h3 className="line-clamp-2 text-sm font-bold group-hover:text-primary">{work.title}</h3>
@@ -158,9 +164,9 @@ export default async function HomePage() {
             </Rail>
           )}
 
-          {/* الأكثر رواجًا هذا الأسبوع */}
+          {/* Lifetime read count, not a weekly ranking. */}
           {trending.length > 0 && (
-            <Rail title="الأكثر رواجًا هذا الأسبوع" href="/explore?sort=popular">
+            <Rail title="الأكثر قراءة" href="/explore?sort=popular">
               {trending.map((s, i) => (
                 <SeriesCardItem key={s.id} series={s} badge={`${i + 1}`} />
               ))}
@@ -169,7 +175,7 @@ export default async function HomePage() {
 
           {/* أضيف حديثًا */}
           {newest.length > 0 && (
-            <Rail title="أضيف حديثًا" href="/explore?sort=newest">
+            <Rail title="أضيف حديثًا" href="/explore" actionLabel="استكشف المكتبة">
               {newest.map((s) => (
                 <SeriesCardItem key={s.id} series={s} />
               ))}
