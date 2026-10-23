@@ -79,7 +79,7 @@ export function HomeLatestUpdates({
                 aria-hidden
               >
                 <Image
-                  src={item.series.coverPath || "/art/covers/warden-of-the-twilight-gate.webp"}
+                  src={item.series.coverPath || "/art/covers/no-cover.svg"}
                   alt={`غلاف ${item.series.titleAr}`}
                   fill
                   sizes="110px"

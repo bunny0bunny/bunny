@@ -68,7 +68,7 @@ export function ContinueReadingHero({
               {/* Cover Art Visual */}
               <div className="relative w-[32%] shrink-0 overflow-hidden md:w-[58%]">
                 <Image
-                  src={hero.coverPath || "/art/covers/warden-of-the-twilight-gate.webp"}
+                  src={hero.coverPath || "/art/covers/no-cover.svg"}
                   alt={`غلاف ${hero.seriesTitle}`}
                   fill
                   priority
@@ -148,7 +148,7 @@ export function ContinueReadingHero({
             <div className="flex min-h-48 items-stretch md:min-h-52 md:flex-row-reverse">
               <div className="relative w-[32%] shrink-0 overflow-hidden md:w-[58%]">
                 <Image
-                  src={guestFeatured.coverPath || "/art/covers/warden-of-the-twilight-gate.webp"}
+                  src={guestFeatured.coverPath || "/art/covers/no-cover.svg"}
                   alt={`غلاف ${guestFeatured.titleAr}`}
                   fill
                   priority

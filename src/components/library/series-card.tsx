@@ -54,8 +54,8 @@ export function SeriesCardItem({
     >
       <div className="relative aspect-[2/3] w-full overflow-hidden rounded-xl border border-border/70 bg-card shadow-sm transition duration-300 group-hover:-translate-y-1 group-hover:border-primary/50 group-hover:shadow-[0_12px_32px_-12px_rgba(180,151,239,0.35)]">
         <Image
-          src={series.coverPath || "/art/covers/warden-of-the-twilight-gate.webp"}
-          alt={`غلاف ${series.titleAr}`}
+          src={series.coverPath || "/art/covers/no-cover.svg"}
+          alt={series.coverPath ? `غلاف ${series.titleAr}` : `الغلاف غير متاح — ${series.titleAr}`}
           fill
           sizes="(max-width: 640px) 50vw, (max-width: 1024px) 25vw, 180px"
           priority={priority}

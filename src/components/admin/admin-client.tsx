@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useId, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { LogOut, Loader2, Plus, Search, PenTool } from "lucide-react";
@@ -11,6 +11,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { updateChapterMeta, upsertSeries, createChapter } from "@/lib/actions";
+import { SeriesCoverEditor, uploadSeriesCover } from './series-cover-editor';
+import { UploadRequestError } from '@/lib/media/upload-request';
 import { CATEGORIES, CATEGORY_LABELS, FORMATS, FORMAT_LABELS, GENRES, SERIES_STATUSES, STATUS_LABELS, WORKFLOWS, WORKFLOW_LABELS, type Category, type Format } from "@/lib/constants";
 
 export function AdminLogoutButton({ compact = false }: { compact?: boolean }) {
@@ -79,6 +81,7 @@ export function SeriesFilters({ initial }: { initial: { q?: string; format?: str
 
 type SeriesFormValues = {
   id?: string;
+  coverPath?: string;
   titleAr: string;
   titleOriginal: string;
   slug: string;
@@ -93,6 +96,7 @@ type SeriesFormValues = {
 };
 
 export function SeriesForm({ initial }: { initial?: SeriesFormValues }) {
+  const formId = useId();
   const router = useRouter();
   const { toast } = useToast();
   const [values, setValues] = useState<SeriesFormValues>(
@@ -114,50 +118,71 @@ export function SeriesForm({ initial }: { initial?: SeriesFormValues }) {
   const [errors, setErrors] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
+  const [cover, setCover] = useState<Blob | null>(null);
+  const [coverBusy, setCoverBusy] = useState(false);
+  const [createdId, setCreatedId] = useState<string | null>(null);
+  const [recoveryRequired, setRecoveryRequired] = useState(false);
+
   const set = <K extends keyof SeriesFormValues>(k: K, v: SeriesFormValues[K]) =>
     setValues((x) => ({ ...x, [k]: v }));
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
+    if (loading || pending || coverBusy || recoveryRequired) return;
     setLoading(true);
     setErrors(null);
-    const res = await upsertSeries(values);
-    setLoading(false);
-    if (!res.ok) {
-      setErrors(res.error ?? "حدث خطأ غير متوقع");
-      return;
-    }
-    toast({ title: "تم الحفظ", description: "حُفظت بيانات العمل وظهرت في الموقع." });
-    startTransition(() => {
-      router.push(`/admin/series`);
-      router.refresh();
-    });
+    let id = createdId;
+    let savingMetadata = false;
+    try {
+      if (!id) {
+        savingMetadata = true;
+        const res = await upsertSeries(values);
+        savingMetadata = false;
+        if (!res.ok || !res.id) { setErrors(res.error ?? 'تعذّر حفظ بيانات العمل.'); return; }
+        id = res.id;
+        if (!values.id) setCreatedId(id);
+      }
+      if (cover) {
+        const saved = await uploadSeriesCover(id, values.coverPath ?? '', cover);
+        setValues(previous => ({ ...previous, coverPath: saved.coverPath }));
+        setCover(null);
+      }
+      toast({ title: 'تم الحفظ', description: 'اتحفظت بيانات العمل. ظهوره في الكتالوج مرتبط بوجود فصل منشور.' });
+      startTransition(() => { router.push(`/admin/series/${id}`); router.refresh(); });
+    } catch (cause) {
+      const unknown = savingMetadata || (cause instanceof UploadRequestError && (cause.ambiguous || cause.code === 'conflict'));
+      setRecoveryRequired(unknown);
+      setErrors(unknown ? 'تعذّر تأكيد نتيجة الحفظ. أعد تحميل الصفحة وافحص العمل قبل إعادة المحاولة.' : `${!values.id && id ? 'اتعمل العمل واتحفظت بياناته، لكن الغلاف ما اتحفظش. تقدر تعيد حفظ الغلاف من غير إنشاء عمل جديد. ' : ''}${cause instanceof UploadRequestError && cause.code === 'invalid_media' ? 'صورة الغلاف غير مدعومة. اختار صورة تانية.' : 'تعذّر حفظ الغلاف. الغلاف السابق محفوظ؛ حاول مرة أخرى أو افتح إدارة العمل.'}`);
+    } finally { setLoading(false); }
   }
 
   const field = "bg-card";
   return (
     <form onSubmit={submit} className="space-y-5" aria-label="نموذج بيانات العمل">
+      <div className="grid items-start gap-7 lg:grid-cols-[240px_minmax(0,1fr)]">
+      <SeriesCoverEditor key={values.coverPath ?? ''} seriesId={values.id ?? createdId ?? undefined} currentCover={values.coverPath ?? ''} disabled={loading || pending || recoveryRequired} onPrepared={setCover} onBusyChange={setCoverBusy} />
+      <fieldset disabled={loading || pending || Boolean(createdId) || recoveryRequired} className="min-w-0 space-y-5">
       <div className="grid gap-4 sm:grid-cols-2">
         <div className="space-y-1.5">
-          <label className="text-sm font-medium">العنوان العربي *</label>
-          <Input required value={values.titleAr} onChange={(e) => set("titleAr", e.target.value)} className={field} placeholder="مثال: حارس بوابة الشفق" />
+          <label htmlFor={`${formId}-title`} className="text-sm font-medium">العنوان العربي *</label>
+          <Input id={`${formId}-title`} required value={values.titleAr} onChange={(e) => set("titleAr", e.target.value)} className={field} placeholder="مثال: حارس بوابة الشفق" />
         </div>
         <div className="space-y-1.5">
-          <label className="text-sm font-medium">العنوان الأصلي (اختياري)</label>
-          <Input dir="ltr" value={values.titleOriginal} onChange={(e) => set("titleOriginal", e.target.value)} className={`${field} text-left`} placeholder="Original title" />
+          <label htmlFor={`${formId}-original`} className="text-sm font-medium">العنوان الأصلي (اختياري)</label>
+          <Input id={`${formId}-original`} dir="ltr" value={values.titleOriginal} onChange={(e) => set("titleOriginal", e.target.value)} className={`${field} text-left`} placeholder="Original title" />
         </div>
         <div className="space-y-1.5">
-          <label className="text-sm font-medium">المعرّف (slug) *</label>
-          <Input dir="ltr" required value={values.slug} onChange={(e) => set("slug", e.target.value)} className={`${field} text-left`} placeholder="twilight-gate-warden" disabled={Boolean(values.id)} />
+          <label htmlFor={`${formId}-slug`} className="text-sm font-medium">المعرّف (slug) *</label>
+          <Input id={`${formId}-slug`} dir="ltr" required value={values.slug} onChange={(e) => set("slug", e.target.value)} className={`${field} text-left`} placeholder="twilight-gate-warden" disabled={Boolean(values.id)} />
           <p className="text-[11px] text-muted-foreground">أحرف لاتينية صغيرة وأرقام وشرطات — لا يمكن تعديله لاحقًا.</p>
         </div>
         <div className="space-y-1.5">
-          <label className="text-sm font-medium">تصنيف المحتوى *</label>
+          <label htmlFor={`${formId}-category`} className="text-sm font-medium">تصنيف المحتوى *</label>
           <Select
             value={values.category ?? (initial ? "none" : "")}
             onValueChange={(v) => set("category", v === "none" ? null : (v as Category))}
           >
-            <SelectTrigger className={field}><SelectValue placeholder="اختر تصنيف العمل" /></SelectTrigger>
+            <SelectTrigger id={`${formId}-category`} className={`${field} w-full`}><SelectValue placeholder="اختر تصنيف العمل" /></SelectTrigger>
             <SelectContent>
               {initial && <SelectItem value="none">غير مصنّف</SelectItem>}
               {CATEGORIES.map((c) => <SelectItem key={c} value={c}>{CATEGORY_LABELS[c]}</SelectItem>)}
@@ -166,9 +191,9 @@ export function SeriesForm({ initial }: { initial?: SeriesFormValues }) {
           <p className="text-[11px] text-muted-foreground">فئة وهوية المحتوى (مانجا، مانهوا، روايات، كوميك).</p>
         </div>
         <div className="space-y-1.5">
-          <label className="text-sm font-medium">طريقة القراءة (الصيغة) *</label>
+          <label htmlFor={`${formId}-format`} className="text-sm font-medium">طريقة القراءة (الصيغة) *</label>
           <Select value={values.format} onValueChange={(v) => set("format", v as SeriesFormValues["format"])}>
-            <SelectTrigger className={field}><SelectValue /></SelectTrigger>
+            <SelectTrigger id={`${formId}-format`} className={`${field} w-full`}><SelectValue /></SelectTrigger>
             <SelectContent>
               {FORMATS.map((f) => <SelectItem key={f} value={f}>{FORMAT_LABELS[f]}</SelectItem>)}
             </SelectContent>
@@ -176,27 +201,28 @@ export function SeriesForm({ initial }: { initial?: SeriesFormValues }) {
           <p className="text-[11px] text-muted-foreground">أسلوب عرض الصفحات أو التمرير أو النص في القارئ.</p>
         </div>
         <div className="space-y-1.5">
-          <label className="text-sm font-medium">حالة النشر *</label>
+          <label htmlFor={`${formId}-status`} className="text-sm font-medium">حالة العمل *</label>
           <Select value={values.status} onValueChange={(v) => set("status", v as SeriesFormValues["status"])}>
-            <SelectTrigger className={field}><SelectValue /></SelectTrigger>
+            <SelectTrigger id={`${formId}-status`} className={`${field} w-full`}><SelectValue /></SelectTrigger>
             <SelectContent>
               {SERIES_STATUSES.map((s) => <SelectItem key={s} value={s}>{STATUS_LABELS[s]}</SelectItem>)}
             </SelectContent>
           </Select>
         </div>
         <div className="space-y-1.5">
-          <label className="text-sm font-medium">المؤلف *</label>
-          <Input required value={values.author} onChange={(e) => set("author", e.target.value)} className={field} />
+          <label htmlFor={`${formId}-author`} className="text-sm font-medium">المؤلف *</label>
+          <Input id={`${formId}-author`} required value={values.author} onChange={(e) => set("author", e.target.value)} className={field} />
         </div>
         <div className="space-y-1.5">
-          <label className="text-sm font-medium">المترجم</label>
-          <Input value={values.translator} onChange={(e) => set("translator", e.target.value)} className={field} />
+          <label htmlFor={`${formId}-translator`} className="text-sm font-medium">المترجم</label>
+          <Input id={`${formId}-translator`} value={values.translator} onChange={(e) => set("translator", e.target.value)} className={field} />
         </div>
       </div>
 
       <div className="space-y-1.5">
-        <label className="text-sm font-medium">الملخص العربي *</label>
+        <label htmlFor={`${formId}-synopsis`} className="text-sm font-medium">الملخص العربي *</label>
         <textarea
+          id={`${formId}-synopsis`}
           required
           value={values.synopsisAr}
           onChange={(e) => set("synopsisAr", e.target.value)}
@@ -237,16 +263,20 @@ export function SeriesForm({ initial }: { initial?: SeriesFormValues }) {
         />
         عمل مميّز (يظهر في الواجهة بشكل أبرز)
       </label>
+      </fieldset>
+      </div>
 
       {errors && (
         <p role="alert" className="rounded-lg border border-danger/40 bg-danger/10 px-3 py-2 text-xs text-danger">{errors}</p>
       )}
 
       <div className="flex gap-2">
-        <Button type="submit" disabled={loading || pending} className="gap-2 bg-primary text-primary-foreground hover:bg-primary/90">
+        <Button type="submit" disabled={loading || pending || coverBusy || recoveryRequired} className="min-h-11 gap-2 bg-primary text-primary-foreground hover:bg-primary/90">
           {(loading || pending) && <Loader2 className="size-4 animate-spin" aria-hidden />}
-          {values.id ? "حفظ التعديلات" : "إنشاء العمل"}
+          {createdId ? 'إعادة حفظ الغلاف' : values.id ? "حفظ التعديلات" : "إنشاء العمل"}
         </Button>
+        {createdId && <Button type="button" variant="outline" onClick={() => { router.push(`/admin/series/${createdId}`); router.refresh(); }}>فتح إدارة العمل</Button>}
+        {recoveryRequired && <Button type="button" variant="outline" onClick={() => createdId ? (router.push(`/admin/series/${createdId}`), router.refresh()) : window.location.reload()}>إعادة تحميل الحالة</Button>}
         <Button type="button" variant="outline" className="border-border" onClick={() => router.back()}>
           إلغاء
         </Button>

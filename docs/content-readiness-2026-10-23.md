@@ -1,0 +1,23 @@
+# Content readiness package — 2026-10-23
+
+## Implemented locally
+- Series creation accepts a staged independent image with an 800×1200 crop, keyboard position/zoom controls, explicit public-cover consent and optional omission. Creation navigates to the work manager; catalog visibility is correctly described as requiring a published chapter.
+- Administrators can explicitly select a chapter revision's ready first page, load it through a private same-origin proxy and crop/re-encode it as an independent JPEG. No source or draft media URL becomes a public cover.
+- Writes reuse private R2 storage and Series.coverPath without schema changes. The request guard, verified transactional actor, rate reservation (20/hour), final actor recheck and compare-and-swap preserve existing covers. Stored image bound: 2 MiB, 1200×1800 maximum; client input: 6 MiB and 16,777,216 pixels maximum. No old cover object is deleted. Definitively unreferenced objects created by that request may be removed on a failed final CAS; uncertain commit outcomes retain the object.
+- A work created before cover failure is retained and retries do not create another work. Ambiguous saves require an authoritative reload. Successful existing-work saves clear staged image state and advance the expected cover path, allowing subsequent saves on the same mounted form.
+- Missing covers use a neutral book placeholder, retaining actual existing cover paths and demo mappings. PDF upload shows actual phases and offers a separate private-preview action after successful completion. Review/submission/publication permissions and recovery locks remain unchanged.
+
+## Verification
+- `node --test scripts/qa-cover-policy.test.mjs scripts/qa-cover-routes.test.mjs`: 16 tests passed. Actual route modules are bundled with local storage/auth/database fixtures; no hosted writes. Includes genuine JPEG validation, gateway current-reference checks, anonymous/editor rejection before body buffering, cross-series source rejection, private source proxy, CAS/storage failure preservation and oversized-stream cancellation.
+- Existing request/Worker ownership tests: 16 passed. Node prints the existing module-type warning; intentional disconnect-failure fixtures log their fixed safe diagnostic.
+- Actual SeriesForm/CoverEditor browser harness: 7 scenarios passed, including post-create recovery and the same-page repeated-save regression. Actual PDF panel harness: 9 scenarios passed, including successful private-preview action.
+- TypeScript and scoped ESLint passed; Impeccable detector returned `[]`. Desktop 1366px and mobile 390px actual-component captures used the project's styles and Arabic font, with no horizontal overflow or uncaught page errors. One visual correction batch adjusted form control widths/labels; confirmation captures passed. These are local component fixtures, not physical-device or hosted end-to-end acceptance.
+
+## Review and delegation
+The configured Antigravity UI lane authenticated but headless command execution was denied; it made no UI changes and no permission bypass was used. Codex implemented the fallback. One configured Claude read-only combined review found the stale cover path/staged image on repeated edit saves; its regression reproduced the bug and passed after correction. Malformed previous-cover encoding and stale phase indicators were also corrected. The relay's change tripwire flagged the coordinator's concurrent edits/new local tests; the reviewer had only Read/Glob/Grep tools and did not apply edits. No second review loop was requested.
+
+## Limits and release boundary
+- No deployment, production migration, billing change, email, demo deletion or actual content/upload/publication change was performed. Existing local untracked project files are preserved.
+- Workers Paid activation is unverified and the CPU blocker remains open. The public cover gateway deliberately checks the current reference on every request and returns a short-lived signed redirect with no-store. Each displayed new cover therefore requires a Worker invocation, DB lookup and signing; no public caching tradeoff or capacity guarantee is implied. Validate the hosted package after the hosting decision before release.
+- Cover-options is bounded to 200 revision records. Historical covers and uncertain-write orphans are retained; the PDF cleanup CLI does not list/delete arbitrary objects and does not manage these independent cover objects.
+- No production build/deployment, real R2 cover write or physical Safari/mobile acceptance was performed in this package. Client/browser and route fixtures do not verify production R2/signing/runtime configuration.

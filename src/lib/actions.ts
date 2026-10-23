@@ -109,7 +109,7 @@ const seriesSchema = z
     }
   );
 
-export async function upsertSeries(input: unknown): Promise<ActionResult & { slug?: string }> {
+export async function upsertSeries(input: unknown): Promise<ActionResult & { slug?: string; id?: string }> {
   try {
     await requireAdmin();
   } catch {
@@ -144,7 +144,7 @@ export async function upsertSeries(input: unknown): Promise<ActionResult & { slu
     revalidatePath("/admin/series");
     revalidatePath(`/series/${d.slug}`);
     revalidatePath("/");
-    return { ok: true, slug: d.slug };
+    return { ok: true, slug: d.slug, id: d.id };
   }
 
   const accentPalette = ["#9B7BFF", "#5FCB9B", "#E56B6F", "#DDBB77", "#7FA8C9", "#C98BD9"];
@@ -158,7 +158,7 @@ export async function upsertSeries(input: unknown): Promise<ActionResult & { slu
   });
   revalidatePath("/admin/series");
   revalidatePath("/");
-  return { ok: true, slug: created.slug };
+  return { ok: true, slug: created.slug, id: created.id };
 }
 
 const chapterMetaSchema = z.object({

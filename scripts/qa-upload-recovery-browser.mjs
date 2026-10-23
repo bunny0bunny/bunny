@@ -9,7 +9,7 @@ import { chromium, expect } from '@playwright/test';
 const root = process.cwd(), folder = path.join(root, '.local-preview/upload-recovery-browser');
 await mkdir(folder, { recursive: true });
 const entry = `import React,{useState} from 'react';import{createRoot}from'react-dom/client';import{PdfUploadPanel}from'${path.join(root, 'src/components/studio/pdf-upload-panel.tsx').replaceAll('\\', '/')}';
-window.events={started:0,busy:false};function App(){const[pending,setPending]=useState(location.search.includes('pending')?'known':null);const[version,setVersion]=useState(1);const[unsaved,setUnsaved]=useState(location.search.includes('unsaved'));return <PdfUploadPanel revisionId="revision" version={version} pendingUploadId={pending} uploadsEnabled disabled={false} unsaved={unsaved} onSaveDraft={()=>setUnsaved(false)} onBusyChange={value=>window.events.busy=value} onStarted={(id,v)=>{window.events.started++;setPending(id);setVersion(v)}} onRevision={r=>{setPending(r.pendingUploadId);setVersion(r.version)}}/>}createRoot(document.getElementById('root')).render(<App/>);`;
+window.events={started:0,busy:false,preview:0};function App(){const[pending,setPending]=useState(location.search.includes('pending')?'known':null);const[version,setVersion]=useState(1);const[unsaved,setUnsaved]=useState(location.search.includes('unsaved'));return <PdfUploadPanel onPreview={()=>window.events.preview++} revisionId="revision" version={version} pendingUploadId={pending} uploadsEnabled disabled={false} unsaved={unsaved} onSaveDraft={()=>setUnsaved(false)} onBusyChange={value=>window.events.busy=value} onStarted={(id,v)=>{window.events.started++;setPending(id);setVersion(v)}} onRevision={r=>{setPending(r.pendingUploadId);setVersion(r.version)}}/>}createRoot(document.getElementById('root')).render(<App/>);`;
 await build({ stdin: { contents: entry, loader: 'tsx', resolveDir: root }, bundle: true, splitting: true, format: 'esm', platform: 'browser', jsx: 'automatic', outdir: folder, logLevel: 'silent', tsconfig: path.join(root, 'tsconfig.json'), plugins: [{ name: 'fixture-pdf', setup(b) {
   b.onResolve({ filter: /\/media\/pdf-client$/ }, () => ({ path: 'pdf', namespace: 'fixture' }));
   b.onLoad({ filter: /.*/, namespace: 'fixture' }, () => ({ contents: 'export async function openPdf(){return{pageCount:2,renderPage:async()=>new Blob(["fixture"],{type:"image/webp"}),destroy:async()=>{}}}', loader: 'js' }));
@@ -130,6 +130,21 @@ try {
     await expect(uploadButton(page)).toBeDisabled(); await page.getByRole('button', { name: 'حفظ تغييرات المسودة', exact: true }).click();
     await expect(uploadButton(page)).toBeEnabled(); await expect(page.getByText('fixture.pdf', { exact: true })).toBeVisible();
     checks.push('picker still supports selection before save and preserves selected file'); await page.close();
+  }
+  {
+    const page = await browser.newPage();
+    await page.route('**/api/uploads**', async route => {
+      const url = new URL(route.request().url());
+      if (url.pathname === '/api/uploads') await route.fulfill({ json: { ok: true, uploadId: 'known', revisionVersion: 2 } });
+      else if (url.pathname.endsWith('/complete')) await route.fulfill({ json: { ok: true, revision: { version: 3, pendingUploadId: null } } });
+      else await route.fulfill({ json: { ok: true } });
+    });
+    await page.goto(origin); await select(page); await uploadButton(page).click();
+    const preview = page.getByRole('button', { name: 'فتح المعاينة الخاصة', exact: true });
+    await expect(preview).toBeEnabled(); await preview.click();
+    assert.equal(await page.evaluate(() => window.events.preview), 1);
+    await expect(page.getByRole('list', { name: 'مراحل رفع الفصل' })).toContainText('جاهز للمعاينة');
+    checks.push('successful upload exposes separate private-preview action without submission'); await page.close();
   }
   console.log(JSON.stringify({ pass: true, checks }, null, 2));
 } finally { await browser.close(); await new Promise(resolve => server.close(resolve)); }

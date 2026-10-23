@@ -260,7 +260,7 @@ export default async function StudioWorkspacePage({
                         <div className="flex items-start gap-3">
                           <div className="relative aspect-[3/4] w-12 shrink-0 overflow-hidden rounded-lg bg-secondary/40">
                             <img
-                              src={ch.series.coverPath || "/art/covers/warden-of-the-twilight-gate.webp"}
+                              src={ch.series.coverPath || "/art/covers/no-cover.svg"}
                               alt={ch.series.titleAr}
                               className="size-full object-cover"
                               loading="lazy"

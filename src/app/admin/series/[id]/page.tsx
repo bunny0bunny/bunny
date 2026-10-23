@@ -29,7 +29,7 @@ export default async function AdminSeriesDetailPage({
   const publishedCount = s.chapters.filter((c) => c.workflow === "published").length;
 
   return (
-    <main className="mx-auto max-w-4xl p-4 pt-6 sm:p-6">
+    <main className="mx-auto max-w-5xl p-4 pt-6 sm:p-6">
       <Button asChild variant="ghost" size="sm" className="mb-4 gap-1.5 text-muted-foreground">
         <Link href="/admin/series">
           <ArrowRight className="size-4" aria-hidden />
@@ -40,7 +40,7 @@ export default async function AdminSeriesDetailPage({
       <header className="mb-6 flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-3">
           <span className="relative block size-14 shrink-0 overflow-hidden rounded-xl border border-border/60">
-            <Image src={s.coverPath || "/art/covers/warden-of-the-twilight-gate.webp"} alt="" fill sizes="56px" className="object-cover" />
+            {s.coverPath ? <Image src={s.coverPath} alt="" fill sizes="56px" className="object-cover" /> : <span className="flex h-full items-center justify-center bg-secondary text-xs text-muted-foreground">بلا غلاف</span>}
           </span>
           <div>
             <h1 className="text-xl font-bold text-foreground">{s.titleAr}</h1>
@@ -59,7 +59,7 @@ export default async function AdminSeriesDetailPage({
           <Button asChild variant="outline" size="sm" className="gap-1.5 border-border">
             <Link href={`/series/${s.slug}`} target="_blank">
               <ExternalLink className="size-4" aria-hidden />
-              معاينة
+              صفحة العمل العامة
             </Link>
           </Button>
         </div>
@@ -150,6 +150,7 @@ export default async function AdminSeriesDetailPage({
             <SeriesForm
               initial={{
                 id: s.id,
+                coverPath: s.coverPath,
                 titleAr: s.titleAr,
                 titleOriginal: s.titleOriginal ?? "",
                 slug: s.slug,

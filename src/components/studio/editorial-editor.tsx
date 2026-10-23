@@ -704,6 +704,7 @@ export function EditorialEditor({
             </div>
 
             {isVisual && <PdfUploadPanel
+              onPreview={() => { if (!uploadBusyRef.current) setActiveTab('preview'); }}
               revisionId={revision.id}
               version={revision.version}
               pendingUploadId={revision.pendingUploadId}

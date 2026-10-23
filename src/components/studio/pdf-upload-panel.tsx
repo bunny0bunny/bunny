@@ -17,6 +17,7 @@ type Props = {
   onBusyChange: (busy: boolean) => void;
   onStarted: (uploadId: string, version: number) => void;
   onRevision: (revision: WorkingRevision) => void;
+  onPreview?: () => void;
 };
 type RevisionResponse = { ok: true; revision: WorkingRevision } | { ok: false; error: string; code: string };
 
@@ -33,6 +34,7 @@ export function PdfUploadPanel(props: Props) {
   const [busy, setBusy] = useState(false);
   const [cancelling, setCancelling] = useState(false);
   const [message, setMessage] = useState("");
+  const [phase, setPhase] = useState<'idle' | 'source' | 'pages' | 'attaching' | 'ready'>('idle');
   const [error, setError] = useState<string | null>(null);
   const [status, setStatus] = useState<UploadStatus | null>(null);
   const [recoveryRequired, setRecoveryRequired] = useState(false);
@@ -102,6 +104,7 @@ export function PdfUploadPanel(props: Props) {
     setWorking(true);
     setError(null);
     setStatus(null);
+    setPhase('idle');
     setProgress({ ready: 0, total: 0 });
     // Publish ownership before preflight can synchronously fail and clear it.
     task.current = Promise.resolve().then(async () => {
@@ -121,11 +124,13 @@ export function PdfUploadPanel(props: Props) {
         if (mounted.current) latestProps.current.onStarted(started.uploadId, started.revisionVersion);
         abort.signal.throwIfAborted();
         setMessage("جارٍ رفع ملف PDF الأصلي الخاص…");
+        setPhase('source');
         // Content-Length is supplied by the browser for these Blob bodies.
         await request(`/api/uploads/${started.uploadId}/source`, { method: "PUT", headers: { "Content-Type": "application/pdf", "X-Bunny-Upload": "1" }, body: selected, signal: abort.signal });
         let totalBytes = selected.size;
         for (let index = 0; index < document.pageCount; index++) {
           abort.signal.throwIfAborted();
+          setPhase('pages');
           setMessage(`جارٍ تجهيز ورفع الصفحة ${index + 1} من ${document.pageCount}…`);
           const blob = await document.renderPage(index, abort.signal);
           totalBytes += blob.size;
@@ -136,14 +141,16 @@ export function PdfUploadPanel(props: Props) {
         }
         abort.signal.throwIfAborted();
         setMessage("جارٍ إرفاق الصفحات بالمسودة…");
+        setPhase('attaching');
         const completed = await request<RevisionResponse>(`/api/uploads/${started.uploadId}/complete`, json({ expectedVersion: upload.current.version }));
         if (completed.ok) {
           attached.current = true;
           upload.current = { id: null, version: completed.revision.version };
-          if (mounted.current) { latestProps.current.onRevision(completed.revision); setMessage("اكتمل الرفع. افتح المعاينة الخاصة وافحص الصفحات قبل إرسال النسخة للمراجعة."); }
+          if (mounted.current) { latestProps.current.onRevision(completed.revision); setPhase('ready'); setMessage("اكتمل الرفع. افتح المعاينة الخاصة وافحص الصفحات قبل إرسال النسخة للمراجعة."); }
         }
       } catch (cause) {
         if (mounted.current) {
+          setPhase('idle');
           setMessage("");
           setError(abort.signal.aborted ? "توقفت المحاولة. تحقّق من الحالة المحفوظة قبل أي رفع جديد." : cause instanceof Error ? cause.message : "تعذّر تجهيز الملف. ألغِ المحاولة ثم أعد رفع الملف كاملًا.");
           const knownId = upload.current.id;
@@ -181,6 +188,7 @@ export function PdfUploadPanel(props: Props) {
         }
       }
       setStatus(null);
+      setPhase(attached.current ? 'ready' : 'idle');
       setError(null);
       if (!attached.current) setProgress({ ready: 0, total: 0 });
       setMessage(attached.current ? "اكتمل إرفاق الصفحات قبل تأكيد الإلغاء. افحص المعاينة الخاصة؛ لم تُنشر النسخة." : "أُلغي الرفع. يمكنك اختيار ملف وإعادة الرفع من البداية؛ صفحات المسودة السابقة محفوظة.");
@@ -224,11 +232,13 @@ export function PdfUploadPanel(props: Props) {
         </div>
       </div>
       <div role="status" aria-live="polite" className="space-y-2 text-sm">
+        {phase !== 'idle' && <ol aria-label="مراحل رفع الفصل" className="flex flex-wrap gap-3 text-xs leading-6 text-muted-foreground">{(['source', 'pages', 'ready'] as const).map(step => <li key={step} aria-current={(phase === step || (phase === 'attaching' && step === 'pages')) ? 'step' : undefined} className={(phase === step || (phase === 'attaching' && step === 'pages')) ? 'font-semibold text-primary' : ''}>{step === 'source' ? 'رفع الملف الأصلي' : step === 'pages' ? 'تجهيز ورفع الصفحات' : 'جاهز للمعاينة'}</li>)}</ol>}
         {message && <p>{message}</p>}
         {progress.total > 0 && <><progress className="h-2 w-full accent-primary" max={progress.total} value={progress.ready} aria-label="الصفحات المرفوعة" /><p className="text-xs text-muted-foreground">{progress.ready} / {progress.total} صفحة مرفوعة</p></>}
       </div>
       {(error || recoveryRequired) && <div className="space-y-2">{error && <p role="alert" className="rounded-lg border border-danger/40 bg-danger/10 p-3 text-sm leading-7 text-danger">{error}</p>}<Button type="button" variant="ghost" disabled={cancelling} className="min-h-11" onClick={() => window.location.reload()}>إعادة تحميل حالة النسخة من الخادم</Button></div>}
       <div className="flex flex-wrap gap-3">
+        {phase === 'ready' && props.onPreview && <Button type="button" disabled={busy || recoveryRequired} onClick={props.onPreview} className="min-h-11">فتح المعاينة الخاصة</Button>}
         <Button type="button" onClick={start} disabled={blocked || !file} className="min-h-11">رفع الملف كاملًا وتجهيز المعاينة</Button>
         {(busy || props.pendingUploadId) && !recoveryRequired && <Button type="button" variant="outline" onClick={cancel} disabled={cancelling} className="min-h-11">{cancelling ? "جارٍ تأكيد الإلغاء…" : "إلغاء الرفع لإعادة المحاولة"}</Button>}
       </div>

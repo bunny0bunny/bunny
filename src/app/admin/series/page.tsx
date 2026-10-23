@@ -61,7 +61,7 @@ export default async function AdminSeriesPage({
                 <td className="p-3">
                   <div className="flex items-center gap-3">
                     <span className="relative block size-11 shrink-0 overflow-hidden rounded-lg border border-border/60">
-                      <Image src={s.coverPath || "/art/covers/warden-of-the-twilight-gate.webp"} alt="" fill sizes="44px" className="object-cover" />
+                      {s.coverPath ? <Image src={s.coverPath} alt="" fill sizes="44px" className="object-cover" /> : <span className="flex h-full items-center justify-center bg-secondary text-[10px] text-muted-foreground">بلا غلاف</span>}
                     </span>
                     <div className="min-w-0">
                       <p className="truncate font-medium text-foreground">{s.titleAr}</p>

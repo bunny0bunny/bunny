@@ -235,7 +235,7 @@ export default async function ProfilePage() {
                   <li key={p.id}>
                     <Link href={`/read/${p.series.format}/${p.series.slug}/${p.chapter.number}`} className="flex items-center gap-3 px-4 py-3 transition hover:bg-accent/40">
                       <span className="relative size-11 shrink-0 overflow-hidden rounded-lg border border-border/60">
-                        <Image src={p.series.coverPath || "/art/covers/warden-of-the-twilight-gate.webp"} alt="" fill sizes="44px" className="object-cover" />
+                        <Image src={p.series.coverPath || "/art/covers/no-cover.svg"} alt="" fill sizes="44px" className="object-cover" />
                       </span>
                       <span className="min-w-0 flex-1">
                         <span className="block truncate text-sm font-medium">{p.series.titleAr}</span>
