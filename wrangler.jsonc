@@ -9,6 +9,9 @@
   ],
   "workers_dev": true,
   "minify": true,
+  "limits": {
+    "cpu_ms": 30000
+  },
   "assets": {
     "directory": ".open-next/assets",
     "binding": "ASSETS"
