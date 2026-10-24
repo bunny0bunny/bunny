@@ -207,6 +207,7 @@ export function EditorialEditor({
   );
 
   const [activeTab, setActiveTab] = useState<"edit" | "preview" | "history">("edit");
+  const [previewedRevision, setPreviewedRevision] = useState<string | null>(null);
   const [conflictOccurred, setConflictOccurred] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
@@ -656,7 +657,7 @@ export function EditorialEditor({
             <button
               type="button"
               disabled={uploadBusy}
-              onClick={() => { if (!uploadBusyRef.current) setActiveTab("preview"); }}
+              onClick={() => { if (!uploadBusyRef.current) { setPreviewedRevision(`${revision.id}:${revision.version}`); setActiveTab("preview"); } }}
               className={`min-h-[44px] rounded-md px-3 text-xs font-medium transition disabled:cursor-wait disabled:opacity-50 ${
                 activeTab === "preview" ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
               }`}
@@ -765,7 +766,10 @@ export function EditorialEditor({
             </div>
 
             {isVisual && <PdfUploadPanel
-              onPreview={() => { if (!uploadBusyRef.current) setActiveTab('preview'); }}
+              onPreview={() => { if (!uploadBusyRef.current) { setPreviewedRevision(`${revision.id}:${revision.version}`); setActiveTab('preview'); } }}
+              previewOpened={previewedRevision === `${revision.id}:${revision.version}`}
+              firstPageImagePath={pages[0]?.imagePath}
+              coverEditorHref={isAdmin ? `/admin/series/${chapter.seriesId}#series-cover` : undefined}
               revisionId={revision.id}
               version={revision.version}
               pendingUploadId={revision.pendingUploadId}

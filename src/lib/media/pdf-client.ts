@@ -1,12 +1,11 @@
 import "client-only";
 import type { PDFDocumentProxy, PDFPageProxy } from "pdfjs-dist";
+import { getProcessingProfile, getRenderDimensions, simpleRasterScale, type ProcessingProfile } from "./pdf-processing";
 
 const SOURCE_LIMIT_BYTES = 30 * 1024 * 1024; // 30 MiB
 const PAGE_LIMIT_BYTES = 6 * 1024 * 1024;    // 6 MiB
 const MAX_PAGES = 200;
-const TARGET_WIDTH = 1440;
 const MAX_PIXELS = 16_777_216;
-const MAX_EDGE = 16_000;
 const CANVAS_MAX_AREA_BYTES = 67_108_864;
 
 function isAbortError(err: unknown): boolean {
@@ -19,9 +18,11 @@ function checkAbort(signal?: AbortSignal) {
 
 export async function openPdf(
   file: File,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  profile: ProcessingProfile = "balanced-v1"
 ): Promise<{
   pageCount: number;
+  sourceSha256: string;
   renderPage(index: number, pageSignal?: AbortSignal): Promise<Blob>;
   destroy(): Promise<void>;
 }> {
@@ -49,6 +50,13 @@ export async function openPdf(
   if (!isPdf) {
     throw new Error("الملف المحدد ليس ملف PDF صالحًا (توقيع الملف غير مطابق).");
   }
+
+  // PDF.js transfers (detaches) its input buffer to the worker. Hash the original
+  // bytes first so resume identity never depends on rendered or encoded images.
+  const digest = await crypto.subtle.digest("SHA-256", buffer);
+  const sourceSha256 = Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, "0")).join("");
+  checkAbort(signal);
+  const encoding = getProcessingProfile(profile);
 
   const moduleUrl = `${window.location.origin}/vendor/pdfjs/pdf.min.mjs`;
   const pdfjs: typeof import("pdfjs-dist") = await import(/* webpackIgnore: true */ moduleUrl);
@@ -119,6 +127,7 @@ export async function openPdf(
 
   return {
     pageCount,
+    sourceSha256,
 
     async renderPage(index: number, pageSignal?: AbortSignal): Promise<Blob> {
       if (isDestroyed) throw new Error("تم إغلاق مستند PDF مسبقًا.");
@@ -143,30 +152,21 @@ export async function openPdf(
       pageSignal?.addEventListener("abort", onPageAbort, { once: true });
 
       try {
+        checkAbort(signal);
+        checkAbort(pageSignal);
         page = await doc.getPage(index + 1);
         checkAbort(mergedAbort.signal);
 
         const unscaledViewport = page.getViewport({ scale: 1 });
-        if (![unscaledViewport.width, unscaledViewport.height].every(value => Number.isFinite(value) && value > 0)) {
-          throw new Error("أبعاد الصفحة غير صالحة.");
+        let rasterScale: number | null = null;
+        try {
+          rasterScale = simpleRasterScale(await page.getOperatorList(), pdfjs.OPS, unscaledViewport);
+        } catch {
+          // Inspection is an optimization only. Uncertain pages retain the
+          // normal rendering path rather than losing detail or failing import.
         }
-        let scale = TARGET_WIDTH / unscaledViewport.width;
-        let w = Math.max(1, Math.floor(unscaledViewport.width * scale));
-        let h = Math.max(1, Math.floor(unscaledViewport.height * scale));
-
-        const maxDim = Math.max(w, h);
-        if (maxDim > MAX_EDGE) {
-          scale *= MAX_EDGE / maxDim;
-          w = Math.max(1, Math.floor(unscaledViewport.width * scale));
-          h = Math.max(1, Math.floor(unscaledViewport.height * scale));
-        }
-
-        const totalPixels = w * h;
-        if (totalPixels > MAX_PIXELS) {
-          scale *= Math.sqrt(MAX_PIXELS / totalPixels);
-          w = Math.max(1, Math.floor(unscaledViewport.width * scale));
-          h = Math.max(1, Math.floor(unscaledViewport.height * scale));
-        }
+        checkAbort(mergedAbort.signal);
+        const { scale, width: w, height: h } = getRenderDimensions(unscaledViewport, rasterScale);
 
         canvas = document.createElement("canvas");
         canvas.width = w;
@@ -200,12 +200,12 @@ export async function openPdf(
         checkAbort(mergedAbort.signal);
 
         let blob = await new Promise<Blob | null>((resolve) =>
-          canvas!.toBlob(resolve, "image/webp", 0.85)
+          canvas!.toBlob(resolve, "image/webp", encoding.webpQuality)
         );
 
         if (!blob || blob.type !== "image/webp") {
           blob = await new Promise<Blob | null>((resolve) =>
-            canvas!.toBlob(resolve, "image/jpeg", 0.9)
+            canvas!.toBlob(resolve, "image/jpeg", encoding.jpegQuality)
           );
         }
 

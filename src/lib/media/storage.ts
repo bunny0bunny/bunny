@@ -1,11 +1,12 @@
 import "server-only";
+import { createHash } from "node:crypto";
 import { AwsClient } from "aws4fetch";
 import { sniffPage, validatePdfPrefix, validateSourceLength, type PageMime } from "./formats";
 
 export type SignGetOptions = { expiresIn?: number; downloadName?: string };
 export interface MediaStorage {
   putPage(key: string, bytes: Uint8Array, mime: PageMime): Promise<{ bytes: number }>;
-  putSource(key: string, body: ReadableStream<Uint8Array>, expectedBytes: number): Promise<{ bytes: number }>;
+  putSource(key: string, body: ReadableStream<Uint8Array>, expectedBytes: number, expectedSha256?: string): Promise<{ bytes: number }>;
   signGet(key: string, options?: SignGetOptions): Promise<string>;
   deleteObject(key: string): Promise<void>;
 }
@@ -39,12 +40,14 @@ function metadata(mime: string): HttpMetadata {
   return { contentType: mime, cacheControl: "private, no-store", ...(mime === "application/pdf" ? { contentDisposition: attachment("source.pdf") } : {}) };
 }
 
-function pdfValidation(expectedBytes: number): TransformStream<Uint8Array, Uint8Array> {
+function pdfValidation(expectedBytes: number, expectedSha256?: string): TransformStream<Uint8Array, Uint8Array> {
+  const hash = expectedSha256 ? createHash("sha256") : null;
   let total = 0;
   let prefixBytes = 0;
   const prefix = new Uint8Array(5);
   return new TransformStream({
     transform(chunk, controller) {
+      hash?.update(chunk);
       total += chunk.byteLength;
       if (total > expectedBytes) throw new Error("PDF source exceeds its declared size");
       let consumed = 0;
@@ -60,17 +63,19 @@ function pdfValidation(expectedBytes: number): TransformStream<Uint8Array, Uint8
     },
     flush() {
       if (total !== expectedBytes || prefixBytes !== 5) throw new Error("PDF source is shorter than its declared size");
+      if (hash && hash.digest("hex") !== expectedSha256) throw new Error("PDF source identity mismatch");
     },
   });
 }
 
 /** Start producer and consumer together; abort both sides on validation/storage failure. */
-async function streamSource(key: string, body: ReadableStream<Uint8Array>, expectedBytes: number, pipe: BytePipe, store: (readable: ReadableStream<Uint8Array>, signal: AbortSignal) => Promise<void>) {
+async function streamSource(key: string, body: ReadableStream<Uint8Array>, expectedBytes: number, pipe: BytePipe, store: (readable: ReadableStream<Uint8Array>, signal: AbortSignal) => Promise<void>, expectedSha256?: string) {
   validateMediaKey(key);
   if (!key.endsWith(".pdf")) throw new Error("PDF source requires a PDF object key");
   validateSourceLength(expectedBytes);
+  if (expectedSha256 !== undefined && !/^[a-f0-9]{64}$/.test(expectedSha256)) throw new Error("Invalid source identity");
   const abort = new AbortController();
-  const piping = body.pipeThrough(pdfValidation(expectedBytes)).pipeTo(pipe.writable, { signal: abort.signal });
+  const piping = body.pipeThrough(pdfValidation(expectedBytes, expectedSha256)).pipeTo(pipe.writable, { signal: abort.signal });
   const storing = Promise.resolve().then(() => store(pipe.readable, abort.signal));
   try {
     await Promise.all([piping, storing]);
@@ -93,13 +98,13 @@ export function createBindingStorage(binding: MediaBinding, signGet: MediaStorag
       if (object === null) throw new Error("Media object already exists");
       return { bytes: bytes.byteLength };
     },
-    async putSource(key, body, expectedBytes) {
+    async putSource(key, body, expectedBytes, expectedSha256) {
       validateMediaKey(key);
       validateSourceLength(expectedBytes);
       return streamSource(key, body, expectedBytes, fixedLength(expectedBytes), async (readable) => {
         const object = await binding.put(key, readable, { onlyIf: { etagDoesNotMatch: "*" }, httpMetadata: metadata("application/pdf") });
         if (object === null) throw new Error("Media object already exists");
-      });
+      }, expectedSha256);
     },
     async signGet(key, options) { validateMediaKey(key); return signGet(key, options); },
     async deleteObject(key) { validateMediaKey(key); await binding.delete(key); },
@@ -124,8 +129,8 @@ export function createS3Storage(config: S3MediaConfig, fetchRequest: Fetch = fet
   }
   return {
     async putPage(key, bytes, mime) { validatePage(key, bytes, mime); await put(key, bytes, bytes.byteLength, mime); return { bytes: bytes.byteLength }; },
-    async putSource(key, body, expectedBytes) {
-      return streamSource(key, body, expectedBytes, new TransformStream<Uint8Array,Uint8Array>(), (readable, signal) => put(key, readable, expectedBytes, "application/pdf", signal));
+    async putSource(key, body, expectedBytes, expectedSha256) {
+      return streamSource(key, body, expectedBytes, new TransformStream<Uint8Array,Uint8Array>(), (readable, signal) => put(key, readable, expectedBytes, "application/pdf", signal), expectedSha256);
     },
     async signGet(key, options = {}) {
       const url = objectUrl(key);

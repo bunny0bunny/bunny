@@ -473,6 +473,14 @@ model ChapterUpload {
   state ChapterUploadState @default(uploading)
   sourceName String
   sourceBytes Int
+  sourceSha256 String?
+  processingProfile String?
+  keepSource Boolean @default(true)
+  sourceReviewedAt DateTime?
+  sourceDeleteAfter DateTime?
+  sourceDeletedAt DateTime?
+  sourceDeletingAt DateTime?
+  completedAt DateTime?
   expectedPages Int
   reservedBytes Int @default(0)
   revisionVersion Int
@@ -486,6 +494,7 @@ model ChapterUpload {
   createdBy Profile @relation(fields: [createdById], references: [id], onDelete: Restrict)
   assets MediaAsset[]
   @@index([createdById, state, expiresAt])
+  @@index([state, keepSource, sourceDeletedAt, sourceDeleteAfter], map: "ChapterUpload_source_retention_idx")
   @@index([revisionId])
 }
 

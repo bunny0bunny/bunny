@@ -1,8 +1,15 @@
 import { expect, mock, test } from "bun:test";
+import { createHash } from "node:crypto";
 mock.module("server-only", () => ({}));
 const { createBindingStorage, createS3Storage, validateMediaKey } = await import("../../src/lib/media/storage");
 const key = "media/test/upload123/asset123.pdf";
 const pdf = new TextEncoder().encode("%PDF-1.7\nsynthetic");
+test("streaming PDF identity is verified before a ready source can be returned", async () => {
+  const digest = createHash("sha256").update(pdf).digest("hex");
+  expect(await fixture().db.putSource(key, stream(pdf.slice(0, 3), pdf.slice(3)), pdf.length, digest)).toEqual({ bytes: pdf.length });
+  await expect(fixture().db.putSource(key, stream(pdf), pdf.length, "0".repeat(64))).rejects.toThrow();
+  await expect(fixture().db.putSource(key, stream(pdf), pdf.length, "not-a-digest")).rejects.toThrow();
+});
 function stream(...parts: Uint8Array[]) { return new ReadableStream<Uint8Array>({ start(controller) { for (const part of parts) controller.enqueue(part); controller.close(); } }); }
 function fixture(conflict = false) {
   const writes: { key: string; options: unknown; bytes: Uint8Array }[] = [];

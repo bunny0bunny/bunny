@@ -5,7 +5,9 @@ import { withSerializableTx, editableRevision, checkStaffSeriesAccess, type Edit
 import { getTrustedAppOrigin } from "@/lib/account-mail";
 import { getMediaStorage } from "./storage";
 import { sniffPage, MAX_PAGE_BYTES, MAX_SOURCE_BYTES } from "./formats";
-import { PDF_UPLOAD_LIMITS, type StartUploadInput } from "./contracts";
+import { PDF_UPLOAD_LIMITS, type StartUploadInput, type ResumeUploadInput } from "./contracts";
+import { toUploadStatus } from "./upload-status";
+import { sourceDeletionDate } from "./source-retention-policy";
 
 type Tx = Prisma.TransactionClient;
 type Actor = { id: string | null; role: string; nickname: string };
@@ -45,6 +47,8 @@ async function active(tx: Tx, actor: Actor, id: string, creator = true) {
 export async function startUpload(input: StartUploadInput): Promise<EditorialResult> {
   if (!enabled()) return fail("disabled");
   if (!input || typeof input.revisionId !== "string" || typeof input.sourceName !== "string" || input.sourceName.length < 1 || input.sourceName.length > 255 || !Number.isInteger(input.sourceBytes) || input.sourceBytes < 5 || input.sourceBytes > MAX_SOURCE_BYTES || !Number.isInteger(input.pageCount) || input.pageCount < 1 || input.pageCount > 200) return fail("invalid_input");
+  const identified = input.sourceSha256 !== undefined || input.processingProfile !== undefined;
+  if ((identified && (typeof input.sourceSha256 !== "string" || !/^[a-f0-9]{64}$/.test(input.sourceSha256) || !["balanced-v1", "high-v1"].includes(input.processingProfile ?? ""))) || (input.keepSource !== undefined && typeof input.keepSource !== "boolean") || (input.keepSource === false && !identified)) return fail("invalid_input");
   return withSerializableTx(async (tx, actor) => {
     const found = await editableRevision(tx, actor, input); if (found.error) return fail(found.error);
     const revision = found.revision!; if (revision.chapter.series.format === "novel") return fail("invalid_input");
@@ -65,11 +69,36 @@ export async function startUpload(input: StartUploadInput): Promise<EditorialRes
       if (previous?.createdById !== actor.id && actor.role !== "admin") return fail("forbidden");
       await tx.chapterUpload.update({ where: { id: revision.pendingUploadId }, data: { state: "superseded" } });
     }
-    const upload = await tx.chapterUpload.create({ data: { revisionId: revision.id, chapterId: revision.chapterId, createdById: actor.id!, sourceName: input.sourceName.replace(/[\u0000-\u001f\u007f]/g, ""), sourceBytes: input.sourceBytes, expectedPages: input.pageCount, revisionVersion: revision.version + 1, expiresAt: new Date(Date.now() + sessionMs) } });
+    const upload = await tx.chapterUpload.create({ data: { revisionId: revision.id, chapterId: revision.chapterId, createdById: actor.id!, sourceName: input.sourceName.replace(/[\u0000-\u001f\u007f]/g, ""), sourceBytes: input.sourceBytes, expectedPages: input.pageCount, sourceSha256: input.sourceSha256 ?? null, processingProfile: input.processingProfile ?? null, keepSource: input.keepSource ?? true, revisionVersion: revision.version + 1, expiresAt: new Date(Date.now() + sessionMs) } });
     const updated = await tx.chapterRevision.update({ where: { id: revision.id }, data: { pendingUploadId: upload.id, version: { increment: 1 }, status: "draft", approvedAt: null, approvedById: null, scheduledFor: null } });
     await event(tx, actor, revision.id, revision.chapterId, "start_pdf_upload");
     return { ok: true, data: { uploadId: upload.id, revisionVersion: updated.version } };
   });
+}
+
+export async function resumeUpload(id: string, input: ResumeUploadInput): Promise<EditorialResult> {
+  if (!enabled()) return fail("disabled");
+  if (!input || !Number.isInteger(input.expectedVersion) || typeof input.sourceSha256 !== "string" || !/^[a-f0-9]{64}$/.test(input.sourceSha256) || !["balanced-v1", "high-v1"].includes(input.processingProfile)) return fail("invalid_input");
+  return withSerializableTx(async (tx, actor) => {
+    const found = await active(tx, actor, id); if (found.error) return fail(found.error);
+    const upload = found.upload!;
+    if (!upload.sourceSha256 || !upload.processingProfile) return fail("resume_unsupported");
+    if (upload.revision.version !== input.expectedVersion) return fail("conflict");
+    if (upload.sourceSha256 !== input.sourceSha256 || upload.sourceBytes !== input.sourceBytes || upload.expectedPages !== input.pageCount || upload.processingProfile !== input.processingProfile) return fail("file_mismatch");
+    // Revoke only a reservation whose storage operation definitively failed.
+    // Other unready parts may still be writing and retain their normal lease.
+    if (upload.state === "failed" && upload.errorCode?.startsWith("storage_failed:")) {
+      const failedId = upload.errorCode.slice("storage_failed:".length);
+      const part = await tx.mediaAsset.findUnique({ where: { id: failedId } });
+      if (part?.uploadId === id && !part.readyAt && part.pageIndex >= -1) {
+        const oldest = await tx.mediaAsset.aggregate({ where: { uploadId: id }, _min: { pageIndex: true } });
+        await tx.mediaAsset.updateMany({ where: { id: part.id, uploadId: id, readyAt: null, pageIndex: part.pageIndex }, data: { pageIndex: Math.min(-2, (oldest._min.pageIndex ?? -1) - 1) } });
+      }
+    }
+    const updated = await tx.chapterUpload.update({ where: { id }, data: { state: "uploading", errorCode: null, expiresAt: new Date(Date.now() + sessionMs) } });
+    const assets = await tx.mediaAsset.findMany({ where: { uploadId: id }, select: { pageIndex: true, readyAt: true, bytes: true } });
+    return { ok: true, data: { status: toUploadStatus({ ...updated, revision: upload.revision, assets }) } };
+  }, { invalidate: false });
 }
 
 async function boundedBytes(request: Request, expected: number) {
@@ -89,6 +118,10 @@ export async function writeUploadAsset(id: string, index: number, request: Reque
   const reserved = await withSerializableTx(async (tx, actor) => {
     const found = await active(tx, actor, id); if (found.error) return fail(found.error); const upload = found.upload!;
     if (index >= upload.expectedPages || (index === -1 && length !== upload.sourceBytes)) return fail("invalid_input");
+    if (index >= 0 && upload.sourceSha256) {
+      const source = await tx.mediaAsset.findUnique({ where: { uploadId_pageIndex: { uploadId: id, pageIndex: -1 } } });
+      if (!source?.readyAt) return fail("source_required");
+    }
     const previous = await tx.mediaAsset.findUnique({ where: { uploadId_pageIndex: { uploadId: id, pageIndex: index } } });
     if (previous?.readyAt) return { ok: true, data: { alreadyReady: true } };
     if (previous && upload.state !== "failed" && Date.now() - previous.createdAt.getTime() < reserveMs) return fail("in_progress");
@@ -103,13 +136,13 @@ export async function writeUploadAsset(id: string, index: number, request: Reque
     const prefix = process.env.MEDIA_STORAGE_PREFIX || "prod"; if (!/^[a-zA-Z0-9][a-zA-Z0-9_-]{0,63}$/.test(prefix)) throw new Error("Invalid media prefix");
     const asset = await tx.mediaAsset.create({ data: { id: assetId, uploadId: id, chapterId: upload.chapterId, pageIndex: index, objectKey: `media/${prefix}/${id}/${assetId}.${index === -1 ? "pdf" : mime === "image/webp" ? "webp" : "jpg"}`, mime, bytes: length, width, height } });
     await tx.chapterUpload.update({ where: { id }, data: { reservedBytes: { increment: length }, state: "uploading", errorCode: null } });
-    return { ok: true, data: { asset } };
+    return { ok: true, data: { asset, sourceSha256: upload.sourceSha256 ?? undefined } };
   }, { invalidate: false });
   if (!reserved.ok) return reserved;
-  const data = reserved.data as { alreadyReady?: boolean; asset?: { id: string; objectKey: string } }; if (data.alreadyReady) return { ok: true };
+  const data = reserved.data as { alreadyReady?: boolean; asset?: { id: string; objectKey: string }; sourceSha256?: string }; if (data.alreadyReady) return { ok: true };
   try {
     const storage = await getMediaStorage();
-    const stored = index === -1 ? await storage.putSource(data.asset!.objectKey, request.body!, length) : await storage.putPage(data.asset!.objectKey, bytes!, mime as "image/webp" | "image/jpeg");
+    const stored = index === -1 ? await storage.putSource(data.asset!.objectKey, request.body!, length, data.sourceSha256) : await storage.putPage(data.asset!.objectKey, bytes!, mime as "image/webp" | "image/jpeg");
     if (stored.bytes !== length) throw new Error("invalid_length");
     return await withSerializableTx(async (tx, actor) => {
       const found = await active(tx, actor, id); if (found.error) return fail(found.error);
@@ -117,7 +150,7 @@ export async function writeUploadAsset(id: string, index: number, request: Reque
       await tx.mediaAsset.update({ where: { id: asset.id }, data: { readyAt: new Date() } }); return { ok: true };
     }, { invalidate: false });
   } catch {
-    await withSerializableTx(async (tx, actor) => { const found = await active(tx, actor, id); if (found.error) return fail(found.error); const asset = await tx.mediaAsset.findUnique({ where: { id: data.asset!.id } }); if (!asset || asset.pageIndex !== index) return fail("conflict"); await tx.chapterUpload.update({ where: { id }, data: { state: "failed", errorCode: "storage_failed" } }); return { ok: true }; }, { invalidate: false });
+    await withSerializableTx(async (tx, actor) => { const found = await active(tx, actor, id); if (found.error) return fail(found.error); const asset = await tx.mediaAsset.findUnique({ where: { id: data.asset!.id } }); if (!asset || asset.pageIndex !== index) return fail("conflict"); await tx.chapterUpload.update({ where: { id }, data: { state: "failed", errorCode: `storage_failed:${asset.id}` } }); return { ok: true }; }, { invalidate: false });
     return fail("storage_failed");
   }
 }
@@ -135,7 +168,8 @@ export async function completeUpload(id: string, expectedVersion: number): Promi
     const assets = await tx.mediaAsset.findMany({ where: { uploadId: id, pageIndex: { gte: -1 } }, orderBy: { pageIndex: "asc" } });
     if (upload.state !== "uploading" || assets.length !== upload.expectedPages + 1 || assets.some((asset, i) => !asset.readyAt || asset.chapterId !== upload.chapterId || asset.pageIndex !== i - 1 || (i > 0 && (!asset.width || !asset.height)))) return fail("incomplete");
     const revision = await tx.chapterRevision.update({ where: { id: upload.revisionId }, data: { pagesJson: assets.slice(1).map(asset => ({ pageIndex: asset.pageIndex, imagePath: `/api/media/${asset.id}`, width: asset.width!, height: asset.height! })), pendingUploadId: null, status: "draft", version: { increment: 1 } } });
-    await tx.chapterUpload.update({ where: { id }, data: { state: "ready", errorCode: null } });
+    const completedAt = upload.completedAt ?? new Date();
+    await tx.chapterUpload.update({ where: { id }, data: { state: "ready", errorCode: null, completedAt, sourceDeleteAfter: upload.keepSource ? null : sourceDeletionDate(completedAt) } });
     await event(tx, actor, revision.id, revision.chapterId, "complete_pdf_upload"); return { ok: true, revision };
   });
 }
@@ -155,9 +189,9 @@ export async function uploadStatus(id: string): Promise<EditorialResult> {
   return withSerializableTx(async (tx, actor) => {
     // Resolve expiry here as well, so abandoned sessions can be explicitly cleared by polling.
     const checked = await active(tx, actor, id, false); if (checked.error && !["expired", "conflict"].includes(checked.error)) return fail(checked.error);
-    const upload = await tx.chapterUpload.findUnique({ where: { id }, include: { revision: { include: { chapter: true } }, assets: { select: { pageIndex: true, readyAt: true } } } });
+    const upload = await tx.chapterUpload.findUnique({ where: { id }, include: { revision: { include: { chapter: true } }, assets: { select: { pageIndex: true, readyAt: true, bytes: true } } } });
     if (!upload) return fail("not_found"); if (!await checkStaffSeriesAccess(tx, actor, upload.revision.chapter.seriesId)) return fail("forbidden");
-    return { ok: true, data: { status: { uploadId: id, state: upload.state, expectedPages: upload.expectedPages, readyPages: upload.assets.filter(a => a.pageIndex >= 0 && a.readyAt).length, sourceReady: upload.assets.some(a => a.pageIndex === -1 && a.readyAt), revisionVersion: upload.revision.version, errorCode: upload.errorCode, expiresAt: upload.expiresAt.toISOString() } } };
+    return { ok: true, data: { status: toUploadStatus(upload) } };
   }, { invalidate: false });
 }
 const safeErrors: Record<string, string> = { unauthenticated: "سجّل الدخول بحساب موثّق", forbidden: "غير مسموح بهذا الإجراء", conflict: "تغيّرت النسخة؛ حدّث الصفحة", disabled: "رفع ملفات PDF غير متاح حاليًا", incomplete: "لم يكتمل رفع صفحات الفصل", expired: "انتهت جلسة الرفع؛ ابدأ من جديد", quota: "تجاوز الرفع الحد المسموح", rate_limit: "محاولات كثيرة؛ حاول لاحقًا", in_progress: "يجري رفع هذه الصفحة؛ انتظر ثم أعد المحاولة" };

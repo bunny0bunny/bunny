@@ -93,7 +93,7 @@ export function SeriesCoverEditor({ seriesId, currentCover, disabled, onPrepared
     finally { setProcessing(false); }
   }
   const locked = disabled || processing;
-  return <section aria-labelledby={`${id}-title`} className="space-y-4">
+  return <section id="series-cover" aria-labelledby={`${id}-title`} className="space-y-4">
     <div><h2 id={`${id}-title`} className="text-lg font-semibold">غلاف العمل</h2><p className="mt-1 text-sm leading-7 text-muted-foreground">صورة مستقلة للعمل. تقدر تضيفها دلوقتي أو تكمل من غير غلاف مؤقتًا.</p></div>
     {bitmap ? <div className="space-y-3">
       <canvas ref={canvas} width={800} height={1200} role="img" aria-label="معاينة قص الغلاف" className="mx-auto aspect-[2/3] w-full max-w-60 rounded-xl border border-border" />

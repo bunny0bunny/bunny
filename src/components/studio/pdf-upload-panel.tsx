@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { PDF_UPLOAD_LIMITS, type StartUploadResponse, type UploadStatus, type UploadStatusResponse } from "@/lib/media/contracts";
 import type { WorkingRevision } from "./editorial-editor";
 import { boundedWait, uploadRequest as request, UploadRequestError } from "@/lib/media/upload-request";
+import { assertResumeIdentity, sourcePolicyInput, uploadPdfParts, type UploadPhase } from "@/lib/media/pdf-upload-flow";
 
 type Props = {
   revisionId: string;
@@ -18,6 +19,9 @@ type Props = {
   onStarted: (uploadId: string, version: number) => void;
   onRevision: (revision: WorkingRevision) => void;
   onPreview?: () => void;
+  previewOpened?: boolean;
+  firstPageImagePath?: string;
+  coverEditorHref?: string;
 };
 type RevisionResponse = { ok: true; revision: WorkingRevision } | { ok: false; error: string; code: string };
 
@@ -34,7 +38,15 @@ export function PdfUploadPanel(props: Props) {
   const [busy, setBusy] = useState(false);
   const [cancelling, setCancelling] = useState(false);
   const [message, setMessage] = useState("");
-  const [phase, setPhase] = useState<'idle' | 'source' | 'pages' | 'attaching' | 'ready'>('idle');
+  const [phase, setPhase] = useState<UploadPhase>('idle');
+  const [profile, setProfile] = useState<'balanced-v1' | 'high-v1'>('balanced-v1');
+  const [keepSource, setKeepSource] = useState(false);
+  const [policyBusy, setPolicyBusy] = useState(false);
+  const [inspection, setInspection] = useState<{ file: File; profile: typeof profile; pages: number | null } | null>(null);
+  const inspectionMatches = inspection?.file === file && inspection?.profile === profile;
+  const inspecting = Boolean(file && !inspectionMatches);
+  const preflight = inspectionMatches && inspection?.pages !== null ? inspection : null;
+  const [bytes, setBytes] = useState({ pageBytes: 0, sourceBytes: 0 });
   const [error, setError] = useState<string | null>(null);
   const [status, setStatus] = useState<UploadStatus | null>(null);
   const [recoveryRequired, setRecoveryRequired] = useState(false);
@@ -44,12 +56,47 @@ export function PdfUploadPanel(props: Props) {
   const upload = useRef<{ id: string | null; version: number }>({ id: props.pendingUploadId ?? null, version: props.version });
   const mounted = useRef(true);
   const busyRef = useRef(false);
+  const policyBusyRef = useRef(false);
   const cancellingRef = useRef(false);
   const attached = useRef(false);
   const recoveryRef = useRef(false);
   const lastStatusRead = useRef<string | null>(null);
   const latestProps = useRef(props);
   useEffect(() => { latestProps.current = props; });
+  useEffect(() => {
+    if (!file) return;
+    const abort = new AbortController();
+    void (async () => {
+      let document: Awaited<ReturnType<typeof import('@/lib/media/pdf-client').openPdf>> | undefined;
+      let pageCount: number | null = null;
+      try {
+        if (file.size > PDF_UPLOAD_LIMITS.sourceBytes) throw new Error('حجم PDF يتجاوز 30 ميجابايت. اختر ملفًا أصغر.');
+        const { openPdf } = await import('@/lib/media/pdf-client');
+        document = await openPdf(file, abort.signal, profile);
+        pageCount = document.pageCount;
+      } catch (cause) {
+        if (!abort.signal.aborted) setError(cause instanceof Error ? cause.message : 'تعذّر فحص PDF. اختر الملف مرة أخرى.');
+      } finally {
+        try { if (document) await boundedWait(document.destroy(), 2000); } catch { /* bounded worker cleanup */ }
+        if (!abort.signal.aborted) setInspection({ file, profile, pages: pageCount });
+      }
+    })();
+    return () => abort.abort();
+  }, [file, profile]);
+
+  useEffect(() => {
+    if (props.pendingUploadId || busyRef.current) return;
+    const abort = new AbortController();
+    void request<{ ok: true; upload: UploadStatus | null }>(`/api/uploads?revisionId=${encodeURIComponent(props.revisionId)}`, { signal: abort.signal }, { timeoutMs: 10_000 }).then(result => {
+      if (!abort.signal.aborted && !busyRef.current && result.ok && result.upload?.state === 'ready') {
+        setStatus(result.upload);
+        setKeepSource(result.upload.keepSource);
+        setBytes({pageBytes: result.upload.pageBytes, sourceBytes: result.upload.sourceReady ? result.upload.sourceBytes : 0});
+        setPhase('ready');
+      }
+    }).catch(() => { /* Existing draft editing stays usable if policy lookup fails. */ });
+    return () => abort.abort();
+  }, [props.revisionId, props.pendingUploadId, props.version]);
   useEffect(() => {
     if (!busyRef.current && !cancellingRef.current && !recoveryRef.current) upload.current = { id: props.pendingUploadId ?? null, version: props.version };
   }, [props.pendingUploadId, props.version]);
@@ -79,6 +126,9 @@ export function PdfUploadPanel(props: Props) {
     const current = result.status;
     lastStatusRead.current = id;
     setStatus(current);
+    setKeepSource(current.keepSource);
+    if (current.processingProfile === 'balanced-v1' || current.processingProfile === 'high-v1') setProfile(current.processingProfile);
+    setBytes({pageBytes: current.pageBytes, sourceBytes: current.sourceReady ? current.sourceBytes : 0});
     setProgress({ ready: current.readyPages, total: current.expectedPages });
     upload.current = { id: current.uploadId, version: current.revisionVersion };
     if (["ready", "cancelled", "superseded"].includes(current.state)) {
@@ -95,15 +145,17 @@ export function PdfUploadPanel(props: Props) {
   }
 
   function start() {
-    if (!file || props.disabled || props.unsaved || !props.uploadsEnabled || props.pendingUploadId || upload.current.id || busyRef.current || cancellingRef.current || recoveryRef.current || task.current) return;
+    if (!file || inspecting || preflight?.file !== file || props.disabled || props.unsaved || !props.uploadsEnabled || busyRef.current || policyBusyRef.current || cancellingRef.current || recoveryRef.current || task.current) return;
     const selected = file;
+    const resumeId = props.pendingUploadId ?? upload.current.id;
+    if (resumeId && (!status || !status.sourceSha256 || !status.processingProfile || !['uploading', 'failed'].includes(status.state))) return;
     const abort = new AbortController();
     controller.current = abort;
     attached.current = false;
     lastStatusRead.current = null;
     setWorking(true);
     setError(null);
-    setStatus(null);
+    if (!resumeId) setStatus(null);
     setPhase('idle');
     setProgress({ ready: 0, total: 0 });
     // Publish ownership before preflight can synchronously fail and clear it.
@@ -113,32 +165,37 @@ export function PdfUploadPanel(props: Props) {
         setMessage("جارٍ التحقق من ملف PDF…");
         if (selected.size > PDF_UPLOAD_LIMITS.sourceBytes) throw new Error("حجم PDF يتجاوز 30 ميجابايت. اختر ملفًا أصغر.");
         const { openPdf } = await import("@/lib/media/pdf-client");
-        document = await openPdf(selected, abort.signal);
+        document = await openPdf(selected, abort.signal, profile);
         abort.signal.throwIfAborted();
         setProgress({ ready: 0, total: document.pageCount });
         // Start/complete have finite deadlines but are not interrupted by the cancel
         // button: obtain their committed result first, or require authoritative recovery.
-        const started = await request<StartUploadResponse>("/api/uploads", json({ revisionId: props.revisionId, expectedVersion: props.version, sourceName: selected.name, sourceBytes: selected.size, pageCount: document.pageCount }));
+        const identity = { sourceSha256: document.sourceSha256, sourceBytes: selected.size, pageCount: document.pageCount, processingProfile: profile };
+        let resumed: UploadStatus | undefined;
+        let started: StartUploadResponse;
+        if (resumeId) {
+          assertResumeIdentity(status!, identity);
+          const result = await request<UploadStatusResponse>(`/api/uploads/${resumeId}/resume`, json({ expectedVersion: upload.current.version, ...identity }), { timeoutMs: 10_000 });
+          if (!result.ok) return;
+          assertResumeIdentity(result.status, identity);
+          resumed = result.status;
+          setStatus(resumed);
+          started = { ok: true, uploadId: resumed.uploadId, revisionVersion: resumed.revisionVersion };
+        } else {
+          started = await request<StartUploadResponse>("/api/uploads", json({ revisionId: props.revisionId, expectedVersion: props.version, sourceName: selected.name, ...identity, keepSource }));
+        }
         if (!started.ok) return;
+        const uploadId = started.uploadId;
         upload.current = { id: started.uploadId, version: started.revisionVersion };
         if (mounted.current) latestProps.current.onStarted(started.uploadId, started.revisionVersion);
         abort.signal.throwIfAborted();
-        setMessage("جارٍ رفع ملف PDF الأصلي الخاص…");
-        setPhase('source');
-        // Content-Length is supplied by the browser for these Blob bodies.
-        await request(`/api/uploads/${started.uploadId}/source`, { method: "PUT", headers: { "Content-Type": "application/pdf", "X-Bunny-Upload": "1" }, body: selected, signal: abort.signal });
-        let totalBytes = selected.size;
-        for (let index = 0; index < document.pageCount; index++) {
-          abort.signal.throwIfAborted();
-          setPhase('pages');
-          setMessage(`جارٍ تجهيز ورفع الصفحة ${index + 1} من ${document.pageCount}…`);
-          const blob = await document.renderPage(index, abort.signal);
-          totalBytes += blob.size;
-          if (totalBytes > PDF_UPLOAD_LIMITS.aggregateBytes) throw new Error("إجمالي حجم الملف والصور يتجاوز 200 ميجابايت. قلّل حجم PDF ثم أعد رفع الملف كاملًا.");
-          if (blob.size > PDF_UPLOAD_LIMITS.pageBytes || !["image/webp", "image/jpeg"].includes(blob.type)) throw new Error("تعذّر تجهيز صفحة بحجم وتنسيق مدعومين. عدّل PDF ثم أعد المحاولة.");
-          await request(`/api/uploads/${started.uploadId}/pages/${index}`, { method: "PUT", headers: { "Content-Type": blob.type, "X-Bunny-Upload": "1" }, body: blob, signal: abort.signal });
-          setProgress({ ready: index + 1, total: document.pageCount });
-        }
+        await uploadPdfParts({ file: selected, pageCount: document.pageCount, status: resumed, signal: abort.signal,
+          renderPage: document.renderPage,
+          putSource: () => request(`/api/uploads/${uploadId}/source`, { method: 'PUT', headers: { 'Content-Type': 'application/pdf', 'X-Bunny-Upload': '1' }, body: selected, signal: abort.signal }),
+          putPage: (index, blob) => request(`/api/uploads/${uploadId}/pages/${index}`, { method: 'PUT', headers: { 'Content-Type': blob.type, 'X-Bunny-Upload': '1' }, body: blob, signal: abort.signal }),
+          onProgress: value => { setProgress({ ready: value.ready, total: value.total }); setBytes({pageBytes: value.pageBytes, sourceBytes: value.sourceBytes}); },
+          onPhase: (value, index) => { setPhase(value); setMessage(value === 'source' ? 'جارٍ رفع ملف PDF الأصلي الخاص…' : `${value === 'rendering' ? 'جارٍ تجهيز' : 'جارٍ رفع'} الصفحة ${(index ?? 0) + 1} من ${document!.pageCount}…`); },
+        });
         abort.signal.throwIfAborted();
         setMessage("جارٍ إرفاق الصفحات بالمسودة…");
         setPhase('attaching');
@@ -146,7 +203,13 @@ export function PdfUploadPanel(props: Props) {
         if (completed.ok) {
           attached.current = true;
           upload.current = { id: null, version: completed.revision.version };
-          if (mounted.current) { latestProps.current.onRevision(completed.revision); setPhase('ready'); setMessage("اكتمل الرفع. افتح المعاينة الخاصة وافحص الصفحات قبل إرسال النسخة للمراجعة."); }
+          if (mounted.current) {
+            latestProps.current.onRevision(completed.revision); setPhase('ready'); setMessage("اكتمل الرفع. افتح المعاينة الخاصة وافحص الصفحات قبل إرسال النسخة للمراجعة.");
+            try {
+              const result = await request<UploadStatusResponse>(`/api/uploads/${started.uploadId}`, {}, { timeoutMs: 10_000 });
+              if (result.ok) { setStatus(result.status); setKeepSource(result.status.keepSource); }
+            } catch { setError('اكتمل الرفع؛ تعذّر قراءة سياسة الأصل. أعد تحميل الصفحة لتحديثها.'); }
+          }
         }
       } catch (cause) {
         if (mounted.current) {
@@ -207,9 +270,33 @@ export function PdfUploadPanel(props: Props) {
     }
   }
 
-  const pickerBlocked = !ready || props.disabled || busy || cancelling || recoveryRequired || Boolean(props.pendingUploadId) || !props.uploadsEnabled;
-  const blocked = pickerBlocked || props.unsaved;
+  async function updatePolicy(permanent: boolean, reviewed = false) {
+    if (!status || status.state !== 'ready' || policyBusyRef.current || busyRef.current || recoveryRef.current || props.disabled) return;
+    try {
+      const body = sourcePolicyInput(permanent, reviewed, Boolean(props.previewOpened));
+      policyBusyRef.current = true;
+      setPolicyBusy(true);
+      latestProps.current.onBusyChange(true);
+      setError(null);
+      const result = await request<UploadStatusResponse>(`/api/uploads/${status.uploadId}/source-policy`, json(body), { timeoutMs: 10_000 });
+      if (result.ok) { setStatus(result.status); setKeepSource(result.status.keepSource); setMessage('حُفظت سياسة الملف الأصلي. صور القراءة باقية.'); }
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'تعذّر تأكيد سياسة الأصل. أعد تحميل الحالة قبل المحاولة مرة أخرى.');
+      // A policy update is not replayed after an uncertain response.
+      if (cause instanceof UploadRequestError && cause.ambiguous) requireRecovery('تعذّر تأكيد سياسة الأصل. أعد تحميل الحالة المحفوظة قبل تغييرها مرة أخرى.');
+    } finally {
+      policyBusyRef.current = false;
+      setPolicyBusy(false);
+      latestProps.current.onBusyChange(busyRef.current || recoveryRef.current);
+    }
+  }
+
+  const pickerBlocked = !ready || props.disabled || busy || policyBusy || cancelling || recoveryRequired || !props.uploadsEnabled;
+  const pending = Boolean(props.pendingUploadId || upload.current.id);
+  const resumable = Boolean(status && ['uploading', 'failed'].includes(status.state) && status.sourceSha256 && status.processingProfile);
+  const blocked = pickerBlocked || props.unsaved || inspecting || preflight?.file !== file || (pending && !resumable);
   const terminalStatus = status && ["ready", "cancelled", "superseded"].includes(status.state);
+  const formatBytes = (value: number) => `${(value / (1024 * 1024)).toLocaleString('ar-EG', { maximumFractionDigits: 2 })} MiB (${value.toLocaleString('ar-EG')} بايت)`;
   return (
     <section className="space-y-4 rounded-2xl border border-border/60 bg-card p-5" aria-labelledby={`${inputId}-heading`} aria-busy={busy || cancelling}>
       <h2 id={`${inputId}-heading`} className="text-base font-bold">رفع فصل من PDF</h2>
@@ -220,26 +307,44 @@ export function PdfUploadPanel(props: Props) {
         <p id={`${inputId}-save-help`} className="text-sm leading-7 text-gold">يمكنك اختيار الملف الآن. احفظ تغييرات المسودة لتفعيل الرفع؛ سيبقى الملف الذي اخترته جاهزًا.</p>
         <Button type="button" variant="outline" disabled={pickerBlocked} className="min-h-11" onClick={props.onSaveDraft}>حفظ تغييرات المسودة</Button>
       </div>}
-      {props.pendingUploadId && !busy && <div className="space-y-1 text-sm leading-7">{!terminalStatus && <p>يوجد رفع غير مكتمل. لا يستمر تجهيز الصفحات بعد إغلاق التبويب. ألغِ المحاولة الحالية ثم ابدأ رفع الملف كاملًا من جديد.</p>}{status && <><p className="text-muted-foreground">الصفحات المستلمة: {status.readyPages} من {status.expectedPages} · الملف الأصلي: {status.sourceReady ? "مستلم" : "لم يكتمل"} · {status.state === "failed" ? "تعذّرت المحاولة" : status.state === "ready" ? "اكتمل الإرفاق بالمسودة" : terminalStatus ? "انتهت المحاولة" : "بانتظار الإكمال أو الإلغاء"}{status.errorCode && !terminalStatus ? " — تحتاج المحاولة إلى إلغاء وإعادة رفع." : ""}</p><p className="text-xs text-muted-foreground">مهلة المحاولة: {new Date(status.expiresAt).toLocaleString("ar-EG")}</p></>}</div>}
+      {pending && !busy && <div className="space-y-1 text-sm leading-7">{!terminalStatus && <p>{resumable ? 'يوجد رفع غير مكتمل. اختر نفس PDF للتحقق منه واستكمال الأجزاء الناقصة فقط. لا يستمر العمل بعد إغلاق التبويب.' : 'تعذّر استكمال هذه المحاولة بأمان. يمكنك إلغاء المحاولة ثم البدء من جديد.'}</p>}{status && <><p dir="auto" className="break-all">{status.sourceName}</p><p className="text-muted-foreground">الصفحات المستلمة: {status.readyPages} من {status.expectedPages} · الملف الأصلي: {status.sourceReady ? "مستلم" : "لم يكتمل"} · {status.state === "failed" ? "تعذّرت المحاولة" : status.state === "ready" ? "اكتمل الإرفاق بالمسودة" : terminalStatus ? "انتهت المحاولة" : "بانتظار الإكمال أو الإلغاء"}</p><p className="text-xs text-muted-foreground">مهلة المحاولة: {new Date(status.expiresAt).toLocaleString("ar-EG")}</p></>}</div>}
       <div className="space-y-2">
         <label htmlFor={inputId} className="block text-sm font-medium">اختر ملف PDF للفصل</label>
         <input ref={fileInput} id={inputId} type="file" accept="application/pdf,.pdf" disabled={pickerBlocked} tabIndex={-1} onChange={(event) => { setFile(event.target.files?.[0] ?? null); setError(null); setMessage(""); }} className="sr-only" />
         <div className="flex min-w-0 flex-wrap items-center gap-3 rounded-lg border border-input bg-background p-3">
           <Button type="button" variant="secondary" disabled={pickerBlocked} className="min-h-11 shrink-0" aria-controls={inputId} aria-describedby={`${inputId}-file-status${props.unsaved ? ` ${inputId}-save-help` : ""}`} onClick={() => fileInput.current?.click()}>اختيار ملف PDF</Button>
           <div id={`${inputId}-file-status`} role="status" aria-live="polite" className="min-w-0 flex-1 text-sm leading-6">
-            {file ? <><p dir="auto" className="break-all text-foreground">{file.name}</p><p className="text-xs text-muted-foreground">{(file.size / (1024 * 1024)).toLocaleString("ar-EG", { maximumFractionDigits: 1 })} ميجابايت</p></> : <p className="text-muted-foreground">لم يتم اختيار ملف بعد</p>}
+            {file ? <><p dir="auto" className="break-all text-foreground">{file.name}</p><p className="text-xs text-muted-foreground">{formatBytes(file.size)} · {inspecting ? 'جارٍ فحص عدد الصفحات…' : preflight?.file === file ? `${preflight.pages} صفحة` : 'لم يكتمل الفحص'}</p></> : <p className="text-muted-foreground">لم يتم اختيار ملف بعد</p>}
           </div>
         </div>
       </div>
+      <div className="space-y-3 border-t border-border/60 pt-4 text-sm leading-7">
+        <label htmlFor={`${inputId}-profile`} className="block font-medium">جودة صور القراءة</label>
+        <select id={`${inputId}-profile`} value={profile} disabled={pickerBlocked || pending} onChange={event => setProfile(event.target.value as typeof profile)} className="min-h-11 w-full rounded-lg border border-input bg-background px-3 text-foreground focus-visible:outline-2 focus-visible:outline-primary">
+          <option value="balanced-v1">متوازن — الإعداد الافتراضي</option><option value="high-v1">جودة أعلى — قد يزيد الحجم</option>
+        </select>
+        <p className="text-xs text-muted-foreground">حجم الصور يتحدد بعد تجهيزها؛ لا توجد نسبة توفير مضمونة. نعرض الحجم الفعلي أثناء الرفع.</p>
+        {status?.state !== 'ready' && <label className="flex min-h-11 cursor-pointer items-start gap-3"><input type="checkbox" checked={keepSource} disabled={pickerBlocked || pending} onChange={event => setKeepSource(event.target.checked)} className="mt-2 size-4 accent-primary" /><span>الاحتفاظ بملف PDF الأصلي بشكل دائم</span></label>}
+        <p className="text-xs text-muted-foreground">صور القراءة تبقى محفوظة. الأصل خاص ومؤقت افتراضيًا؛ يُحذف وحده بعد اكتمال الرفع ومرور ٧ أيام، وبعد تأكيد فحص الصفحات. بعد حذفه، تتطلب إعادة المعالجة اختيار PDF مجددًا.</p>
+      </div>
       <div role="status" aria-live="polite" className="space-y-2 text-sm">
-        {phase !== 'idle' && <ol aria-label="مراحل رفع الفصل" className="flex flex-wrap gap-3 text-xs leading-6 text-muted-foreground">{(['source', 'pages', 'ready'] as const).map(step => <li key={step} aria-current={(phase === step || (phase === 'attaching' && step === 'pages')) ? 'step' : undefined} className={(phase === step || (phase === 'attaching' && step === 'pages')) ? 'font-semibold text-primary' : ''}>{step === 'source' ? 'رفع الملف الأصلي' : step === 'pages' ? 'تجهيز ورفع الصفحات' : 'جاهز للمعاينة'}</li>)}</ol>}
+        {phase !== 'idle' && <ol aria-label="مراحل رفع الفصل" className="flex flex-wrap gap-3 text-xs leading-6 text-muted-foreground">{(['source', 'rendering', 'uploading', 'attaching', 'ready'] as const).map(step => <li key={step} aria-current={phase === step ? 'step' : undefined} className={phase === step ? 'font-semibold text-primary' : ''}>{({source:'رفع الأصل',rendering:'تجهيز الصفحة',uploading:'رفع الصفحة',attaching:'إرفاق بالمسودة',ready:'جاهز للمعاينة'})[step]}</li>)}</ol>}
         {message && <p>{message}</p>}
         {progress.total > 0 && <><progress className="h-2 w-full accent-primary" max={progress.total} value={progress.ready} aria-label="الصفحات المرفوعة" /><p className="text-xs text-muted-foreground">{progress.ready} / {progress.total} صفحة مرفوعة</p></>}
+        {(bytes.pageBytes > 0 || bytes.sourceBytes > 0) && <p className="text-xs leading-6 text-muted-foreground">الحجم الفعلي المستلم — صور القراءة: {formatBytes(bytes.pageBytes)} · الأصل الخاص: {formatBytes(bytes.sourceBytes)}</p>}
       </div>
+      {status?.state === 'ready' && <div className="space-y-3 border-t border-border/60 pt-4 text-sm leading-7">
+        <h3 className="font-semibold">فحص الصفحات وسياسة الأصل</h3>
+        <p className="text-muted-foreground">{status.sourceDeletedAt ? 'حُذف الأصل المؤقت؛ صور القراءة باقية.' : status.sourceDeletingAt ? 'بدأ حذف الأصل المؤقت؛ لم يعد تغيير الاحتفاظ متاحًا.' : status.keepSource ? 'الأصل محفوظ بشكل دائم.' : status.sourceDeleteAfter ? `الأصل مؤقت. موعد الحذف بعد الفحص: ${new Date(status.sourceDeleteAfter).toLocaleString('ar-EG')}.` : 'الأصل مؤقت؛ لن يُحذف قبل تأكيد فحص الصفحات.'}</p>
+        {!status.sourceDeletedAt && !status.sourceDeletingAt && <label className="flex min-h-11 cursor-pointer items-start gap-3"><input type="checkbox" checked={keepSource} disabled={pickerBlocked} onChange={event => void updatePolicy(event.target.checked)} className="mt-2 size-4 accent-primary" /><span>الاحتفاظ بالأصل بشكل دائم</span></label>}
+        {!status.sourceReviewedAt && !status.sourceDeletedAt && !status.sourceDeletingAt && <><p className="text-xs text-muted-foreground">افتح المعاينة الخاصة وافحص ترتيب الصفحات ووضوح النص، ثم أكد الفحص هنا.</p><Button type="button" variant="outline" disabled={pickerBlocked || !props.previewOpened} onClick={() => void updatePolicy(keepSource, true)} className="min-h-11">{policyBusy ? 'جارٍ الحفظ…' : 'فحصت الصفحات وأؤكد سلامة الاستيراد'}</Button></>}
+        {status.sourceReviewedAt && <p className="text-xs text-muted-foreground">تأكد فحص الاستيراد في {new Date(status.sourceReviewedAt).toLocaleString('ar-EG')}.</p>}
+        {props.firstPageImagePath && <div className="space-y-2"><h3 className="font-semibold">الصفحة الأولى — اقتراح للغلاف</h3><img src={props.firstPageImagePath} alt="معاينة خاصة للصفحة الأولى المقترحة كغلاف" className="max-h-72 max-w-full rounded-lg object-contain" /><p className="text-xs text-muted-foreground">اقتراح خاص لهذا الملف. تغيير غلاف العمل يتطلب اختيارًا صريحًا في محرر الغلاف.</p>{props.coverEditorHref && <a href={props.coverEditorHref} className="inline-flex min-h-11 items-center text-primary underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-primary">فتح محرر غلاف العمل واختيار الغلاف</a>}</div>}
+      </div>}
       {(error || recoveryRequired) && <div className="space-y-2">{error && <p role="alert" className="rounded-lg border border-danger/40 bg-danger/10 p-3 text-sm leading-7 text-danger">{error}</p>}<Button type="button" variant="ghost" disabled={cancelling} className="min-h-11" onClick={() => window.location.reload()}>إعادة تحميل حالة النسخة من الخادم</Button></div>}
       <div className="flex flex-wrap gap-3">
         {phase === 'ready' && props.onPreview && <Button type="button" disabled={busy || recoveryRequired} onClick={props.onPreview} className="min-h-11">فتح المعاينة الخاصة</Button>}
-        <Button type="button" onClick={start} disabled={blocked || !file} className="min-h-11">رفع الملف كاملًا وتجهيز المعاينة</Button>
+        <Button type="button" onClick={start} disabled={blocked || !file} className="min-h-11">{pending ? 'التحقق من PDF واستكمال الرفع' : 'رفع الملف وتجهيز المعاينة'}</Button>
         {(busy || props.pendingUploadId) && !recoveryRequired && <Button type="button" variant="outline" onClick={cancel} disabled={cancelling} className="min-h-11">{cancelling ? "جارٍ تأكيد الإلغاء…" : "إلغاء الرفع لإعادة المحاولة"}</Button>}
       </div>
     </section>
