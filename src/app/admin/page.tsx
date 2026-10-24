@@ -102,6 +102,9 @@ export default async function AdminDashboard({
     { label: "الفصول المنشورة", value: o.publishedCount, icon: CheckCircle2, href: "/admin/chapters?workflow=published" },
     { label: "قيد المراجعة", value: o.reviewCount, icon: Eye, href: "/admin/chapters?workflow=review" },
     { label: "المسودات", value: o.draftCount, icon: FileEdit, href: "/admin/chapters?workflow=draft" },
+    { label: "طُلبت تعديلات", value: o.changesRequestedCount, icon: FileEdit, href: "/admin/chapters?workflow=changes_requested" },
+    { label: "معتمد", value: o.approvedCount, icon: CheckCircle2, href: "/admin/chapters?workflow=approved" },
+    { label: "مجدول", value: o.scheduledCount, icon: Eye, href: "/admin/chapters?workflow=scheduled" },
     { label: "قراءو العرض", value: o.profileCount, icon: Users, href: "/admin/series" },
     { label: "إجمالي الأحداث", value: o.eventCount, icon: BookOpen, href: "/admin" },
   ];
@@ -227,11 +230,7 @@ export default async function AdminDashboard({
               <CardTitle className="text-base">حالة المحتوى</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="flex h-3 overflow-hidden rounded-full bg-accent" role="img" aria-label={`منشور ${o.publishedCount}، مراجعة ${o.reviewCount}، مسودة ${o.draftCount}`}>
-                <div className="bg-success" style={{ width: `${(o.publishedCount / Math.max(o.chapterCount, 1)) * 100}%` }} />
-                <div className="bg-gold" style={{ width: `${(o.reviewCount / Math.max(o.chapterCount, 1)) * 100}%` }} />
-                <div className="bg-muted-foreground/40" style={{ width: `${(o.draftCount / Math.max(o.chapterCount, 1)) * 100}%` }} />
-              </div>
+              <p className="text-xs leading-relaxed text-muted-foreground">حالة التحرير تخص أحدث نسخة؛ قد يكون للفصل المنشور مسودة بديلة أو نسخة قيد المراجعة، لذا تتداخل أعداد النشر والتحرير.</p>
               <div className="mt-3 flex flex-wrap gap-3 text-xs text-muted-foreground">
                 <span className="flex items-center gap-1.5"><span className="size-2 rounded-full bg-success" /> {WORKFLOW_LABELS.published} ({o.publishedCount})</span>
                 <span className="flex items-center gap-1.5"><span className="size-2 rounded-full bg-gold" /> {WORKFLOW_LABELS.review} ({o.reviewCount})</span>

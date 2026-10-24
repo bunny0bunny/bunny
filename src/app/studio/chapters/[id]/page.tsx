@@ -202,6 +202,7 @@ async function loadStudioChapterPage(params: Promise<{ id: string }>) {
             }
             events={formattedEvents}
             currentActorRole={actor.role as any}
+            currentActorId={actor.id}
           />
         </div>
       </main>

@@ -418,17 +418,24 @@ notifications at publication time. Legacy direct-publish and bulk-workflow contr
 disabled; use the studio.
 
 Scheduling stores an approved revision and a future timestamp. Local preview has a
-manual administrator button to publish due chapters. **No external scheduler is active.**
-For a deployment, configure a private nonempty `EDITORIAL_CRON_SECRET` and arrange an
-external scheduler to POST `/api/editorial/publish-due` with an `Authorization: Bearer`
-header containing that secret. GET and anonymous requests cannot publish. Each request
-processes at most 20 due approved revisions; repeat as needed. Concurrent calls do not
-publish the same revision twice.
+manual administrator button to publish due chapters. The Cloudflare deployment uses
+`worker.mjs`, which preserves OpenNext's HTTP handler and runs the configured Cron
+Trigger every minute. It calls `/api/editorial/publish-due` through the existing
+`WORKER_SELF_REFERENCE` service binding with a private encrypted `EDITORIAL_CRON_SECRET`
+binding. Provision that secret before deploying a new Worker; keep `APP_ORIGIN` set to
+the production HTTPS origin. Do not put secret values in `wrangler.jsonc` or source.
+GET and anonymous requests cannot publish. Each invocation processes at most 20 due
+approved revisions; remaining revisions wait for the next invocation. Concurrent calls
+do not publish the same revision twice. A schedule is a due time; publication follows
+the next successful tick, and initial Cron configuration propagation can take time.
 
-This package does not add file uploads, PDF import, protected file delivery, team account
-provisioning or versioned series metadata. Existing `/public` chapter images remain public;
-the editor can only reorder or remove assets already belonging to that chapter.
+PDF imports and protected media delivery use the upload flow documented above. Existing
+`/public` chapter images remain public. Series metadata edits preserve the slug, and a
+series with chapters cannot change its reading format. Admin chapter status and content
+counts describe the latest working revision; public availability is shown separately.
+Unsaved editor and creation-form text can be explicitly restored within the same browser
+tab and actor context. Cover files and private media are not stored in that recovery data.
 
 Start the saved loopback preview with `bun run dev:local`. It applies migrations only to
 its local database and retains previously seeded data. Production database deployment
-and external cron activation are separate operator steps.
+and Cloudflare deployment are separate operator steps.

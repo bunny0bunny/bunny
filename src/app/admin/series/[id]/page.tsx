@@ -1,3 +1,4 @@
+import { EDITORIAL_LABELS, isPublicChapter } from "@/lib/editorial-state";
 import Link from "next/link";
 import Image from "next/image";
 import { notFound } from "next/navigation";
@@ -7,7 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ChapterWorkflowControls, SeriesForm } from "@/components/admin/admin-client";
 import { TeamAssignmentPanel } from "@/components/admin/team-assignment-panel";
-import { FORMAT_LABELS, STATUS_LABELS, WORKFLOW_LABELS, type Format, type SeriesStatus, type Workflow } from "@/lib/constants";
+import { FORMAT_LABELS, STATUS_LABELS, type Format, type SeriesStatus, type Workflow } from "@/lib/constants";
 
 export const dynamic = "force-dynamic";
 
@@ -26,7 +27,7 @@ export default async function AdminSeriesDetailPage({
   const staff = isAdmin ? await getAssignableStaff() : [];
   const assignedProfileIds = (s as any).assignments?.map((a: any) => a.profileId) ?? [];
 
-  const publishedCount = s.chapters.filter((c) => c.workflow === "published").length;
+  const publishedCount = s.chapters.filter((c) => isPublicChapter(c)).length;
 
   return (
     <main className="mx-auto max-w-5xl p-4 pt-6 sm:p-6">
@@ -76,7 +77,7 @@ export default async function AdminSeriesDetailPage({
             <thead>
               <tr className="border-b border-border/60 text-xs text-muted-foreground">
                 <th className="p-3 text-start font-medium">الفصل</th>
-                <th className="hidden p-3 text-start font-medium sm:table-cell">الصفحات</th>
+                <th className="hidden p-3 text-start font-medium sm:table-cell">المحتوى</th>
                 <th className="hidden p-3 text-start font-medium md:table-cell">سير العمل</th>
                 <th className="p-3 text-start font-medium">التحكم</th>
               </tr>
@@ -85,27 +86,27 @@ export default async function AdminSeriesDetailPage({
               {s.chapters.map((c) => (
                 <tr key={c.id} className="border-b border-border/40 last:border-0">
                   <td className="p-3">
-                    <p className="font-medium text-foreground">الفصل {c.number}: {c.titleAr}</p>
+                    <p className="font-medium text-foreground">الفصل {c.number}: {c.workingTitleAr}</p>
                     <p className="mt-0.5 flex items-center gap-2 text-[11px] text-muted-foreground">
                       {c.isPremiumDemo && (
                         <Badge variant="secondary" className="border-gold/40 bg-gold/10 text-gold">مقفل</Badge>
                       )}
-                      {c.publishedAt ? `نُشر ${c.publishedAt.toLocaleDateString("ar-EG")}` : "غير منشور"}
+                      {isPublicChapter(c) ? "النسخة العامة منشورة" : "غير منشور للعامة"}
                     </p>
                   </td>
-                  <td className="hidden p-3 tabular-nums text-muted-foreground sm:table-cell">{c._count.pages}</td>
+                  <td className="hidden p-3 tabular-nums text-muted-foreground sm:table-cell">{s.format === "novel" ? `${c.workingWordCount} كلمة` : `${c.workingPageCount} صفحة`}</td>
                   <td className="hidden p-3 md:table-cell">
                     <Badge
                       variant="secondary"
                       className={
-                        c.workflow === "published"
+                        c.workingStatus === "published"
                           ? "border-success/40 bg-success/10 text-success"
-                          : c.workflow === "review"
+                          : c.workingStatus === "review"
                             ? "border-gold/40 bg-gold/10 text-gold"
                             : "border-border bg-secondary text-muted-foreground"
                       }
                     >
-                      {WORKFLOW_LABELS[c.workflow as Workflow]}
+                      {EDITORIAL_LABELS[c.workingStatus]}
                     </Badge>
                   </td>
                   <td className="p-3">
@@ -113,10 +114,12 @@ export default async function AdminSeriesDetailPage({
                       chapter={{
                         id: c.id,
                         number: c.number,
-                        titleAr: c.titleAr,
+                        titleAr: c.workingTitleAr,
                         workflow: c.workflow as Workflow,
+                        workingStatus: c.workingStatus,
+                        publicPublished: isPublicChapter(c),
                         isPremiumDemo: c.isPremiumDemo,
-                        scheduledFor: c.scheduledFor ? c.scheduledFor.toISOString() : null,
+                        scheduledFor: c.workingScheduledFor ? c.workingScheduledFor.toISOString() : null,
                       }}
                       isAdmin={isAdmin}
                     />
@@ -148,6 +151,8 @@ export default async function AdminSeriesDetailPage({
           <h2 className="mb-3 text-lg font-bold">تعديل البيانات</h2>
           <div className="rounded-2xl border border-border/60 bg-card p-5 sm:p-6">
             <SeriesForm
+              currentActorId={profile?.id ?? ""}
+              readingFormatLocked={s.chapters.length > 0}
               initial={{
                 id: s.id,
                 coverPath: s.coverPath,

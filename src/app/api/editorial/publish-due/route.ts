@@ -2,10 +2,15 @@ import { NextResponse } from "next/server";
 import { executeDuePublications } from "@/lib/editorial";
 import { currentProfileOrNull } from "@/lib/queries";
 import { isAdminRole } from "@/lib/team-access";
+import { withDatabaseScope } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
 
 export async function POST(request: Request) {
+  return withDatabaseScope(() => publishDue(request));
+}
+
+async function publishDue(request: Request) {
   // Check authorization via:
   // 1. Cron secret: Authorization Bearer token matching nonempty EDITORIAL_CRON_SECRET
   // 2. Or logged-in admin profile session

@@ -27,7 +27,7 @@ export default async function NewSeriesPage() {
         </p>
       </header>
       <div className="rounded-2xl border border-border/60 bg-card p-5 sm:p-6">
-        <SeriesForm />
+        <SeriesForm currentActorId={profile.id} />
       </div>
     </main>
   );

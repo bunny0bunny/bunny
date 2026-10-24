@@ -13,11 +13,10 @@ import {
   getLatestUpdates,
   getNewestSeries,
   getTrendingSeries,
-  getFirstReadableChapter,
+  getGuestFeaturedSeries,
   getSeriesBySlug,
   currentProfileOrNull,
   parseJsonArray,
-  type SeriesCard,
 } from "@/lib/queries";
 import { getForYouSeries } from "@/lib/foryou";
 import type { Category, Format } from "@/lib/constants";
@@ -27,7 +26,7 @@ export const dynamic = "force-dynamic";
 
 export default async function HomePage() {
   const profile = await currentProfileOrNull();
-  const [continueItems, forYou, rawLatest, trending, newest, genres, collections] = await Promise.all([
+  const [continueItems, forYou, rawLatest, trending, newest, genres, collections, featuredSelection] = await Promise.all([
     profile ? getContinueReading(profile.id) : Promise.resolve([]),
     profile ? getForYouSeries(profile.id) : Promise.resolve([]),
     getLatestUpdates(24),
@@ -35,11 +34,11 @@ export default async function HomePage() {
     getNewestSeries(8),
     getGenreCounts(),
     getFeaturedCollections(),
+    getGuestFeaturedSeries(),
   ]);
 
-  // Guest featured series (first trending or newest series for guest hero without fake metrics)
-  const guestFeatured = (trending[0] ?? newest[0] ?? null) as SeriesCard | null;
-  const firstChapter = guestFeatured ? await getFirstReadableChapter(guestFeatured.id) : null;
+  const guestFeatured = featuredSelection?.series ?? null;
+  const firstChapter = featuredSelection?.firstChapter;
   const guestReadHref = guestFeatured && firstChapter
     ? readerHref(guestFeatured.format, guestFeatured.slug, firstChapter.number) : undefined;
 

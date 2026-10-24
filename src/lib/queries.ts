@@ -1,4 +1,5 @@
 import "server-only";
+import { EDITORIAL_LABELS, latestRevisionSelect, withWorkingState, isPublicChapter } from "@/lib/editorial-state";
 import { getServerSession } from "next-auth";
 import { redirect } from "next/navigation";
 import { authOptions } from "@/lib/auth";
@@ -230,6 +231,20 @@ export async function getFirstReadableChapter(seriesId: string) {
   });
 }
 
+/** Prefer an editorial selection; fall back to the most read work readers can actually start. */
+export async function getGuestFeaturedSeries() {
+  const readable = { chapters: { some: { ...liveChapterWhere(), isPremiumDemo: false } } };
+  const row = await db.series.findFirst({
+    where: { ...readable, isFeatured: true }, include: cardInclude,
+    orderBy: [{ displayOrder: "asc" }, { reads: "desc" }, { id: "asc" }],
+  }) ?? await db.series.findFirst({
+    where: readable, include: cardInclude, orderBy: [{ reads: "desc" }, { id: "asc" }],
+  });
+  if (!row) return null;
+  const firstChapter = await getFirstReadableChapter(row.id);
+  return firstChapter ? { series: toCard(row), firstChapter } : null;
+}
+
 export async function getNewestSeries(limit = 8): Promise<SeriesCard[]> {
   const rows = await db.series.findMany({ where: { chapters: { some: liveChapterWhere() } }, include: cardInclude, orderBy: { createdAt: "desc" }, take: limit });
   return rows.map(toCard);
@@ -426,7 +441,7 @@ export async function getLatestUpdates(limit = 10) {
 }
 
 export async function getFeaturedCollections() {
-  return db.editorialCollection.findMany({ orderBy: { displayOrder: "asc" } });
+  return db.editorialCollection.findMany({ where: { isFeatured: true }, orderBy: { displayOrder: "asc" } });
 }
 
 /* ------------------------------------------------------------------ */
@@ -437,16 +452,19 @@ export async function getAdminOverview() {
   const profile = await currentProfileOrNull();
   if (!profile || profile.role !== "admin") return null;
 
-  const [seriesCount, chapterCount, publishedCount, draftCount, reviewCount, profileCount, eventCount] =
-    await Promise.all([
-      db.series.count(),
-      db.chapter.count(),
-      db.chapter.count({ where: { workflow: "published" } }),
-      db.chapter.count({ where: { workflow: "draft" } }),
-      db.chapter.count({ where: { workflow: "review" } }),
-      db.profile.count(),
-      db.analyticsEvent.count(),
-    ]);
+  const [seriesCount, chapters, profileCount, eventCount] = await Promise.all([
+    db.series.count(),
+    db.chapter.findMany({ select: { workflow: true, scheduledFor: true, revisions: { ...latestRevisionSelect, select: { status: true } } } }),
+    db.profile.count(), db.analyticsEvent.count(),
+  ]);
+  const chapterCount = chapters.length;
+  const publishedCount = chapters.filter((c) => isPublicChapter(c)).length;
+  const statusCount = (status: string) => chapters.filter((c) => (c.revisions[0]?.status ?? c.workflow) === status).length;
+  const draftCount = statusCount("draft");
+  const reviewCount = statusCount("review");
+  const changesRequestedCount = statusCount("changes_requested");
+  const approvedCount = statusCount("approved");
+  const scheduledCount = statusCount("scheduled");
   const recentEvents = await db.analyticsEvent.findMany({
     orderBy: { createdAt: "desc" },
     take: 8,
@@ -462,6 +480,9 @@ export async function getAdminOverview() {
     publishedCount,
     draftCount,
     reviewCount,
+    changesRequestedCount,
+    approvedCount,
+    scheduledCount,
     profileCount,
     eventCount,
     recentEvents,
@@ -495,12 +516,12 @@ export async function getAdminSeriesById(id: string) {
   if (!profile || !isStaffRole(profile.role)) return null;
 
   if (profile.role === "admin") {
-    return db.series.findUnique({
+    const series = await db.series.findUnique({
       where: { id },
       include: {
         chapters: {
           orderBy: { number: "asc" },
-          include: { _count: { select: { pages: true } } },
+          include: { _count: { select: { pages: true } }, revisions: latestRevisionSelect },
         },
         assignments: {
           include: {
@@ -509,10 +530,11 @@ export async function getAdminSeriesById(id: string) {
         },
       },
     });
+    return series ? { ...series, chapters: series.chapters.map(withWorkingState) } : null;
   }
 
   // Non-admin staff: combined id + assignment membership, no team assignment or email list
-  return db.series.findFirst({
+  const series = await db.series.findFirst({
     where: {
       id,
       assignments: {
@@ -525,10 +547,11 @@ export async function getAdminSeriesById(id: string) {
     include: {
       chapters: {
         orderBy: { number: "asc" },
-        include: { _count: { select: { pages: true } } },
+        include: { _count: { select: { pages: true } }, revisions: latestRevisionSelect },
       },
     },
   });
+  return series ? { ...series, chapters: series.chapters.map(withWorkingState) } : null;
 }
 
 export async function getAdminChapters(filters: { workflow?: string; format?: string; seriesId?: string }) {
@@ -536,8 +559,6 @@ export async function getAdminChapters(filters: { workflow?: string; format?: st
   if (!profile || !isStaffRole(profile.role)) return [];
 
   const chapterWhere: Record<string, unknown> = {};
-  if (filters.workflow && ["draft", "review", "published"].includes(filters.workflow))
-    chapterWhere.workflow = filters.workflow;
   if (filters.seriesId) {
     chapterWhere.seriesId = filters.seriesId;
   }
@@ -549,14 +570,19 @@ export async function getAdminChapters(filters: { workflow?: string; format?: st
   }
   chapterWhere.series = seriesWhere;
 
-  return db.chapter.findMany({
+  const chapters = await db.chapter.findMany({
     where: chapterWhere,
     orderBy: [{ publishedAt: "desc" }, { createdAt: "desc" }],
     include: {
       series: { select: { id: true, slug: true, titleAr: true, format: true, accent: true } },
       _count: { select: { pages: true } },
+      revisions: latestRevisionSelect,
     },
   });
+  const rows = chapters.map(withWorkingState);
+  if (filters.workflow === "published") return rows.filter((c) => isPublicChapter(c));
+  return filters.workflow && filters.workflow in EDITORIAL_LABELS
+    ? rows.filter((c) => c.workingStatus === filters.workflow) : rows;
 }
 
 export async function getStaffOverview() {

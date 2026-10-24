@@ -1,5 +1,6 @@
+import { EDITORIAL_LABELS, isPublicChapter } from "@/lib/editorial-state";
 import Link from "next/link";
-import { FileEdit, Eye, CheckCircle2, Plus } from "lucide-react";
+import { FileEdit, Eye, Plus } from "lucide-react";
 import { getAdminChapters, currentProfileOrNull } from "@/lib/queries";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -30,6 +31,7 @@ export default async function AdminChaptersPage({
     { key: "published", label: WORKFLOW_LABELS.published, href: "/admin/chapters?workflow=published" },
     { key: "review", label: WORKFLOW_LABELS.review, href: "/admin/chapters?workflow=review" },
     { key: "draft", label: WORKFLOW_LABELS.draft, href: "/admin/chapters?workflow=draft" },
+    ...(["changes_requested", "approved", "scheduled", "withdrawn"] as const).map((key) => ({ key, label: EDITORIAL_LABELS[key], href: `/admin/chapters?workflow=${key}` })),
   ];
   const active = get("workflow") ?? "all";
 
@@ -39,7 +41,7 @@ export default async function AdminChaptersPage({
         <div>
           <h1 className="text-2xl font-bold text-foreground">الفصول</h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            سير العمل: <strong className="text-foreground">مسودة ← مراجعة ← منشور</strong> — النشر يظهر مباشرة في الموقع.
+            الحالة التحريرية تخص أحدث نسخة. تبقى النسخة المنشورة متاحة أثناء تجهيز التعديلات.
           </p>
         </div>
         <Button asChild size="sm" className="gap-1.5 bg-primary text-primary-foreground hover:bg-primary/90">
@@ -81,14 +83,15 @@ export default async function AdminChaptersPage({
                   <div className="flex items-center gap-2">
                     <FileEdit className="size-4 shrink-0 text-muted-foreground" aria-hidden />
                     <div>
-                      <p className="font-medium text-foreground">الفصل {c.number}: {c.titleAr}</p>
+                      <p className="font-medium text-foreground">الفصل {c.number}: {c.workingTitleAr}</p>
                       <div className="mt-1 flex items-center gap-1.5">
                         <Badge
                           variant="secondary"
-                          className={`border ${WORKFLOW_STYLES[c.workflow as Workflow]}`}
+                          className={`border ${WORKFLOW_STYLES[c.workingStatus === "published" ? "published" : c.workingStatus === "draft" ? "draft" : "review"]}`}
                         >
-                          {WORKFLOW_LABELS[c.workflow as Workflow]}
+                          {EDITORIAL_LABELS[c.workingStatus]}
                         </Badge>
+                        {isPublicChapter(c) && c.workingStatus !== "published" && <Badge variant="secondary">النسخة العامة منشورة</Badge>}
                         {c.isPremiumDemo && (
                           <Badge variant="secondary" className="border border-gold/40 bg-gold/10 text-gold">مقفل</Badge>
                         )}
@@ -103,7 +106,7 @@ export default async function AdminChaptersPage({
                   <p className="text-[11px] text-muted-foreground">{FORMAT_LABELS[c.series.format as Format]}</p>
                 </td>
                 <td className="hidden p-3 text-muted-foreground md:table-cell">
-                  {c._count.pages} {c.series.format === "manga" ? "صفحة" : "لوحة"}
+                  {c.series.format === "novel" ? `${c.workingWordCount} كلمة` : `${c.workingPageCount} ${c.series.format === "manga" ? "صفحة" : "لوحة"}`}
                   {c.publishedAt && (
                     <p className="text-[11px]">
                       نُشر {c.publishedAt.toLocaleDateString("ar-EG")}
@@ -115,10 +118,12 @@ export default async function AdminChaptersPage({
                     chapter={{
                       id: c.id,
                       number: c.number,
-                      titleAr: c.titleAr,
+                      titleAr: c.workingTitleAr,
                       workflow: c.workflow as Workflow,
+                      workingStatus: c.workingStatus,
+                      publicPublished: isPublicChapter(c),
                       isPremiumDemo: c.isPremiumDemo,
-                      scheduledFor: c.scheduledFor ? c.scheduledFor.toISOString() : null,
+                      scheduledFor: c.workingScheduledFor ? c.workingScheduledFor.toISOString() : null,
                     }}
                     isAdmin={isAdmin}
                   />

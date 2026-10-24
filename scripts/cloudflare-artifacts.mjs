@@ -15,7 +15,7 @@ await writeFile(path.join(output, "cloudflare/next-env.mjs"),
   "export const production = {};\nexport const development = {};\nexport const test = {};\n");
 const { loadEnvConfig } = require("@next/env");
 const { combinedEnv } = loadEnvConfig(root, false, { info() {}, error() { throw new Error("Cannot load build environment for artifact checks"); } });
-const secrets = ["DATABASE_URL", "DIRECT_URL", "NEXTAUTH_SECRET", "SMTP_PASSWORD", "R2_ACCESS_KEY_ID", "R2_SECRET_ACCESS_KEY"]
+const secrets = ["DATABASE_URL", "DIRECT_URL", "NEXTAUTH_SECRET", "SMTP_PASSWORD", "R2_ACCESS_KEY_ID", "R2_SECRET_ACCESS_KEY", "EDITORIAL_CRON_SECRET"]
   .map(name => ({ name, value: combinedEnv[name] }))
   .filter(entry => entry.value && entry.value.length >= 8);
 

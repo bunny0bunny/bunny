@@ -1,7 +1,12 @@
 "use client";
 
-import { useId, useState, useTransition } from "react";
+import { EDITORIAL_LABELS } from "@/lib/editorial-state";
+
+import { useId, useRef, useState, useTransition } from "react";
 import Link from "next/link";
+import { useSessionFormDraft } from "@/hooks/use-session-text-draft";
+import { useUnsavedChanges } from "@/hooks/use-unsaved-changes";
+import { createSubmissionGate } from "@/lib/unsaved-text";
 import { useRouter } from "next/navigation";
 import { LogOut, Loader2, Plus, Search, PenTool } from "lucide-react";
 import { signOut } from "next-auth/react";
@@ -95,7 +100,11 @@ type SeriesFormValues = {
   isFeatured: boolean;
 };
 
-export function SeriesForm({ initial }: { initial?: SeriesFormValues }) {
+function seriesText(values: SeriesFormValues) {
+  return { titleAr: values.titleAr, titleOriginal: values.titleOriginal, slug: values.slug, synopsisAr: values.synopsisAr, author: values.author, translator: values.translator };
+}
+
+export function SeriesForm({ initial, readingFormatLocked = false, currentActorId }: { initial?: SeriesFormValues; readingFormatLocked?: boolean; currentActorId: string }) {
   const formId = useId();
   const router = useRouter();
   const { toast } = useToast();
@@ -123,16 +132,28 @@ export function SeriesForm({ initial }: { initial?: SeriesFormValues }) {
   const [createdId, setCreatedId] = useState<string | null>(null);
   const [recoveryRequired, setRecoveryRequired] = useState(false);
 
+  const submitGate = useRef(createSubmissionGate());
+  const [savedValues, setSavedValues] = useState(values);
+  const textDirty = JSON.stringify(seriesText(values)) !== JSON.stringify(seriesText(savedValues));
+  const formRecovery = useSessionFormDraft(
+    { actorId: currentActorId, entityId: `series:${values.id ?? "new"}`, serverSnapshot: JSON.stringify(seriesText(savedValues)) },
+    { ...seriesText(values), resultUncertain: String(recoveryRequired) },
+    textDirty || recoveryRequired,
+  );
+  const { confirmLeave, markSaved } = useUnsavedChanges(JSON.stringify(values) !== JSON.stringify(savedValues) || Boolean(cover));
+
   const set = <K extends keyof SeriesFormValues>(k: K, v: SeriesFormValues[K]) =>
     setValues((x) => ({ ...x, [k]: v }));
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
-    if (loading || pending || coverBusy || recoveryRequired) return;
+    if (loading || pending || coverBusy || recoveryRequired || !submitGate.current.begin()) return;
     setLoading(true);
     setErrors(null);
     let id = createdId;
     let savingMetadata = false;
+    let uncertain = false;
+    let savedSnapshot = values;
     try {
       if (!id) {
         savingMetadata = true;
@@ -141,24 +162,46 @@ export function SeriesForm({ initial }: { initial?: SeriesFormValues }) {
         if (!res.ok || !res.id) { setErrors(res.error ?? 'تعذّر حفظ بيانات العمل.'); return; }
         id = res.id;
         if (!values.id) setCreatedId(id);
+        setSavedValues(values);
+        formRecovery.clear();
       }
       if (cover) {
         const saved = await uploadSeriesCover(id, values.coverPath ?? '', cover);
-        setValues(previous => ({ ...previous, coverPath: saved.coverPath }));
+        savedSnapshot = { ...values, coverPath: saved.coverPath };
+        setValues(savedSnapshot);
         setCover(null);
       }
+      uncertain = !values.id; // Creation remains guarded until navigation; mounted edit forms can save again.
+      setSavedValues(savedSnapshot);
+      formRecovery.clear();
+      markSaved();
       toast({ title: 'تم الحفظ', description: 'اتحفظت بيانات العمل. ظهوره في الكتالوج مرتبط بوجود فصل منشور.' });
       startTransition(() => { router.push(`/admin/series/${id}`); router.refresh(); });
     } catch (cause) {
       const unknown = savingMetadata || (cause instanceof UploadRequestError && (cause.ambiguous || cause.code === 'conflict'));
+      uncertain = unknown;
       setRecoveryRequired(unknown);
       setErrors(unknown ? 'تعذّر تأكيد نتيجة الحفظ. أعد تحميل الصفحة وافحص العمل قبل إعادة المحاولة.' : `${!values.id && id ? 'اتعمل العمل واتحفظت بياناته، لكن الغلاف ما اتحفظش. تقدر تعيد حفظ الغلاف من غير إنشاء عمل جديد. ' : ''}${cause instanceof UploadRequestError && cause.code === 'invalid_media' ? 'صورة الغلاف غير مدعومة. اختار صورة تانية.' : 'تعذّر حفظ الغلاف. الغلاف السابق محفوظ؛ حاول مرة أخرى أو افتح إدارة العمل.'}`);
-    } finally { setLoading(false); }
+    } finally { submitGate.current.finish(uncertain); setLoading(false); }
   }
 
   const field = "bg-card";
   return (
     <form onSubmit={submit} className="space-y-5" aria-label="نموذج بيانات العمل">
+      {formRecovery.recovered && <div role="status" className="space-y-3 rounded-xl border border-primary/30 bg-primary/10 p-4 text-sm">
+        <p>وُجد نص غير محفوظ لهذا العمل في هذا التبويب. يمكنك استعادته؛ الغلاف لا يُحفظ في المتصفح.</p>
+        <div className="flex flex-wrap gap-2">
+          <Button type="button" variant="outline" disabled={loading || pending} onClick={() => {
+            if (textDirty && !window.confirm("استبدال النص الحالي بالنص المستعاد؟")) return;
+            const recovered = formRecovery.recovered;
+            if (!recovered) return;
+            setValues(previous => ({ ...previous, titleAr: recovered.titleAr, titleOriginal: recovered.titleOriginal, slug: previous.id ? previous.slug : recovered.slug, synopsisAr: recovered.synopsisAr, author: recovered.author, translator: recovered.translator }));
+            if (recovered.resultUncertain === "true") { setRecoveryRequired(true); setErrors("تعذّر تأكيد الحفظ السابق. تحقق من قائمة الأعمال قبل إنشاء عمل آخر."); }
+            formRecovery.dismiss();
+          }}>استعادة النص</Button>
+          <Button type="button" variant="ghost" onClick={formRecovery.dismiss}>تجاهل النص المستعاد</Button>
+        </div>
+      </div>}
       <div className="grid items-start gap-7 lg:grid-cols-[240px_minmax(0,1fr)]">
       <SeriesCoverEditor key={values.coverPath ?? ''} seriesId={values.id ?? createdId ?? undefined} currentCover={values.coverPath ?? ''} disabled={loading || pending || recoveryRequired} onPrepared={setCover} onBusyChange={setCoverBusy} />
       <fieldset disabled={loading || pending || Boolean(createdId) || recoveryRequired} className="min-w-0 space-y-5">
@@ -192,12 +235,13 @@ export function SeriesForm({ initial }: { initial?: SeriesFormValues }) {
         </div>
         <div className="space-y-1.5">
           <label htmlFor={`${formId}-format`} className="text-sm font-medium">طريقة القراءة (الصيغة) *</label>
-          <Select value={values.format} onValueChange={(v) => set("format", v as SeriesFormValues["format"])}>
+          <Select disabled={readingFormatLocked} value={values.format} onValueChange={(v) => set("format", v as SeriesFormValues["format"])}>
             <SelectTrigger id={`${formId}-format`} className={`${field} w-full`}><SelectValue /></SelectTrigger>
             <SelectContent>
               {FORMATS.map((f) => <SelectItem key={f} value={f}>{FORMAT_LABELS[f]}</SelectItem>)}
             </SelectContent>
           </Select>
+          {readingFormatLocked && <p className="text-xs text-muted-foreground">لا يمكن تغيير تنسيق القراءة بعد إضافة فصول حفاظًا على محتواها وروابط القراءة.</p>}
           <p className="text-[11px] text-muted-foreground">أسلوب عرض الصفحات أو التمرير أو النص في القارئ.</p>
         </div>
         <div className="space-y-1.5">
@@ -270,14 +314,15 @@ export function SeriesForm({ initial }: { initial?: SeriesFormValues }) {
         <p role="alert" className="rounded-lg border border-danger/40 bg-danger/10 px-3 py-2 text-xs text-danger">{errors}</p>
       )}
 
-      <div className="flex gap-2">
+      {recoveryRequired && <Link href="/admin/series" target="_blank" rel="noopener noreferrer" className="inline-block text-sm text-primary underline">افتح قائمة الأعمال للتحقق من نتيجة الحفظ</Link>}
+      <div className="flex flex-wrap gap-2">
         <Button type="submit" disabled={loading || pending || coverBusy || recoveryRequired} className="min-h-11 gap-2 bg-primary text-primary-foreground hover:bg-primary/90">
           {(loading || pending) && <Loader2 className="size-4 animate-spin" aria-hidden />}
           {createdId ? 'إعادة حفظ الغلاف' : values.id ? "حفظ التعديلات" : "إنشاء العمل"}
         </Button>
-        {createdId && <Button type="button" variant="outline" onClick={() => { router.push(`/admin/series/${createdId}`); router.refresh(); }}>فتح إدارة العمل</Button>}
-        {recoveryRequired && <Button type="button" variant="outline" onClick={() => createdId ? (router.push(`/admin/series/${createdId}`), router.refresh()) : window.location.reload()}>إعادة تحميل الحالة</Button>}
-        <Button type="button" variant="outline" className="border-border" onClick={() => router.back()}>
+        {createdId && <Button type="button" variant="outline" onClick={() => { if (!confirmLeave()) return; markSaved(); router.push(`/admin/series/${createdId}`); router.refresh(); }}>فتح إدارة العمل</Button>}
+        {recoveryRequired && <Button type="button" variant="outline" onClick={() => { if (!confirmLeave()) return; markSaved(); if (createdId) { router.push(`/admin/series/${createdId}`); router.refresh(); } else window.location.reload(); }}>إعادة تحميل الحالة</Button>}
+        <Button type="button" variant="outline" className="border-border" onClick={() => { if (confirmLeave()) router.back(); }}>
           إلغاء
         </Button>
       </div>
@@ -290,6 +335,8 @@ type ChapterRow = {
   number: number;
   titleAr: string;
   workflow: "draft" | "review" | "published";
+  publicPublished?: boolean;
+  workingStatus?: keyof typeof EDITORIAL_LABELS;
   isPremiumDemo: boolean;
   scheduledFor?: string | null;
 };
@@ -304,8 +351,11 @@ export function ChapterWorkflowControls({
   return (
     <div className="flex flex-wrap items-center justify-end gap-2">
       <span className="rounded-md border border-border bg-card px-2.5 py-1 text-xs font-medium text-foreground">
-        {WORKFLOW_LABELS[chapter.workflow]}
+        {EDITORIAL_LABELS[chapter.workingStatus ?? chapter.workflow]}
       </span>
+      {chapter.publicPublished && chapter.workingStatus && chapter.workingStatus !== "published" && (
+        <span className="text-xs text-success">النسخة العامة منشورة</span>
+      )}
       {chapter.isPremiumDemo && (
         <span className="rounded-md border border-gold/40 bg-gold/10 px-2 py-1 text-xs text-gold">
           مقفل
@@ -336,10 +386,13 @@ export const ChapterWorkflowActions = ChapterWorkflowControls;
 export function ChapterForm({
   seriesOptions,
   isAdmin = false,
+  currentActorId,
 }: {
+  currentActorId: string;
   seriesOptions: { id: string; titleAr: string; format: Format }[];
   isAdmin?: boolean;
 }) {
+  const formId = useId();
   const router = useRouter();
   const { toast } = useToast();
   const [seriesId, setSeriesId] = useState(seriesOptions[0]?.id ?? "");
@@ -351,49 +404,98 @@ export function ChapterForm({
   const [novelBody, setNovelBody] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [recoveryRequired, setRecoveryRequired] = useState(false);
+  const submitGate = useRef(createSubmissionGate());
+  const { markSaved } = useUnsavedChanges(Boolean(titleAr || novelBody || number !== "1" || seriesId !== (seriesOptions[0]?.id ?? "") || workflow !== "draft" || readingDirection !== "rtl"));
+  const formRecovery = useSessionFormDraft(
+    { actorId: currentActorId, entityId: `chapter:new:${seriesId}`, serverSnapshot: "new-chapter-v1" },
+    { titleAr, novelBody, number, resultUncertain: String(recoveryRequired) },
+    Boolean(titleAr || novelBody || number !== "1" || recoveryRequired),
+  );
 
   const selected = seriesOptions.find((s) => s.id === seriesId);
   const isManga = selected?.format === "manga";
   const isNovel = selected?.format === "novel";
 
+  function changeSeries(nextSeriesId: string) {
+    if (nextSeriesId === seriesId) return;
+    // Each work keeps its own tab draft. Never carry live text into another work's recovery key.
+    setSeriesId(nextSeriesId);
+    setTitleAr("");
+    setNovelBody("");
+    setNumber("1");
+    setWorkflow("draft");
+    setReadingDirection("rtl");
+    setError(null);
+  }
+
   async function submit(e: React.FormEvent) {
     e.preventDefault();
+    if (!seriesId || loading || recoveryRequired || !submitGate.current.begin()) return;
     setLoading(true);
-    setError(null);
-    const res = await createChapter({
-      seriesId,
-      number: Number(number),
-      titleAr,
-      workflow: isNovel ? workflow : "draft",
-      isPremiumDemo: false,
-      readingDirection: isManga ? readingDirection : "rtl",
+    let uncertain = false;
+    try {
+      setError(null);
+      const res = await createChapter({
+        seriesId,
+        number: Number(number),
+        titleAr,
+        workflow: isNovel ? workflow : "draft",
+        isPremiumDemo: false,
+        readingDirection: isManga ? readingDirection : "rtl",
 
-      scheduledFor: null,
-      novelBody: isNovel ? novelBody : undefined,
-    });
-    setLoading(false);
-    if (!res.ok) {
-      setError(res.error ?? "حدث خطأ");
-      return;
+        scheduledFor: null,
+        novelBody: isNovel ? novelBody : undefined,
+      });
+      if (!res.ok) {
+        setError(res.error ?? "حدث خطأ");
+        return;
+      }
+      uncertain = true; // A confirmed creation cannot be replayed during navigation.
+      formRecovery.clear();
+      markSaved();
+      toast({
+        title: "أُنشئ الفصل بنجاح",
+        description: "جاري الانتقال إلى استوديو التحرير لإدارة النسخة واعتمادها…",
+      });
+      if (res.id) {
+        router.push(`/studio/chapters/${res.id}`);
+      } else {
+        router.push("/admin/chapters");
+      }
+      router.refresh();
+    } catch {
+      uncertain = true;
+      setRecoveryRequired(true);
+      setError("تعذّر تأكيد إنشاء الفصل. نصك ما زال هنا. افتح قائمة الفصول في تبويب آخر وتحقق من العمل ورقم الفصل قبل إعادة المحاولة؛ ربما تم الحفظ بالفعل.");
+    } finally {
+      submitGate.current.finish(uncertain);
+      setLoading(false);
     }
-    toast({
-      title: "أُنشئ الفصل بنجاح",
-      description: "جاري الانتقال إلى استوديو التحرير لإدارة النسخة واعتمادها…",
-    });
-    if (res.id) {
-      router.push(`/studio/chapters/${res.id}`);
-    } else {
-      router.push("/admin/chapters");
-    }
-    router.refresh();
   }
 
   return (
     <form onSubmit={submit} className="space-y-5 max-w-xl" aria-label="نموذج فصل جديد">
+      {formRecovery.recovered && <div role="status" className="space-y-3 rounded-xl border border-primary/30 bg-primary/10 p-4 text-sm">
+        <p>وُجد نص فصل غير محفوظ لهذا العمل في هذا التبويب. استعده أو تجاهله للبدء من جديد.</p>
+        <div className="flex flex-wrap gap-2">
+          <Button type="button" variant="outline" disabled={loading} onClick={() => {
+            if ((titleAr || novelBody || number !== "1") && !window.confirm("استبدال النص الحالي بالنص المستعاد؟")) return;
+            const recovered = formRecovery.recovered;
+            if (!recovered) return;
+            setTitleAr(recovered.titleAr); setNovelBody(recovered.novelBody); setNumber(recovered.number);
+            if (recovered.resultUncertain === "true") { setRecoveryRequired(true); setError("تعذّر تأكيد الإنشاء السابق. تحقق من قائمة الفصول قبل إنشاء فصل آخر."); }
+            formRecovery.dismiss();
+          }}>استعادة النص</Button>
+          <Button type="button" variant="ghost" onClick={formRecovery.dismiss}>تجاهل النص المستعاد</Button>
+        </div>
+      </div>}
+      {!seriesOptions.length && <p role="status" className="text-sm text-muted-foreground">لا توجد أعمال متاحة لإضافة فصل. {isAdmin ? <Link href="/admin/series/new" className="text-primary underline">أنشئ عملًا أولًا</Link> : "اطلب من الإدارة إسناد عمل إليك أولًا."}</p>}
+      <fieldset disabled={loading || recoveryRequired || !seriesOptions.length} className="space-y-5">
       <div className="space-y-1.5">
-        <label className="text-sm font-medium">العمل *</label>
-        <Select value={seriesId} onValueChange={setSeriesId}>
-          <SelectTrigger className="min-h-[44px] bg-card"><SelectValue placeholder="اختر العمل" /></SelectTrigger>
+        <label htmlFor={`${formId}-series`} className="text-sm font-medium">العمل *</label>
+        <Select value={seriesId} onValueChange={changeSeries}>
+          <SelectTrigger id={`${formId}-series`} className="min-h-[44px] bg-card"><SelectValue placeholder="اختر العمل" /></SelectTrigger>
           <SelectContent>
             {seriesOptions.map((s) => (
               <SelectItem key={s.id} value={s.id}>
@@ -405,20 +507,20 @@ export function ChapterForm({
       </div>
       <div className="grid gap-4 sm:grid-cols-2">
         <div className="space-y-1.5">
-          <label className="text-sm font-medium">رقم الفصل *</label>
-          <Input type="number" min={1} required value={number} onChange={(e) => setNumber(e.target.value)} className="min-h-[44px] bg-card" />
+          <label htmlFor={`${formId}-number`} className="text-sm font-medium">رقم الفصل *</label>
+          <Input id={`${formId}-number`} type="number" min={1} required value={number} onChange={(e) => setNumber(e.target.value)} className="min-h-[44px] bg-card" />
         </div>
 
       </div>
       <div className="space-y-1.5">
-        <label className="text-sm font-medium">عنوان الفصل *</label>
-        <Input required value={titleAr} onChange={(e) => setTitleAr(e.target.value)} className="min-h-[44px] bg-card" placeholder="مثال: أضواء على الحدود" />
+        <label htmlFor={`${formId}-title`} className="text-sm font-medium">عنوان الفصل *</label>
+        <Input id={`${formId}-title`} required value={titleAr} onChange={(e) => setTitleAr(e.target.value)} className="min-h-[44px] bg-card" placeholder="مثال: أضواء على الحدود" />
       </div>
       <div className="grid gap-4 sm:grid-cols-2">
         <div className="space-y-1.5">
-          <label className="text-sm font-medium">حالة سير العمل المبدئية *</label>
+          <label htmlFor={`${formId}-workflow`} className="text-sm font-medium">حالة سير العمل المبدئية *</label>
           <Select value={isNovel ? workflow : "draft"} disabled={!isNovel} onValueChange={(v) => setWorkflow(v as "draft" | "review")}>
-            <SelectTrigger className="min-h-[44px] bg-card"><SelectValue /></SelectTrigger>
+            <SelectTrigger id={`${formId}-workflow`} className="min-h-[44px] bg-card"><SelectValue /></SelectTrigger>
             <SelectContent>
               <SelectItem value="draft">مسودة (الافتراضي)</SelectItem>
               <SelectItem value="review">مراجعة</SelectItem>
@@ -428,9 +530,9 @@ export function ChapterForm({
         </div>
         {isManga && (
           <div className="space-y-1.5">
-            <label className="text-sm font-medium">اتجاه القراءة</label>
+            <label htmlFor={`${formId}-direction`} className="text-sm font-medium">اتجاه القراءة</label>
             <Select value={readingDirection} onValueChange={(v) => setReadingDirection(v as "rtl" | "ltr")}>
-              <SelectTrigger className="min-h-[44px] bg-card"><SelectValue /></SelectTrigger>
+              <SelectTrigger id={`${formId}-direction`} className="min-h-[44px] bg-card"><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="rtl">يمين ← يسار (يابانية)</SelectItem>
                 <SelectItem value="ltr">يسار → يمين</SelectItem>
@@ -441,8 +543,9 @@ export function ChapterForm({
       </div>
       {isNovel && (
         <div className="space-y-1.5">
-          <label className="text-sm font-medium">نص الفصل *</label>
+          <label htmlFor={`${formId}-body`} className="text-sm font-medium">نص الفصل *</label>
           <Textarea
+            id={`${formId}-body`}
             value={novelBody}
             onChange={(e) => setNovelBody(e.target.value)}
             rows={10}
@@ -453,8 +556,10 @@ export function ChapterForm({
           <p className="text-[11px] text-muted-foreground">{novelBody.split(/\s+/).filter(Boolean).length} كلمة — كل سطر جديد يبدأ فقرة.</p>
         </div>
       )}
+      </fieldset>
+      {recoveryRequired && <Link href={isAdmin ? "/admin/chapters" : "/studio"} target="_blank" rel="noopener noreferrer" className="inline-block text-sm text-primary underline">افتح قائمة الفصول للتحقق من نتيجة الإنشاء</Link>}
       {error && <p role="alert" className="rounded-lg border border-danger/40 bg-danger/10 px-3 py-2 text-xs text-danger">{error}</p>}
-      <Button type="submit" disabled={loading} className="min-h-[44px] gap-2 bg-primary text-primary-foreground hover:bg-primary/90">
+      <Button type="submit" disabled={loading || recoveryRequired || !seriesOptions.length} className="min-h-[44px] gap-2 bg-primary text-primary-foreground hover:bg-primary/90">
         {loading ? <Loader2 className="size-4 animate-spin" aria-hidden /> : <Plus className="size-4" aria-hidden />}
         إنشاء الفصل والمتابعة للاستوديو
       </Button>

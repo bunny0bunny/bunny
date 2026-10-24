@@ -9,6 +9,7 @@ import { revalidatePath } from "next/cache";
 import { isWorkflow, isRole, type Workflow, type Role } from "@/lib/constants";
 import { isStaffRole, isAssignableRole, isAssignedToSeries } from "@/lib/team-access";
 import { categoryMatchesFormat } from "@/lib/content-category";
+import { withSerializableTx } from "@/lib/editorial";
 
 /* ------------------------------------------------------------------ */
 /* Reading progress (authenticated readers; guests mirror locally)     */
@@ -136,11 +137,19 @@ export async function upsertSeries(input: unknown): Promise<ActionResult & { slu
   };
 
   if (d.id) {
-    const existing = await db.series.findUnique({ where: { id: d.id } });
-    if (!existing) return { ok: false, error: "not_found" };
-    if (!categoryMatchesFormat(d.category === undefined ? existing.category : d.category, d.format))
-      return { ok: false, error: "تصنيف العمل لا يتوافق مع طريقة القراءة" };
-    await db.series.update({ where: { id: d.id }, data });
+    const result = await withSerializableTx(async (tx, actor) => {
+      if (actor.role !== "admin") return { ok: false, error: "forbidden" };
+      const existing = await tx.series.findUnique({ where: { id: d.id }, include: { _count: { select: { chapters: true } } } });
+      if (!existing) return { ok: false, error: "not_found" };
+      if (existing.slug !== d.slug) return { ok: false, error: "لا يمكن تغيير معرّف العمل بعد إنشائه حفاظًا على الروابط المحفوظة." };
+      if (existing.format !== d.format && existing._count.chapters > 0)
+        return { ok: false, error: "لا يمكن تغيير طريقة القراءة بعد إضافة فصول للعمل. أنشئ عملًا مستقلًا للصيغة الجديدة حفاظًا على المحتوى والروابط." };
+      if (!categoryMatchesFormat(d.category === undefined ? existing.category : d.category, d.format))
+        return { ok: false, error: "تصنيف العمل لا يتوافق مع طريقة القراءة" };
+      await tx.series.update({ where: { id: d.id }, data });
+      return { ok: true };
+    }, { invalidate: false });
+    if (!result.ok) return { ok: false, error: result.error };
     revalidatePath("/admin/series");
     revalidatePath(`/series/${d.slug}`);
     revalidatePath("/");
@@ -148,14 +157,19 @@ export async function upsertSeries(input: unknown): Promise<ActionResult & { slu
   }
 
   const accentPalette = ["#9B7BFF", "#5FCB9B", "#E56B6F", "#DDBB77", "#7FA8C9", "#C98BD9"];
-  const created = await db.series.create({
+  let created;
+  try { created = await db.series.create({
     data: {
       ...data,
       category: d.category ?? null,
       accent: accentPalette[Math.floor(Math.random() * accentPalette.length)],
       coverPath: "", // placeholder until cover art is uploaded (Release B upload flow)
     },
-  });
+  }); } catch (error) {
+    if (error && typeof error === "object" && "code" in error && error.code === "P2002")
+      return { ok: false, error: "المعرّف مستخدم بالفعل. اختر معرّفًا مختلفًا للعمل." };
+    throw error;
+  }
   revalidatePath("/admin/series");
   revalidatePath("/");
   return { ok: true, slug: created.slug, id: created.id };

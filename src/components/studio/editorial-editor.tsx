@@ -1,5 +1,8 @@
 "use client";
 
+import { useUnsavedChanges } from "@/hooks/use-unsaved-changes";
+import { useSessionTextDraft } from "@/hooks/use-session-text-draft";
+import { createSubmissionGate } from "@/lib/unsaved-text";
 import { useId, useRef, useState, useTransition } from "react";
 import type { ChapterRevision } from '@prisma/client';
 import { PdfUploadPanel } from "./pdf-upload-panel";
@@ -153,12 +156,14 @@ export function EditorialEditor({
   publishedSnapshot,
   events,
   currentActorRole,
+  currentActorId,
   uploadsEnabled,
 }: {
   chapter: ChapterMeta;
   initialRevision: WorkingRevision;
   publishedSnapshot: PublishedRevision;
   events: EditorialEvent[];
+  currentActorId: string;
   currentActorRole: "contributor" | "editor" | "admin";
   uploadsEnabled: boolean;
 }) {
@@ -168,6 +173,8 @@ export function EditorialEditor({
   const [isPending, startTransition] = useTransition();
   const [uploadBusy, setUploadBusy] = useState(false);
   const uploadBusyRef = useRef(false);
+  const actionGate = useRef(createSubmissionGate());
+  const [actionUncertain, setActionUncertain] = useState(false);
 
   // Working state
   const [revision, setRevision] = useState<WorkingRevision>(initialRevision);
@@ -208,10 +215,32 @@ export function EditorialEditor({
   const isVisual = chapter.format !== "novel";
   const isReadOnlyStatus = revision.status === "published" || revision.status === "withdrawn";
   const uploadBlocked = uploadBusy || Boolean(revision.pendingUploadId);
-  const actionsBlocked = isPending || uploadBlocked;
+  const actionsBlocked = isPending || uploadBlocked || actionUncertain;
   const importedPages = pages.some((page) => page.imagePath.startsWith("/api/media/"));
   const hasUnsavedChanges = titleAr.trim() !== revision.titleAr || readingDirection !== revision.readingDirection || isPremiumDemo !== revision.isPremiumDemo ||
-    (chapter.format === "novel" ? novelBody !== (revision.novelBody ?? "") : JSON.stringify(pages.map(({ pageIndex, imagePath, width, height }) => [pageIndex, imagePath, width, height])) !== JSON.stringify((revision.pagesJson as typeof pages).map(({ pageIndex, imagePath, width, height }) => [pageIndex, imagePath, width, height])));
+    (chapter.format === "novel" ? novelBody !== (revision.novelBody ?? "") : JSON.stringify(pages.map(({ pageIndex, imagePath, width, height }) => [pageIndex, imagePath, width, height])) !== JSON.stringify((Array.isArray(revision.pagesJson) ? revision.pagesJson as typeof pages : []).map(({ pageIndex, imagePath, width, height }) => [pageIndex, imagePath, width, height])));
+
+
+  useUnsavedChanges(hasUnsavedChanges || Boolean(returnReason || recommendNote || withdrawReason));
+  const draftRecovery = useSessionTextDraft(
+    { actorId: currentActorId, chapterId: chapter.id, revisionId: revision.id, version: revision.version },
+    { titleAr, novelBody: chapter.format === "novel" ? novelBody : "" },
+    hasUnsavedChanges,
+  );
+
+  function runAction(action: () => Promise<void>) {
+    if (!actionGate.current.begin()) return;
+    startTransition(async () => {
+      let uncertain = false;
+      try { await action(); }
+      catch {
+        uncertain = true;
+        setActionUncertain(true);
+        setConflictOccurred(true);
+        setErrorMessage("انقطع الاتصال وتعذّر تأكيد نتيجة الإجراء. تعديلاتك ما زالت هنا؛ تحقق من آخر نسخة محفوظة بإعادة تحميل الصفحة قبل تكرار الإجراء.");
+      } finally { actionGate.current.finish(uncertain); }
+    });
+  }
 
   // Reorder pages
   function movePage(index: number, direction: "up" | "down") {
@@ -239,6 +268,7 @@ export function EditorialEditor({
   }
 
   function guardUpload() {
+    if (actionUncertain) return true;
     if (uploadBusyRef.current || revision.pendingUploadId || isPending) {
       setErrorMessage("أكمل رفع PDF أو ألغِ المحاولة الحالية قبل تعديل النسخة أو تنفيذ إجراءات المراجعة والنشر.");
       return true;
@@ -262,7 +292,7 @@ export function EditorialEditor({
   async function handleSaveDraft() {
     if (guardUpload()) return;
     setErrorMessage(null);
-    startTransition(async () => {
+    runAction(async () => {
       const res = await updateDraftSnapshotAction({
         revisionId: revision.id,
         expectedVersion: revision.version,
@@ -282,6 +312,7 @@ export function EditorialEditor({
         return;
       }
 
+      draftRecovery.clear();
       setConflictOccurred(false);
       if (res.revision) {
         setRevision(res.revision as any);
@@ -295,7 +326,7 @@ export function EditorialEditor({
   async function handleOpenNewDraft() {
     if (guardUpload()) return;
     setErrorMessage(null);
-    startTransition(async () => {
+    runAction(async () => {
       const res = await openOrCreateDraftAction({ chapterId: chapter.id });
       if (!res.ok) {
         setErrorMessage(res.error ?? "تعذّر فتح مسودة جديدة");
@@ -323,7 +354,7 @@ export function EditorialEditor({
     if (guardUpload()) return;
     if (hasUnsavedChanges) { setErrorMessage("احفظ تغييرات المسودة أولًا."); return; }
     setErrorMessage(null);
-    startTransition(async () => {
+    runAction(async () => {
       const res = await submitForReviewAction({
         revisionId: revision.id,
         expectedVersion: revision.version,
@@ -349,7 +380,7 @@ export function EditorialEditor({
       return;
     }
     setErrorMessage(null);
-    startTransition(async () => {
+    runAction(async () => {
       const res = await returnForChangesAction({
         revisionId: revision.id,
         expectedVersion: revision.version,
@@ -373,7 +404,7 @@ export function EditorialEditor({
     if (guardUpload()) return;
     if (hasUnsavedChanges) { setErrorMessage("احفظ تغييرات المسودة أولًا."); return; }
     setErrorMessage(null);
-    startTransition(async () => {
+    runAction(async () => {
       const res = await recommendApprovalAction({
         revisionId: revision.id,
         expectedVersion: revision.version,
@@ -397,7 +428,7 @@ export function EditorialEditor({
     if (guardUpload()) return;
     if (hasUnsavedChanges) { setErrorMessage("احفظ تغييرات المسودة أولًا."); return; }
     setErrorMessage(null);
-    startTransition(async () => {
+    runAction(async () => {
       const res = await approveRevisionAction({
         revisionId: revision.id,
         expectedVersion: revision.version,
@@ -419,7 +450,7 @@ export function EditorialEditor({
     if (guardUpload()) return;
     if (hasUnsavedChanges) { setErrorMessage("احفظ تغييرات المسودة أولًا."); return; }
     setErrorMessage(null);
-    startTransition(async () => {
+    runAction(async () => {
       const res = await publishRevisionNowAction({
         revisionId: revision.id,
         expectedVersion: revision.version,
@@ -450,7 +481,7 @@ export function EditorialEditor({
       return;
     }
     setErrorMessage(null);
-    startTransition(async () => {
+    runAction(async () => {
       const res = await scheduleRevisionAction({
         revisionId: revision.id,
         expectedVersion: revision.version,
@@ -473,7 +504,7 @@ export function EditorialEditor({
     if (guardUpload()) return;
     if (hasUnsavedChanges) { setErrorMessage("احفظ تغييرات المسودة أولًا."); return; }
     setErrorMessage(null);
-    startTransition(async () => {
+    runAction(async () => {
       const res = await cancelScheduledRevisionAction({
         revisionId: revision.id,
         expectedVersion: revision.version,
@@ -503,7 +534,7 @@ export function EditorialEditor({
       return;
     }
     setErrorMessage(null);
-    startTransition(async () => {
+    runAction(async () => {
       const res = await withdrawPublishedChapterAction({
         chapterId: chapter.id,
         expectedRevisionId: publishedSnapshot.id,
@@ -526,6 +557,22 @@ export function EditorialEditor({
 
   return (
     <div className="space-y-6">
+      {draftRecovery.recovered && !isReadOnlyStatus && (
+        <div role="status" className="space-y-3 rounded-xl border border-primary/30 bg-primary/10 p-4 text-sm">
+          <p>وُجد نص غير محفوظ في هذا التبويب لنفس إصدار الفصل. استعده أو تجاهله؛ لم تُستبدل النسخة المحفوظة.</p>
+          <div className="flex flex-wrap gap-2">
+            <Button type="button" variant="outline" disabled={actionsBlocked} onClick={() => {
+              if (hasUnsavedChanges && !window.confirm("استبدال النص الحالي بالنص المستعاد؟")) return;
+              const recovered = draftRecovery.recovered;
+              if (!recovered) return;
+              setTitleAr(recovered.titleAr);
+              if (chapter.format === "novel") setNovelBody(recovered.novelBody);
+              draftRecovery.dismiss();
+            }}>استعادة النص</Button>
+            <Button type="button" variant="ghost" disabled={actionsBlocked} onClick={draftRecovery.dismiss}>تجاهل النص المستعاد</Button>
+          </div>
+        </div>
+      )}
       {/* Conflict / Reload Banner */}
       {conflictOccurred && (
         <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-gold/40 bg-gold/10 p-4 text-foreground">
@@ -723,7 +770,7 @@ export function EditorialEditor({
               version={revision.version}
               pendingUploadId={revision.pendingUploadId}
               uploadsEnabled={uploadsEnabled}
-              disabled={isReadOnlyStatus || isPending}
+              disabled={isReadOnlyStatus || isPending || actionUncertain}
               unsaved={hasUnsavedChanges}
               onSaveDraft={handleSaveDraft}
               onBusyChange={(value) => { uploadBusyRef.current = value; setUploadBusy(value); }}

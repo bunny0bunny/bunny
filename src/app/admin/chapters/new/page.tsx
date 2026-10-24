@@ -41,11 +41,14 @@ export default async function NewChapterPage({
       </header>
       {options.length === 0 ? (
         <div className="rounded-2xl border border-border/60 bg-card p-8 text-center text-sm text-muted-foreground">
-          لا توجد أعمال مسندة إليك لإنشاء فصول لها. يرجى التواصل مع إدارة الموقع لإسناد العمل إليك أولاً.
+          {isAdmin ? <>
+            <p>أنشئ عملًا أولًا، ثم أضف الفصل الأول من صفحة إدارة العمل.</p>
+            <Button asChild className="mt-4 min-h-11"><Link href="/admin/series/new">إنشاء عمل جديد</Link></Button>
+          </> : <p>لا توجد أعمال مسندة إليك لإنشاء فصول لها. يرجى التواصل مع إدارة الموقع لإسناد العمل إليك أولًا.</p>}
         </div>
       ) : (
         <div className="rounded-2xl border border-border/60 bg-card p-5 sm:p-6">
-          <ChapterForm seriesOptions={options} isAdmin={isAdmin} />
+          <ChapterForm currentActorId={profile?.id ?? ""} seriesOptions={options} isAdmin={isAdmin} />
         </div>
       )}
     </main>
