@@ -18,8 +18,8 @@
 - [x] 1. Regression-test editorial counts, filters and row status/pages; derive latest working revision with legacy fallback. Correct featured collection filtering and real featured-work selection. Keep publication status distinct.
 - [x] 2. Correct creation recovery and duplicate-submit handling, useful empty creation guidance, and unsaved-change protection/recovery for series/chapter/editor text without persisting private media or introducing stale version overwrites.
 - [x] 3. Reject reading-format changes once chapters exist, return structured duplicate-slug errors, and verify role/transaction boundaries. Unit/actual-module regressions first.
-- [ ] 4. Make scheduling truthful and operational using the current paid Worker: authenticated bounded periodic execution, tests for auth, failure and due publication. If automatic execution cannot be safely connected, keep manual scheduling explicitly labeled and document the limitation rather than promising automation.
-- [ ] 5. Run focused regressions, TypeScript, scoped lint and one combined code review. Fix material findings, then verify the Cloudflare build/deployment if authorized and feasible. Record exact remaining device/browser limits.
+- [x] 4. Make scheduling truthful and operational using the current paid Worker: authenticated bounded periodic execution, tests for auth, failure and due publication. If automatic execution cannot be safely connected, keep manual scheduling explicitly labeled and document the limitation rather than promising automation.
+- [x] 5. Run focused regressions, TypeScript, scoped lint and one combined code review. Fix material findings, then verify the Cloudflare build/deployment if authorized and feasible. Record exact remaining device/browser limits.
 
 ## Acceptance
 Review submission and replacement drafts display the same working state across admin/studio; published copies stay readable. Existing chapter formats cannot change accidentally. Featured switches affect the real home query. Known duplicate slugs remain editable; network failures recover without blind mutation replay. Unsaved text survives reload or warns before leaving. Scheduled execution is accurately described and tested. No mock removal occurs.
@@ -29,4 +29,8 @@ Review submission and replacement drafts display the same working state across a
 - Direct local TypeScript passed. Scoped ESLint passed, including final helper/form changes. Whitespace check passed.
 - Combined independent review corrected repeat-save gate, browser-history text recovery and the real empty-state route. A scoped follow-up corrected cross-work recovery overwrites; no material findings remain.
 - Production read-only preflight: zero scheduled/due revisions; existing app-origin/self binding and CPU30000ms present. Provisioned encrypted cron secret without printing or storing its value.
-- Cloudflare production build, its TypeScript pass and private-asset/runtime-secret scanner passed. Hosted acceptance pending. Browser automation unavailable in this session; component/handler fixtures and hosted HTTP checks do not substitute for Safari/mobile/browser file-picker verification.
+- Cloudflare production build, its TypeScript pass and private-asset/runtime-secret scanner passed. Deployed version `1d7cb36d-876b-4f2b-bc64-a047b40cc423`, code commit `6e4e53a`.
+- Hosted acceptance: 20 checks passed for real metadata actions, duplicate slug rejection, protected format, admin scheduled filter, scheduled private state, automatic system publication and anonymous reader access. Exact temporary fixture and analytics removed. Public-route smoke: 7/7 passed.
+- Initial Cron activation: due14:48:34Z, publication observed14:54:12Z on2026-10-24 (about5m38s late during activation); configuration propagation must not be described as an exact-time guarantee.
+- Worker API readback: cron every minute, CPU30000ms, encrypted cron secret, app origin, self binding, database and private R2 binding present.
+- Browser automation unavailable in this session; component/handler fixtures and hosted HTTP checks do not substitute for Safari/mobile/browser file-picker verification. No original/mock content removed.
