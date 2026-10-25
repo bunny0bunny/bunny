@@ -27,6 +27,17 @@ async function chapter() {
   return db.chapter.create({ data: { seriesId, number: ++number, titleAr: "النص المتاح", novelBody: "المحتوى السابق.", workflow: "published", publishedAt: new Date() } });
 }
 
+test("concurrent first opens and published forks converge on one working draft", async () => {
+  for (const published of [false, true]) {
+    const current = published ? await chapter() : await db.chapter.create({ data: { seriesId, number: ++number, titleAr: "فصل جديد" } });
+    const opened = await Promise.all(Array.from({ length: 4 }, () => withActor(adminId, () => openOrCreateDraft(current.id))));
+    expect(opened.every(result => result.ok)).toBe(true);
+    expect(new Set(opened.map(result => result.revision!.id)).size).toBe(1);
+    expect(await db.chapterRevision.count({ where: { chapterId: current.id, status: "draft" } })).toBe(1);
+    expect(await db.chapterRevision.count({ where: { chapterId: current.id } })).toBe(published ? 2 : 1);
+  }
+});
+
 test("simultaneous form saves accept one version and reject the stale competing write", async () => {
   const current = await chapter();
   const opened = await withActor(contributorId, () => openOrCreateDraft(current.id));

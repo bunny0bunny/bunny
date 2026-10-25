@@ -185,7 +185,7 @@ export function SeriesForm({ initial, readingFormatLocked = false, currentActorI
     } finally { submitGate.current.finish(uncertain); setLoading(false); }
   }
 
-  const field = "bg-card";
+  const field = "min-h-11 bg-card";
   return (
     <form onSubmit={submit} className="space-y-5" aria-label="نموذج بيانات العمل">
       {formRecovery.recovered && <div role="status" className="space-y-3 rounded-xl border border-primary/30 bg-primary/10 p-4 text-sm">
@@ -286,7 +286,7 @@ export function SeriesForm({ initial, readingFormatLocked = false, currentActorI
                 type="button"
                 key={g}
                 onClick={() => set("genres", active ? values.genres.filter((x) => x !== g) : [...values.genres, g])}
-                className={`rounded-full border px-3 py-1.5 text-xs transition ${
+                className={`min-h-11 rounded-full border px-3 py-1.5 text-xs transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring ${
                   active ? "border-primary/50 bg-primary/15 text-primary" : "border-border bg-card text-muted-foreground hover:text-foreground"
                 }`}
                 aria-pressed={active}
@@ -298,7 +298,7 @@ export function SeriesForm({ initial, readingFormatLocked = false, currentActorI
         </div>
       </div>
 
-      <label className="flex items-center gap-2.5 text-sm">
+      <label className="flex min-h-11 cursor-pointer items-center gap-2.5 text-sm">
         <input
           type="checkbox"
           checked={values.isFeatured}
@@ -389,14 +389,14 @@ export function ChapterForm({
   currentActorId,
 }: {
   currentActorId: string;
-  seriesOptions: { id: string; titleAr: string; format: Format }[];
+  seriesOptions: { id: string; titleAr: string; format: Format; nextNumber?: number }[];
   isAdmin?: boolean;
 }) {
   const formId = useId();
   const router = useRouter();
   const { toast } = useToast();
   const [seriesId, setSeriesId] = useState(seriesOptions[0]?.id ?? "");
-  const [number, setNumber] = useState("1");
+  const [number, setNumber] = useState(String(seriesOptions[0]?.nextNumber ?? 1));
   const [titleAr, setTitleAr] = useState("");
   const [workflow, setWorkflow] = useState<"draft" | "review">("draft");
   const [readingDirection, setReadingDirection] = useState<"rtl" | "ltr">("rtl");
@@ -406,14 +406,15 @@ export function ChapterForm({
   const [loading, setLoading] = useState(false);
   const [recoveryRequired, setRecoveryRequired] = useState(false);
   const submitGate = useRef(createSubmissionGate());
-  const { markSaved } = useUnsavedChanges(Boolean(titleAr || novelBody || number !== "1" || seriesId !== (seriesOptions[0]?.id ?? "") || workflow !== "draft" || readingDirection !== "rtl"));
+  const selected = seriesOptions.find((s) => s.id === seriesId);
+  const suggestedNumber = String(selected?.nextNumber ?? 1);
+  const { markSaved } = useUnsavedChanges(Boolean(titleAr || novelBody || number !== suggestedNumber || seriesId !== (seriesOptions[0]?.id ?? "") || workflow !== "draft" || readingDirection !== "rtl"));
   const formRecovery = useSessionFormDraft(
     { actorId: currentActorId, entityId: `chapter:new:${seriesId}`, serverSnapshot: "new-chapter-v1" },
     { titleAr, novelBody, number, resultUncertain: String(recoveryRequired) },
-    Boolean(titleAr || novelBody || number !== "1" || recoveryRequired),
+    Boolean(titleAr || novelBody || number !== suggestedNumber || recoveryRequired),
   );
 
-  const selected = seriesOptions.find((s) => s.id === seriesId);
   const isManga = selected?.format === "manga";
   const isNovel = selected?.format === "novel";
 
@@ -423,7 +424,7 @@ export function ChapterForm({
     setSeriesId(nextSeriesId);
     setTitleAr("");
     setNovelBody("");
-    setNumber("1");
+    setNumber(String(seriesOptions.find(series => series.id === nextSeriesId)?.nextNumber ?? 1));
     setWorkflow("draft");
     setReadingDirection("rtl");
     setError(null);
@@ -480,7 +481,7 @@ export function ChapterForm({
         <p>وُجد نص فصل غير محفوظ لهذا العمل في هذا التبويب. استعده أو تجاهله للبدء من جديد.</p>
         <div className="flex flex-wrap gap-2">
           <Button type="button" variant="outline" disabled={loading} onClick={() => {
-            if ((titleAr || novelBody || number !== "1") && !window.confirm("استبدال النص الحالي بالنص المستعاد؟")) return;
+            if ((titleAr || novelBody || number !== suggestedNumber) && !window.confirm("استبدال النص الحالي بالنص المستعاد؟")) return;
             const recovered = formRecovery.recovered;
             if (!recovered) return;
             setTitleAr(recovered.titleAr); setNovelBody(recovered.novelBody); setNumber(recovered.number);
@@ -509,6 +510,7 @@ export function ChapterForm({
         <div className="space-y-1.5">
           <label htmlFor={`${formId}-number`} className="text-sm font-medium">رقم الفصل *</label>
           <Input id={`${formId}-number`} type="number" min={1} required value={number} onChange={(e) => setNumber(e.target.value)} className="min-h-[44px] bg-card" />
+          <p className="text-xs leading-6 text-muted-foreground">الرقم التالي المقترح: {Number(suggestedNumber).toLocaleString("ar-EG")}. يمكنك تغييره؛ يتحقق الموقع من عدم تكراره عند الحفظ.</p>
         </div>
 
       </div>

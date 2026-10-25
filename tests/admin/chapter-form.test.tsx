@@ -170,9 +170,13 @@ test("SeriesForm recovery restores text only, while a newer saved server snapsho
 });
 
 let routeRole = "admin";
-mock.module("../../src/lib/queries", () => ({ currentProfileOrNull: async () => ({ id: "actor-a", role: routeRole }), getAdminSeries: async () => [] }));
+let routeSeries: any[] = [];
+let groupedInput: any;
+mock.module("../../src/lib/queries", () => ({ currentProfileOrNull: async () => ({ id: "actor-a", role: routeRole }), getAdminSeries: async () => routeSeries }));
+mock.module("../../src/lib/db", () => ({ db: { chapter: { groupBy: async (input: any) => { groupedInput = input; return [{ seriesId: "series", _max: { number: 35 } }]; } } } }));
 const { default: NewChapterPage } = await import("../../src/app/admin/chapters/new/page");
 test("real empty new-chapter route offers admins create-work and staff assignment guidance", async () => {
+  routeSeries = [];
   routeRole = "admin";
   let tree = await NewChapterPage({ searchParams: Promise.resolve({}) });
   expect(find(tree, node => node.props?.href === "/admin/series/new")).toBeTruthy();
@@ -180,6 +184,31 @@ test("real empty new-chapter route offers admins create-work and staff assignmen
   tree = await NewChapterPage({ searchParams: Promise.resolve({}) });
   expect(find(tree, node => typeof node.props?.children === "string" && node.props.children.includes("إسناد العمل"))).toBeTruthy();
   expect(find(tree, node => node.props?.href === "/admin/series/new")).toBeUndefined();
+});
+
+test("new chapter route suggests maximum existing number plus one only for authorized works", async () => {
+  routeRole = "contributor";
+  routeSeries = [{ id: "series", titleAr: "عمل", format: "manga" }, { id: "empty", titleAr: "بلا فصول", format: "novel" }];
+  const tree = await NewChapterPage({ searchParams: Promise.resolve({ series: "empty" }) });
+  const form = find(tree, node => node.type === ChapterForm);
+  expect(form.props.seriesOptions.map((s: any) => [s.id, s.nextNumber])).toEqual([["empty", 1], ["series", 36]]);
+  expect(groupedInput.where.seriesId.in).toEqual(["series", "empty"]);
+  routeSeries = [];
+});
+
+test("chapter number suggestion follows the selected work while allowing manual override", async () => {
+  create = async () => ({ ok: false, error: "known validation" });
+  const works = [{ ...options[0], nextNumber: 36 }, { id: "series-b", titleAr: "عمل ثان", format: "novel" as const, nextNumber: 8 }];
+  let tree = render(works);
+  expect(field(tree, "number").props.value).toBe("36");
+  expect(lastDirty).toBe(false);
+  find(tree, node => typeof node.props?.onValueChange === "function" && node.props.value === "series").props.onValueChange("series-b");
+  tree = render(works);
+  expect(field(tree, "number").props.value).toBe("8");
+  field(tree, "number").props.onChange({ target: { value: "10" } });
+  await submit(render(works));
+  expect(calls[0].number).toBe(10);
+  expect(calls[0].seriesId).toBe("series-b");
 });
 
 

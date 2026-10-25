@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { ChapterForm } from "@/components/admin/admin-client";
 import { getAdminSeries, currentProfileOrNull } from "@/lib/queries";
 import type { Format } from "@/lib/constants";
+import { db } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
 
@@ -17,10 +18,18 @@ export default async function NewChapterPage({
   const profile = await currentProfileOrNull();
   const isAdmin = profile?.role === "admin";
   const seriesList = await getAdminSeries({});
+  // Scope the aggregate to the works already authorized for this actor.
+  const highestNumbers = seriesList.length ? await db.chapter.groupBy({
+    by: ["seriesId"],
+    where: { seriesId: { in: seriesList.map(series => series.id) } },
+    _max: { number: true },
+  }) : [];
+  const nextNumbers = new Map(highestNumbers.map(row => [row.seriesId, (row._max.number ?? 0) + 1]));
   const options = seriesList.map((s) => ({
     id: s.id,
     titleAr: s.titleAr,
     format: s.format as Format,
+    nextNumber: nextNumbers.get(s.id) ?? 1,
   }));
   // preselect via ?series=
   if (preferred) options.sort((a, b) => (a.id === preferred ? -1 : b.id === preferred ? 1 : 0));

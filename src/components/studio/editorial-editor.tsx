@@ -693,13 +693,17 @@ export function EditorialEditor({
               </p>
             </div>
             {isAdmin && (
-              <div className="flex w-full min-w-0 flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
+              <div className="flex w-full min-w-0 flex-col gap-2 sm:w-auto sm:flex-row sm:items-end">
+                <div className="space-y-1.5">
+                <label htmlFor={`${editorId}-withdraw`} className="block text-xs font-medium">سبب سحب الفصل (مطلوب)</label>
                 <Input
+                  id={`${editorId}-withdraw`}
                   placeholder="سبب السحب الإلزامي…"
                   value={withdrawReason}
                   onChange={(e) => setWithdrawReason(e.target.value)}
                   className="min-h-[44px] w-full bg-card text-xs sm:w-64"
                 />
+                </div>
                 <Button
                   variant="destructive"
                   size="sm"
@@ -919,7 +923,9 @@ export function EditorialEditor({
 
                   {/* Return for changes */}
                   <div className="space-y-1.5">
+                    <label htmlFor={`${editorId}-return-reason`} className="block text-xs font-medium">سبب طلب التعديلات (مطلوب)</label>
                     <Input
+                      id={`${editorId}-return-reason`}
                       placeholder="سبب طلب التعديلات (إلزامي)…"
                       value={returnReason}
                       onChange={(e) => setReturnReason(e.target.value)}
@@ -938,7 +944,9 @@ export function EditorialEditor({
 
                   {/* Recommend approval */}
                   <div className="space-y-1.5 pt-2">
+                    <label htmlFor={`${editorId}-recommend-note`} className="block text-xs font-medium">ملاحظة التوصية (اختياري)</label>
                     <Input
+                      id={`${editorId}-recommend-note`}
                       placeholder="ملاحظة التوصية (اختياري)…"
                       value={recommendNote}
                       onChange={(e) => setRecommendNote(e.target.value)}

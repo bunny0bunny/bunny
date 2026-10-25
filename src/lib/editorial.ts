@@ -32,7 +32,9 @@ export async function withSerializableTx(
       }
       return result;
     } catch (error) {
-      if (error instanceof Prisma.PrismaClientKnownRequestError && ["P2034", "P2002"].includes(error.code)) {
+      // Worker and Node bundles can carry different Prisma error constructors.
+      // Retry only the two known transaction/unique-conflict codes, regardless of realm.
+      if (error && typeof error === "object" && "code" in error && ["P2034", "P2002"].includes(String(error.code))) {
         if (attempt < 3) { await new Promise(resolve => setTimeout(resolve, 20 * (attempt + 1))); continue; }
         return { ok: false, error: "conflict" };
       }

@@ -79,6 +79,18 @@ async function loadStudioChapterPage(params: Promise<{ id: string }>) {
 
   // 3. Open or get working draft revision (lazily initialized or created if none open)
   const openResult = await openOrCreateDraft(chapterId);
+  if (!openResult.ok && openResult.error === "conflict") {
+    return <div className="flex min-h-screen flex-col bg-background">
+      <SiteHeader />
+      <main className="mx-auto flex w-full max-w-lg flex-1 flex-col items-center justify-center gap-4 p-6 text-center">
+        <h1 className="text-xl font-bold">تعذّر فتح النسخة الآن</h1>
+        <p className="text-sm leading-8 text-muted-foreground">يجري تجهيز نسخة لهذا الفصل في طلب آخر. الفصل محفوظ؛ أعد محاولة فتحه دون إنشاء فصل جديد.</p>
+        <Button asChild className="min-h-11"><a href={`/studio/chapters/${encodeURIComponent(chapterId)}`}>إعادة محاولة فتح النسخة</a></Button>
+        <Link href={`/admin/series/${chapter.seriesId}`} className="inline-flex min-h-11 items-center text-sm text-primary underline underline-offset-4">العودة إلى إدارة العمل</Link>
+      </main>
+      <SiteFooter />
+    </div>;
+  }
   if (!openResult.ok || !openResult.revision) {
     throw new Error(openResult.error ?? "تعذّر فتح مسودة الفصل التحريرية");
   }
