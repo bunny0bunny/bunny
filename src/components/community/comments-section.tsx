@@ -168,7 +168,7 @@ export function CommentsSection({
                   {c.author.role !== "reader" && (
                     <span className="flex items-center gap-1 rounded-md bg-gold/15 px-1.5 py-0.5 text-[10px] font-medium text-gold">
                       <ShieldAlert className="size-3" aria-hidden />
-                      فريق باني
+                      فريق بانيورا
                     </span>
                   )}
                   <time dateTime={new Date(c.createdAt).toISOString()} className="text-[11px] text-muted-foreground">{timeAgoAr(c.createdAt, now)}</time>

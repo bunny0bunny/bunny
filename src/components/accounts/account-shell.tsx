@@ -18,9 +18,9 @@ export function AccountShell({
         <Link
           href="/"
           className="mx-auto inline-flex min-h-11 items-center justify-center rounded-xl p-1 transition hover:opacity-85 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          aria-label="مكتبة باني — الصفحة الرئيسية"
+          aria-label="مكتبة بانيورا — الصفحة الرئيسية"
         >
-          <BrandMark className="size-16" alt="مكتبة باني" resolution={256} />
+          <BrandMark className="size-16" alt="مكتبة بانيورا" resolution={256} />
         </Link>
         <h1 className="mt-3 text-2xl font-bold tracking-tight text-foreground">{title}</h1>
         {description && (

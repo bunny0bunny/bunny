@@ -2,7 +2,7 @@ import { PrismaClient } from "@prisma/client"
 import { resolveDatabaseUrl } from "@/lib/db-url"
 
 /**
- * Bunny Library — runtime database client (Neon PostgreSQL).
+ * Bunyora Library — runtime database client (Neon PostgreSQL).
  *
  * Two Neon connection strings are used (see README → "Database"):
  *   - DATABASE_URL : Neon POOLED url  → used by this client for ALL runtime queries

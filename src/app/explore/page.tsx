@@ -18,7 +18,7 @@ import { Button } from "@/components/ui/button";
 export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
-  title: "استكشف المكتبة — مكتبة باني",
+  title: "استكشف المكتبة — مكتبة بانيورا",
   description: "اكتشف آلاف الفصول والقصص المصورة والروايات العربية المنسقة بعناية.",
 };
 

@@ -4,7 +4,7 @@ import manifest from "../../../../public/share/manifest.json";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-export const alt = "مكتبة باني";
+export const alt = "مكتبة بانيورا";
 export const size = { width: 1200, height: 630 };
 export const contentType = "image/png";
 

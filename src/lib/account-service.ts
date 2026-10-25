@@ -122,7 +122,7 @@ export async function registerReaderService(input: {
     const verifyUrl = `${origin}/verify-email?token=${rawToken}`;
     await sendAccountMail({
       to: email,
-      subject: "تأكيد بريدك الإلكتروني في مكتبة باني",
+      subject: "تأكيد بريدك الإلكتروني في مكتبة بانيورا",
       text: `مرحبًا ${verificationNickname}،\n\nيرجى تأكيد حسابك من خلال الرابط التالي:\n${verifyUrl}\n\nصلاحية هذا الرابط ٢٤ ساعة.`,
     });
   }
@@ -212,7 +212,7 @@ export async function resendVerificationService(input: {
     const verifyUrl = `${origin}/verify-email?token=${rawToken}`;
     await sendAccountMail({
       to: email,
-      subject: "تأكيد بريدك الإلكتروني في مكتبة باني",
+      subject: "تأكيد بريدك الإلكتروني في مكتبة بانيورا",
       text: `مرحبًا ${nickname}،\n\nيرجى تأكيد حسابك من خلال الرابط التالي:\n${verifyUrl}\n\nصلاحية هذا الرابط ٢٤ ساعة.`,
     });
   }
@@ -381,7 +381,7 @@ export async function requestPasswordResetService(input: {
     const resetUrl = `${origin}/reset-password?token=${rawToken}`;
     await sendAccountMail({
       to: email,
-      subject: "إعادة تعيين كلمة المرور في مكتبة باني",
+      subject: "إعادة تعيين كلمة المرور في مكتبة بانيورا",
       text: `مرحبًا ${nickname}،\n\nتلقينا طلبًا لإعادة تعيين كلمة المرور الخاصة بحسابك:\n${resetUrl}\n\nصلاحية هذا الرابط ساعة واحدة. إذا لم تطلب ذلك، يمكنك تجاهل هذه الرسالة.`,
     });
   }
@@ -665,8 +665,8 @@ export async function createTeamInvitationService(
   const inviteUrl = `${origin}/accept-invitation?token=${rawToken}`;
   const delivery = await sendAccountMail({
     to: email,
-    subject: "دعوة للانضمام إلى فريق عمل مكتبة باني",
-    text: `مرحبًا،\n\nتمت دعوتك للانضمام إلى فريق عمل مكتبة باني بدور (${role}):\n${inviteUrl}\n\nصلاحية هذه الدعوة ٧ أيام.`,
+    subject: "دعوة للانضمام إلى فريق عمل مكتبة بانيورا",
+    text: `مرحبًا،\n\nتمت دعوتك للانضمام إلى فريق عمل مكتبة بانيورا بدور (${role}):\n${inviteUrl}\n\nصلاحية هذه الدعوة ٧ أيام.`,
   });
   if (!delivery.ok) return { ok: false, error: "تعذّر إرسال الدعوة. يمكنك إعادة المحاولة أو إلغاء الدعوة من القائمة." };
   return { ok: true, message: "تم إرسال الدعوة بنجاح." };

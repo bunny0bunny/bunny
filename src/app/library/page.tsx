@@ -22,7 +22,7 @@ import { normalizeArabic, tokenizeArabic, scoreDocument } from "@/lib/arabic-sea
 
 export const dynamic = "force-dynamic";
 
-export const metadata: Metadata = { title: "مكتبتي — مكتبة باني" };
+export const metadata: Metadata = { title: "مكتبتي — مكتبة بانيورا" };
 
 export default async function LibraryPage({
   searchParams,

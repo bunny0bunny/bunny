@@ -148,7 +148,7 @@ export function AcceptInvitationView({
   return (
     <AccountShell
       title="دعوة للانضمام إلى الفريق"
-      description={`تمت دعوتك للانضمام إلى فريق عمل مكتبة باني بصلاحية «${roleName}».`}
+      description={`تمت دعوتك للانضمام إلى فريق عمل مكتبة بانيورا بصلاحية «${roleName}».`}
       footer={
         <p>
           <Link href="/" className="text-muted-foreground transition hover:text-foreground">
@@ -176,7 +176,7 @@ export function AcceptInvitationView({
             {!currentSession?.id ? (
               <div className="space-y-3 text-center">
                 <p className="text-xs leading-5 text-muted-foreground">
-                  هذا البريد مسجّل مسبقًا في مكتبة باني. يرجى تسجيل الدخول بحسابك لتأكيد قبول الدعوة ومنحك صلاحية «{roleName}».
+                  هذا البريد مسجّل مسبقًا في مكتبة بانيورا. يرجى تسجيل الدخول بحسابك لتأكيد قبول الدعوة ومنحك صلاحية «{roleName}».
                 </p>
                 <Button asChild className="h-11 w-full bg-primary font-bold text-primary-foreground hover:bg-primary/90">
                   <Link href={loginToAcceptUrl}>

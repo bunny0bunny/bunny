@@ -9,7 +9,7 @@ import { readerHref } from "@/lib/reader-route";
 
 export const dynamic = "force-dynamic";
 
-export const metadata: Metadata = { title: "التحديثات — مكتبة باني" };
+export const metadata: Metadata = { title: "التحديثات — مكتبة بانيورا" };
 
 const arabicDateFormatter = new Intl.DateTimeFormat("ar-EG", {
   calendar: "gregory",

@@ -14,12 +14,13 @@ const arabic = IBM_Plex_Sans_Arabic({
 export const metadata: Metadata = {
   metadataBase: new URL(process.env.APP_ORIGIN || process.env.NEXTAUTH_URL || "http://localhost:3000"),
   title: {
-    default: "مكتبة باني — مكتبتك العربية للقصص",
-    template: "%s · مكتبة باني",
+    default: "مكتبة بانيورا — مكتبتك العربية للقصص",
+    template: "%s · مكتبة بانيورا",
   },
   description:
     "مكتبة قراءة عربية للمانجا والمانهوا والروايات والكوميكس — اكتشف قصصًا جديدة وواصل قراءة أعمالك المفضلة.",
-  applicationName: "Bunny Library",
+  applicationName: "Bunyora Library",
+  openGraph: { siteName: "Bunyora Library" },
 };
 
 export const viewport: Viewport = {

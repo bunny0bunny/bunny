@@ -5,7 +5,7 @@ import { ForgotPasswordForm } from "@/components/accounts/forgot-password-form";
 export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
-  title: "استعادة كلمة المرور — مكتبة باني",
+  title: "استعادة كلمة المرور — مكتبة بانيورا",
 };
 
 export default function ForgotPasswordPage() {

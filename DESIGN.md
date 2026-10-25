@@ -1,4 +1,4 @@
-# Bunny Library — approved reader design
+# Bunyora Library — approved reader design
 
 Approved by the founder on 2026-10-09. Replace the old public-page composition with the selected content-first direction while preserving real product behavior and brand name.
 

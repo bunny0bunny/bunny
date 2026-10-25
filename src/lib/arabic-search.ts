@@ -1,5 +1,5 @@
 /**
- * Bunny Library — Arabic-aware search (Release E, zero DDL).
+ * Bunyora Library — Arabic-aware search (Release E, zero DDL).
  *
  * Arabic search needs more than SQL `contains`: readers type hamza-less
  * ("اسطورة" for "أسطورة"), drop diacritics, mix ة/ه and ى/ي, and make typos.

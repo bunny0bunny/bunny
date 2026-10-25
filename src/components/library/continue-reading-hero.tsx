@@ -201,7 +201,7 @@ export function ContinueReadingHero({
           <div className="flex flex-col items-start justify-between gap-4 rounded-2xl border border-border/70 bg-[#191C25] p-6 sm:flex-row sm:items-center sm:p-8">
             <div>
               <h1 className="text-xl sm:text-2xl font-bold text-foreground">
-                مكتبة باني — تجربة قراءة عربية هادئة
+                مكتبة بانيورا — تجربة قراءة عربية هادئة
               </h1>
               <p className="mt-1.5 text-xs sm:text-sm text-muted-foreground">
                 اكتشف الأعمال المصورة والروايات، واختر قراءتك القادمة.

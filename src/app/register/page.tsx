@@ -5,7 +5,7 @@ import { RegisterForm } from "@/components/accounts/register-form";
 export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
-  title: "إنشاء حساب قارئ — مكتبة باني",
+  title: "إنشاء حساب قارئ — مكتبة بانيورا",
 };
 
 export default function RegisterPage() {

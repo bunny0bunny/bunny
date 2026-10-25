@@ -59,7 +59,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
         <Link href="/admin" className="mb-6 flex min-h-11 items-center gap-2.5">
           <BrandMark className="size-11" />
           <span>
-            <span className="block text-sm font-bold text-foreground">مكتبة باني</span>
+            <span className="block text-sm font-bold text-foreground">مكتبة بانيورا</span>
             <span className="block text-[10px] text-gold">لوحة الإدارة</span>
           </span>
         </Link>

@@ -1,57 +1,57 @@
 {
   "version": 1,
   "default": {
-    "fingerprint": "696158c81c3376fb2b31e9173e6be643076e5476717309c35181f1cfca12c592",
-    "path": "/share/default.png"
+    "fingerprint": "2c8c17b3e73633d7d16ec169ef2c746473d529b5935c0eeb22cebc27fb37f7ab",
+    "path": "/share/bunyora-default.png"
   },
   "cards": {
     "city-pulse-zero": {
-      "fingerprint": "42e3c2d0565d16b7acfcdc31727eb773e9be4d5428885807af28aee729acdaee",
-      "path": "/share/42e3c2d0565d16b7acfcdc31727eb773e9be4d5428885807af28aee729acdaee.png"
+      "fingerprint": "8396853db4eee9910e3496b6f4efad4313cf8f5a29f8d84b32b0d9c0168d7a59",
+      "path": "/share/8396853db4eee9910e3496b6f4efad4313cf8f5a29f8d84b32b0d9c0168d7a59.png"
     },
     "harbor-of-old-stars": {
-      "fingerprint": "9cd3033c875f613c452b13c7000156716ca2b66ead00f5ba0c1a4e4a8ee27313",
-      "path": "/share/9cd3033c875f613c452b13c7000156716ca2b66ead00f5ba0c1a4e4a8ee27313.png"
+      "fingerprint": "bddac79c034ad3fb88d5ab3f1bcd1de8fc4e9831c73a07a5619be5f8b2c7d394",
+      "path": "/share/bddac79c034ad3fb88d5ab3f1bcd1de8fc4e9831c73a07a5619be5f8b2c7d394.png"
     },
     "harbor-of-the-missing": {
-      "fingerprint": "c0c385e2a42490490118f985b456edaaf2d52afdef9a7edd2f2ab82f687bd201",
-      "path": "/share/c0c385e2a42490490118f985b456edaaf2d52afdef9a7edd2f2ab82f687bd201.png"
+      "fingerprint": "f2d008f2970df6fe177abccc26efce7a3270d0dc916936491fec4f18ef1d0033",
+      "path": "/share/f2d008f2970df6fe177abccc26efce7a3270d0dc916936491fec4f18ef1d0033.png"
     },
     "letters-from-the-seventh-floor": {
-      "fingerprint": "d8905fbcda505d46b6027caba625798f7e27c5adcd79993990aab9ca51c4831c",
-      "path": "/share/d8905fbcda505d46b6027caba625798f7e27c5adcd79993990aab9ca51c4831c.png"
+      "fingerprint": "f6c346cd5f560dfdad50cbadf9d3d31eff90bd5e9ebd99734efdb7cc4ce4ed7e",
+      "path": "/share/f6c346cd5f560dfdad50cbadf9d3d31eff90bd5e9ebd99734efdb7cc4ce4ed7e.png"
     },
     "mint-leaf-cafe": {
-      "fingerprint": "94a87b8984b99c75fde79249fe32475561cf50ea2e5d0ba7483a62c772f4190c",
-      "path": "/share/94a87b8984b99c75fde79249fe32475561cf50ea2e5d0ba7483a62c772f4190c.png"
+      "fingerprint": "53fbe5e8352d0b2f2c7541a7db2d0182352f3cd44b993ae4b3e98c09aa5206f8",
+      "path": "/share/53fbe5e8352d0b2f2c7541a7db2d0182352f3cd44b993ae4b3e98c09aa5206f8.png"
     },
     "sand-that-remembers-names": {
-      "fingerprint": "d816b8e718293323fb544ee658d434d5b9bd16f0ffe023b09a709b532547324c",
-      "path": "/share/d816b8e718293323fb544ee658d434d5b9bd16f0ffe023b09a709b532547324c.png"
+      "fingerprint": "f1c33a0f6be1db68ae274f0531daad5ca52ca48b4d33bc06656ad7a0fd44da67",
+      "path": "/share/f1c33a0f6be1db68ae274f0531daad5ca52ca48b4d33bc06656ad7a0fd44da67.png"
     },
     "the-city-that-forgot-rain": {
-      "fingerprint": "28a17ee1788836c6ee4631ad4ff2e9c1eb9e020713d612aa7341cc44a91f8416",
-      "path": "/share/28a17ee1788836c6ee4631ad4ff2e9c1eb9e020713d612aa7341cc44a91f8416.png"
+      "fingerprint": "a942293ef31ea35acbfddba97a40ef20fb384bd0ed7763ad90060c1c1edbe896",
+      "path": "/share/a942293ef31ea35acbfddba97a40ef20fb384bd0ed7763ad90060c1c1edbe896.png"
     },
     "the-last-tide-season": {
-      "fingerprint": "e86bead7998b7e99b4b84d52392f8efaac416b69c0d2c17348176917ad96e605",
-      "path": "/share/e86bead7998b7e99b4b84d52392f8efaac416b69c0d2c17348176917ad96e605.png"
+      "fingerprint": "b8bb7e713c09fe9ce538c215ef5cbf2f19c9065ab68adb93e400fcc077acc695",
+      "path": "/share/b8bb7e713c09fe9ce538c215ef5cbf2f19c9065ab68adb93e400fcc077acc695.png"
     },
     "the-six-thirty-train": {
-      "fingerprint": "6e31fce0bcb33b8a89c61fbace00989082dda5a49b74762dddd70821f3cce86d",
-      "path": "/share/6e31fce0bcb33b8a89c61fbace00989082dda5a49b74762dddd70821f3cce86d.png"
+      "fingerprint": "927579d4bf1b95e5e29830d942d932a52eb1c04a3dab1654e22f2a792abd68ae",
+      "path": "/share/927579d4bf1b95e5e29830d942d932a52eb1c04a3dab1654e22f2a792abd68ae.png"
     },
     "warden-of-the-twilight-gate": {
-      "fingerprint": "050de0465e25dc5cfee8a9484709e646e26acb859dc22f4e19c68dc50b960601",
-      "path": "/share/050de0465e25dc5cfee8a9484709e646e26acb859dc22f4e19c68dc50b960601.png"
+      "fingerprint": "c358d7cdc205c66358d96c86ce51b5eae10a41be73519ea361692a400cfe6f9b",
+      "path": "/share/c358d7cdc205c66358d96c86ce51b5eae10a41be73519ea361692a400cfe6f9b.png"
     },
     "wedding-of-the-red-moon": {
-      "fingerprint": "1f3f92efc476f16d41ed83b28da3b981c006b2874afc14c765fa4bde24168547",
-      "path": "/share/1f3f92efc476f16d41ed83b28da3b981c006b2874afc14c765fa4bde24168547.png"
+      "fingerprint": "67122576b587a0e847613cfd0fb78bdfb6c3cc0e2c6c6373d0f44f88c2bcee5e",
+      "path": "/share/67122576b587a0e847613cfd0fb78bdfb6c3cc0e2c6c6373d0f44f88c2bcee5e.png"
     },
     "zainab-wardrobe": {
-      "fingerprint": "5027d8c3080f428d46289ef8481e95f6b3ab5d62f953c3f0aaf0ba7ef3d48132",
-      "path": "/share/5027d8c3080f428d46289ef8481e95f6b3ab5d62f953c3f0aaf0ba7ef3d48132.png"
+      "fingerprint": "aa6439eb33e758fdbc8d7930737b7e7af304beee17d8cc95f8b5214c110e9f84",
+      "path": "/share/aa6439eb33e758fdbc8d7930737b7e7af304beee17d8cc95f8b5214c110e9f84.png"
     }
   }
 }

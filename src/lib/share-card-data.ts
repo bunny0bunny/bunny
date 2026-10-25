@@ -1,7 +1,7 @@
 export type ShareCardData = { slug: string; titleAr: string; author: string; accent: string; format: string; genresJson: string; ratingAvg: number; ratingCount: number };
 // Increment when changing layout, fonts, labels or the Arabic text treatment.
-export const SHARE_CARD_RENDERER_VERSION = "1";
-export const DEFAULT_SHARE_CARD_PATH = "/share/default.png";
+export const SHARE_CARD_RENDERER_VERSION = "2";
+export const DEFAULT_SHARE_CARD_PATH = "/share/bunyora-default.png";
 export type ShareCardManifest = {
   version: 1;
   default: { fingerprint: string; path: string };

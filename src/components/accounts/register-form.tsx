@@ -187,7 +187,7 @@ export function RegisterForm() {
             type="text"
             value={nickname}
             onChange={(e) => setNickname(e.target.value)}
-            placeholder="مثال: قارئ باني"
+            placeholder="مثال: قارئ بانيورا"
             className="h-11 bg-card"
             autoComplete="nickname"
             minLength={2}

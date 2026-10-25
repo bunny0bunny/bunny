@@ -7,7 +7,7 @@ import { AcceptInvitationView, type InvitationData } from "@/components/accounts
 export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
-  title: "قبول دعوة الانضمام — مكتبة باني",
+  title: "قبول دعوة الانضمام — مكتبة بانيورا",
 };
 
 export default async function AcceptInvitationPage({

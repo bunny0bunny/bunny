@@ -3,7 +3,7 @@ import { db } from "@/lib/db";
 import type { NotificationType } from "@prisma/client";
 
 /**
- * Bunny Library — in-app notifications (Release E).
+ * Bunyora Library — in-app notifications (Release E).
  *
  * One table, zero fan-out infrastructure: publishing a chapter notifies the
  * profiles that shelved the series (any shelf — plan readers opted in too),

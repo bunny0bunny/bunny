@@ -5,7 +5,7 @@ import { VerifyEmailContent } from "@/components/accounts/verify-email-content";
 export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
-  title: "تأكيد البريد الإلكتروني — مكتبة باني",
+  title: "تأكيد البريد الإلكتروني — مكتبة بانيورا",
 };
 
 export default function VerifyEmailPage() {

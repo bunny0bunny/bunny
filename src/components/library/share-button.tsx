@@ -19,7 +19,7 @@ export function ShareButton({ slug, titleAr, compact = false }: { slug: string; 
   const [copied, setCopied] = useState(false);
 
   const url = () => `${window.location.origin}/series/${slug}`;
-  const text = () => `اقرأ «${titleAr}» على مكتبة باني`;
+  const text = () => `اقرأ «${titleAr}» على مكتبة بانيورا`;
 
   const copy = async () => {
     try {

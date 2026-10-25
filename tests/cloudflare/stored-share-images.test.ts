@@ -23,16 +23,16 @@ describe("stored share cards", () => {
   });
   test("selects a prepared asset for an eligible slug and brand fallback otherwise", () => {
     expect(resolveShareCardPath("public-work", manifest)).toBe(`/share/${hash}.png`);
-    expect(resolveShareCardPath(null, manifest)).toBe("/share/default.png");
-    expect(resolveShareCardPath("missing", manifest)).toBe("/share/default.png");
-    expect(resolveShareCardPath("__proto__", manifest)).toBe("/share/default.png");
+    expect(resolveShareCardPath(null, manifest)).toBe("/share/bunyora-default.png");
+    expect(resolveShareCardPath("missing", manifest)).toBe("/share/bunyora-default.png");
+    expect(resolveShareCardPath("__proto__", manifest)).toBe("/share/bunyora-default.png");
   });
   test("rejects external, traversal, query-string and malformed manifest paths", () => {
-    for (const unsafe of ["https://example.com/x.png", "//example.com/x.png", "/share/../secret.png", `/share/${hash}.png?x=1`, `/share/%2e%2e/${hash}.png`, "/share/foo.png", "/share/default.png", null]) {
-      expect(resolveShareCardPath("public-work", { cards: { "public-work": { fingerprint: hash, path: unsafe } } })).toBe("/share/default.png");
+    for (const unsafe of ["https://example.com/x.png", "//example.com/x.png", "/share/../secret.png", `/share/${hash}.png?x=1`, `/share/%2e%2e/${hash}.png`, "/share/foo.png", "/share/bunyora-default.png", null]) {
+      expect(resolveShareCardPath("public-work", { cards: { "public-work": { fingerprint: hash, path: unsafe } } })).toBe("/share/bunyora-default.png");
     }
-    expect(resolveShareCardPath("public-work", { cards: { "public-work": { fingerprint: "invalid", path: `/share/${hash}.png` } } })).toBe("/share/default.png");
-    expect(resolveShareCardPath("public-work", null)).toBe("/share/default.png");
+    expect(resolveShareCardPath("public-work", { cards: { "public-work": { fingerprint: "invalid", path: `/share/${hash}.png` } } })).toBe("/share/bunyora-default.png");
+    expect(resolveShareCardPath("public-work", null)).toBe("/share/bunyora-default.png");
   });
   test("validates PNG signature, IHDR and the required share-card dimensions", () => {
     const png = new Uint8Array(24);

@@ -18,7 +18,7 @@ import { EVENT_LABELS } from "@/lib/labels";
 
 export const dynamic = "force-dynamic";
 
-export const metadata: Metadata = { title: "حسابي — مكتبة باني" };
+export const metadata: Metadata = { title: "حسابي — مكتبة بانيورا" };
 
 function timeAgoAr(date: Date) {
   const diff = Date.now() - new Date(date).getTime();

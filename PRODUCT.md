@@ -1,4 +1,4 @@
-# مكتبة باني
+# مكتبة بانيورا
 
 An Arabic-first web library for serialized manga, manhwa, novels and comics. Anime is excluded. Mobile discovery and comfortable reading are the founder's primary priorities. Readers can start as guests and resume their progress; accounts provide the existing personal-library and community functionality.
 

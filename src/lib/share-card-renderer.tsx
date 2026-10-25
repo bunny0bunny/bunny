@@ -40,7 +40,7 @@ function ar(s: string): string {
 export async function renderShareCard(s: ShareCardData | null) {
   const fonts = await loadFonts();
 
-  const title = s?.titleAr ?? "مكتبة باني";
+  const title = s?.titleAr ?? "مكتبة بانيورا";
   const author = s?.author ?? "منصة القراءة العربية";
   const accent = s?.accent ?? "#9B7BFF";
   const format = s ? (FORMAT_AR[s.format as Format] ?? "عمل") : "اقرأ على مهلك";
@@ -114,8 +114,8 @@ export async function renderShareCard(s: ShareCardData | null) {
             ب
           </div>
           <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end" }}>
-            <span style={{ fontSize: 26, fontWeight: 700 }}>{ar("مكتبة باني")}</span>
-            <span style={{ fontSize: 15, color: "#8B87A0" }}>Bunny Library</span>
+            <span style={{ fontSize: 26, fontWeight: 700 }}>{ar("مكتبة بانيورا")}</span>
+            <span style={{ fontSize: 15, color: "#8B87A0" }}>Bunyora Library</span>
           </div>
         </div>
 
@@ -160,7 +160,7 @@ export async function renderShareCard(s: ShareCardData | null) {
 
         {/* footer */}
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", flexDirection: "row-reverse" }}>
-          <span style={{ fontSize: 22, color: "#6F6A85" }}>{ar("مكتبة باني")}</span>
+          <span style={{ fontSize: 22, color: "#6F6A85" }}>{ar("مكتبة بانيورا")}</span>
           <span style={{ fontSize: 22, color: "#6F6A85" }}>{ar("اقرأ على مهلك — بلا إعلانات")}</span>
         </div>
       </div>

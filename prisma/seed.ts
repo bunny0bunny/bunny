@@ -1,5 +1,5 @@
 /**
- * Bunny Library — idempotent seed (Release A) → Neon PostgreSQL.
+ * Bunyora Library — idempotent seed (Release A) → Neon PostgreSQL.
  * Run: bun run db:seed   (or: bun prisma/seed.ts — bun loads .env.local automatically)
  * Upserts by slug/email so re-running is always safe (docs/DECISIONS.md D-21).
  * Analytics events are seeded only into an empty table (guarded below), so running
@@ -444,7 +444,7 @@ async function seedReleaseE() {
         data: {
           profileId: reader.id,
           type: "system",
-          titleAr: "أهلًا بك في مكتبة باني",
+          titleAr: "أهلًا بك في مكتبة بانيورا",
           bodyAr: "أضِف أعمالك المفضلة إلى المكتبة لتصلك تحديثاتها أولًا بأول.",
           href: "/explore",
           readAt: new Date(now - 5 * 86400000),

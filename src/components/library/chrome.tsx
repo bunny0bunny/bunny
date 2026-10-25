@@ -23,13 +23,13 @@ import type { Role } from "@/lib/constants";
 
 function Logo() {
   return (
-    <Link href="/" className="group flex min-h-11 shrink-0 items-center gap-2.5" aria-label="مكتبة باني — الرئيسية">
+    <Link href="/" className="group flex min-h-11 shrink-0 items-center gap-2.5" aria-label="مكتبة بانيورا — الرئيسية">
       <span className="transition group-hover:brightness-125">
         <BrandMark className="size-11" />
       </span>
       <span className="leading-tight">
-        <span className="block font-bold text-[15px] text-foreground">مكتبة باني</span>
-        <span className="block text-[10px] text-muted-foreground tracking-normal">Bunny Library</span>
+        <span className="block font-bold text-[15px] text-foreground">مكتبة بانيورا</span>
+        <span className="block text-[10px] text-muted-foreground tracking-normal">Bunyora Library</span>
       </span>
     </Link>
   );
@@ -267,9 +267,9 @@ export function SiteFooter() {
       <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6">
         <div className="flex flex-col gap-6 md:flex-row md:items-start md:justify-between">
           <div className="max-w-sm">
-            <Link href="/" aria-label="مكتبة باني — الرئيسية" className="inline-flex min-h-11 items-center gap-2.5 text-foreground">
+            <Link href="/" aria-label="مكتبة بانيورا — الرئيسية" className="inline-flex min-h-11 items-center gap-2.5 text-foreground">
               <BrandMark className="size-12" />
-              <span className="font-bold">مكتبة باني</span>
+              <span className="font-bold">مكتبة بانيورا</span>
             </Link>
             <p className="mt-2 text-sm leading-7 text-muted-foreground">
               مكتبتك الشخصية للقصص التي تستحق الضياع فيها. تجربة قراءة عربية هادئة وفاخرة، بلا إعلانات ولا ضجيج.
@@ -293,7 +293,7 @@ export function SiteFooter() {
             </div>
           </div>
         </div>
-        <p className="mt-8 text-center text-xs text-muted-foreground">© ٢٠٢٦ مكتبة باني</p>
+        <p className="mt-8 text-center text-xs text-muted-foreground">© ٢٠٢٦ مكتبة بانيورا</p>
       </div>
     </footer>
   );

@@ -6,7 +6,7 @@ export const VALID_AVATAR_SEEDS: AvatarSeed[] = ["initials", "bunny", "violet", 
 
 export const AVATAR_SEED_LABELS: Record<AvatarSeed, string> = {
   initials: "الأحرف الأولى",
-  bunny: "شعار باني",
+  bunny: "شعار بانيورا",
   violet: "بنفسجي هادئ",
   teal: "أزرق مخضر",
   gold: "ذهبي دافئ",

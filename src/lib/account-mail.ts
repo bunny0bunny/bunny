@@ -133,7 +133,9 @@ export async function sendAccountMail(payload: AccountMailPayload): Promise<Acco
     });
 
     await transporter.sendMail({
-      from,
+      // Update the legacy display name only; delivery addresses and SMTP configuration stay intact.
+      from: from.replace(/^("?)(Bunny Library|Bunny|مكتبة باني)("?\s*<)/iu,
+        (_match, quote: string, name: string, ending: string) => `${quote}${name === "مكتبة باني" ? "مكتبة بانيورا" : /library/i.test(name) ? "Bunyora Library" : "Bunyora"}${ending}`),
       to,
       subject,
       text,

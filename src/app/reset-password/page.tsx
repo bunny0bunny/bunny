@@ -5,7 +5,7 @@ import { ResetPasswordForm } from "@/components/accounts/reset-password-form";
 export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
-  title: "تعيين كلمة المرور — مكتبة باني",
+  title: "تعيين كلمة المرور — مكتبة بانيورا",
 };
 
 export default function ResetPasswordPage() {

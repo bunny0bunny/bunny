@@ -1,4 +1,4 @@
-# مكتبة باني — Bunny Library
+# مكتبة بانيورا — Bunyora Library
 
 > **Existing-cloud release:** use [the release preflight guide](docs/release-preflight.md) and [2026-10-11 release evidence](docs/superpowers/reports/2026-10-11-release-preflight.md). The demo setup/seed instructions below are for disposable development databases, never the existing production dataset. Public launch also requires production account, storage and environment configuration described in the report.
 

@@ -45,6 +45,7 @@ export async function generateMetadata({
     title: s.titleAr,
     description: s.synopsisAr.slice(0, 120),
     openGraph: {
+      siteName: "Bunyora Library",
       title: s.titleAr,
       description: s.synopsisAr.slice(0, 120),
       type: "article",
