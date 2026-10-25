@@ -25,9 +25,11 @@ export const metadata: Metadata = {
 function EmptyState({
   filtered,
   suggestion,
+  searchedTitle,
 }: {
   filtered: boolean;
   suggestion?: string | null;
+  searchedTitle?: string;
 }) {
   return (
     <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-border/70 bg-[#191C25]/60 px-6 py-16 text-center">
@@ -46,6 +48,7 @@ function EmptyState({
       </p>
 
       <div className="mt-5 flex flex-wrap items-center justify-center gap-3">
+        <Button asChild className="min-h-11"><Link href={searchedTitle ? `/requests/new?title=${encodeURIComponent(searchedTitle)}` : "/requests/new"}>اطلب عملًا</Link></Button>
         {filtered && suggestion && (
           <Button asChild variant="outline" size="sm" className="border-primary/40 bg-primary/10 text-primary hover:bg-primary/20">
             <Link href={`/explore?q=${encodeURIComponent(suggestion)}`}>
@@ -99,6 +102,7 @@ export default async function ExplorePage({
         <div className="mx-auto max-w-6xl px-4 sm:px-6">
           {/* Header */}
           <header className="pt-6 sm:pt-8 pb-4">
+            <Link href="/requests/new" className="float-end inline-flex min-h-11 items-center rounded-lg border border-border px-3 text-sm text-primary hover:bg-accent">اطلب عملًا</Link>
             <h1 className="text-2xl sm:text-3xl font-extrabold text-foreground">
               استكشف المكتبة
             </h1>
@@ -143,7 +147,7 @@ export default async function ExplorePage({
 
                 {/* Results Grid or Empty State */}
                 {series.length === 0 ? (
-                  <EmptyState filtered={hasFilters} suggestion={suggestion} />
+                  <EmptyState filtered={hasFilters} suggestion={suggestion} searchedTitle={filters.q} />
                 ) : (
                   <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 sm:gap-4 pt-1">
                     {series.map((s, idx) => (

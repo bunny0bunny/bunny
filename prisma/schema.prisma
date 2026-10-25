@@ -141,6 +141,7 @@ model Profile {
   approvedRevisions     ChapterRevision[] @relation("RevisionApprovedBy")
   editorialEvents       ChapterEditorialEvent[]
   accountTokens         AccountToken[]
+  contentRequests       ContentRequest[]
   chapterUploads        ChapterUpload[]
 }
 
@@ -216,6 +217,7 @@ model Series {
   libraryItems  LibraryItem[]
   comments      Comment[]
   ratings       Rating[]
+  contentRequests ContentRequest[]
   assignments   SeriesAssignment[]
 
   @@index([category])
@@ -514,4 +516,42 @@ model MediaAsset {
   chapter Chapter @relation(fields: [chapterId], references: [id], onDelete: Cascade)
   @@unique([uploadId, pageIndex])
   @@index([chapterId])
+}
+
+enum ContentRequestStatus {
+  new
+  reviewing
+  preparing
+  available
+  declined
+  @@map("content_request_status")
+}
+
+model ContentRequest {
+  id String @id @default(cuid())
+  profileId String
+  title String
+  category SeriesCategory
+  referenceUrl String?
+  message String?
+  normalizedTitle String
+  submissionId String
+  reply String?
+  internalNote String?
+  status ContentRequestStatus @default(new)
+  statusNote String?
+  fulfilledSeriesId String?
+  mergedIntoId String?
+  version Int @default(1)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  profile Profile @relation(fields:[profileId], references:[id], onDelete:Cascade)
+  fulfilledSeries Series? @relation(fields:[fulfilledSeriesId], references:[id], onDelete:SetNull)
+  mergedInto ContentRequest? @relation("RequestGroup", fields:[mergedIntoId], references:[id], onDelete:Restrict)
+  members ContentRequest[] @relation("RequestGroup")
+  @@unique([profileId,submissionId])
+  @@unique([profileId,category,normalizedTitle])
+  @@index([profileId,createdAt])
+  @@index([mergedIntoId,status,createdAt])
+  @@index([fulfilledSeriesId])
 }

@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useSession, signOut } from "next-auth/react";
-import { BookOpenText, BookMarked, Compass, Library, Search, LogOut, ShieldCheck, UserRound, PenTool } from "lucide-react";
+import { BookOpenText, BookMarked, Compass, Library, Search, LogOut, ShieldCheck, UserRound, PenTool, MessageSquarePlus } from "lucide-react";
 import { BrandMark } from "@/components/library/brand-mark";
 import { NotificationBell } from "@/components/library/notification-bell";
 import { Button } from "@/components/ui/button";
@@ -149,6 +149,9 @@ export function SiteHeader() {
             </Link>
           </Button>
 
+          <Button asChild variant="ghost" size="sm" className="hidden min-h-11 text-muted-foreground xl:inline-flex">
+            <Link href="/requests/new"><MessageSquarePlus className="me-1.5 size-4" aria-hidden />اطلب عملًا</Link>
+          </Button>
           <NotificationBell />
 
           {status === "loading" ? (
@@ -176,6 +179,11 @@ export function SiteHeader() {
                 <DropdownMenuItem asChild>
                   <Link href="/profile" className="cursor-pointer">
                     <UserRound className="size-4 me-2" aria-hidden /> حسابي
+                  </Link>
+                </DropdownMenuItem>
+                <DropdownMenuItem asChild>
+                  <Link href="/requests" className="min-h-11 cursor-pointer">
+                    <MessageSquarePlus className="size-4 me-2" aria-hidden /> طلباتي
                   </Link>
                 </DropdownMenuItem>
                 {isStaff && (

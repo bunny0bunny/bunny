@@ -1,12 +1,14 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { ExternalLink, GalleryVerticalEnd, LayoutDashboard, LibraryBig, ListOrdered, LogOut, MessageSquareWarning, PenTool, ShieldAlert, UsersRound } from "lucide-react";
+import { ExternalLink, GalleryVerticalEnd, LayoutDashboard, LibraryBig, ListOrdered, LogOut, MessageSquareWarning, PenTool, ShieldAlert, UsersRound, MessageSquarePlus } from "lucide-react";
 import { BrandMark } from "@/components/library/brand-mark";
 import { currentProfileOrNull } from "@/lib/queries";
 import { isStaffRole } from "@/lib/team-access";
 import { ROLE_LABELS, type Role } from "@/lib/constants";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { getAdminNewRequestCount } from "@/lib/content-requests/service";
+import { withDatabaseScope } from "@/lib/db";
 import { AdminLogoutButton } from "@/components/admin/admin-client";
 
 /**
@@ -37,6 +39,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
 
   const isAdmin = role === "admin";
   const isEditor = role === "editor";
+  const newRequestCount = isAdmin ? await withDatabaseScope(() => getAdminNewRequestCount()) : 0;
 
   const nav = [
     { href: "/admin", label: isAdmin ? "اللوحة" : "أعمالي", icon: LayoutDashboard },
@@ -45,6 +48,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
     { href: "/admin/chapters", label: "الفصول", icon: ListOrdered },
     ...(isAdmin || isEditor ? [{ href: "/admin/moderation", label: "الإشراف", icon: MessageSquareWarning }] : []),
     ...(isAdmin ? [{ href: "/admin/collections", label: "المجموعات", icon: GalleryVerticalEnd }] : []),
+    ...(isAdmin ? [{ href: "/admin/requests", label: `طلبات القراء${newRequestCount ? ` (${newRequestCount})` : ""}`, icon: MessageSquarePlus }] : []),
     ...(isAdmin ? [{ href: "/admin/users", label: "المستخدمون", icon: UsersRound }] : []),
   ];
 
@@ -66,7 +70,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
               key={item.href}
               asChild
               variant="ghost"
-              className="w-full justify-start gap-2.5 text-muted-foreground hover:text-foreground"
+              className="min-h-11 w-full justify-start gap-2.5 text-muted-foreground hover:text-foreground"
             >
               <Link href={item.href}>
                 <item.icon className="size-4" aria-hidden />
@@ -95,14 +99,14 @@ export default async function AdminLayout({ children }: { children: React.ReactN
       </aside>
 
       {/* Mobile top bar */}
-      <div className="fixed inset-x-0 top-0 z-40 flex h-14 items-center justify-between border-b border-border/60 bg-background/90 px-4 backdrop-blur-md md:hidden">
+      <div className="fixed inset-x-0 top-0 z-40 flex min-h-14 items-center gap-2 border-b border-border/60 bg-background/90 px-4 backdrop-blur-md md:hidden">
         <Link href="/admin" className="flex min-h-11 items-center gap-2 text-sm font-bold text-foreground">
           <BrandMark className="size-8" />
           الإدارة
         </Link>
-        <nav className="flex items-center gap-1" aria-label="تنقل الإدارة">
+        <nav className="ms-auto flex min-w-0 items-center gap-1 overflow-x-auto" aria-label="تنقل الإدارة">
           {nav.map((item) => (
-            <Button key={item.href} asChild variant="ghost" size="icon" className="size-9 text-muted-foreground" aria-label={item.label}>
+            <Button key={item.href} asChild variant="ghost" size="icon" className="size-11 shrink-0 text-muted-foreground" aria-label={item.label}>
               <Link href={item.href}>
                 <item.icon className="size-4.5" />
               </Link>

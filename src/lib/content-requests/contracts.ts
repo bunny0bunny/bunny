@@ -1,0 +1,9 @@
+export type RequestStatus = "new" | "reviewing" | "preparing" | "available" | "declined";
+export const REQUEST_STATUS_LABELS: Record<RequestStatus,string> = {new:"جديد",reviewing:"قيد المراجعة",preparing:"قيد التجهيز",available:"متاح",declined:"لن نضيفه حاليًا"};
+export const CATEGORY_LABELS = {manga:"مانجا",manhwa:"مانهوا",novel:"روايات",comic:"قصص مصورة"} as const;
+export type RequestCategory = keyof typeof CATEGORY_LABELS;
+export type RequestResult<T> = {ok:true;data:T} | {ok:false;error:string};
+export type CatalogWork = {id:string;title:string;href:string;category:string|null};
+export type ReaderRequest = {id:string;title:string;category:RequestCategory;referenceUrl:string|null;message:string|null;reply:string|null;status:RequestStatus;statusNote:string|null;createdAt:string;updatedAt:string;availableSeries:{id:string;title:string;href:string}|null};
+export type AdminRequestSummary = {id:string;title:string;category:RequestCategory;status:RequestStatus;requesterCount:number;version:number;createdAt:string;updatedAt:string};
+export type AdminRequestDetail = AdminRequestSummary & {statusNote:string|null;seriesId:string|null;members:Array<{id:string;nickname:string;title:string;referenceUrl:string|null;message:string|null;reply:string|null;internalNote:string|null;version:number;createdAt:string}>;mergeTargets:AdminRequestSummary[];workOptions:CatalogWork[]};
