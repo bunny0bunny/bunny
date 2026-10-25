@@ -31,6 +31,21 @@ Minute maintenance is bounded and authenticated using the existing scheduled Wor
 
 The matched official PDF.js legacy main and worker replace the modern pair, fixing a discovered dependency on APIs missing from some browser versions. A build-flavor marker prevents old generated modern assets from being reused. Three regression tests passed, and both deployed files matched the tested assets byte-for-byte. See the [official PDF.js support policy](https://github.com/mozilla/pdf.js/wiki/Frequently-Asked-Questions#which-browsersenvironments-are-supported).
 
-Native browser automation was unavailable in this session. Actual file-picker interaction, mobile behavior and Safari device acceptance remain unverified. The Node rendering harness and hosted HTTP checks do not constitute those browser tests.
+Native browser automation was unavailable during the initial deployment checks. Follow-up browser interaction verification is recorded below. Safari/iOS/Android device acceptance remains unverified; narrow Chromium viewport emulation does not establish real-device compatibility.
+
+## Browser acceptance follow-up — 2026-10-25
+
+The live application was exercised through Tabbit Browser 154.0.8037.58 on Windows using the existing staff session and a separately owned temporary chapter. No application code changes were needed for the verified flow.
+
+- The actual file-chooser button selected the supplied PDF. Browser preflight detected 45 pages; both quality choices completed inspection, and balanced remained the default for the upload.
+- Normal browser processing/upload completed 45 WebP pages totaling 18,449,100 bytes (17.59 MiB). The private original remained 22,424,231 bytes and its SHA256 matched the unchanged local file.
+- A real browser reload interrupted the upload after 11 completed pages. Reselecting the same PDF resumed the same attempt: only page indices 11–44 were sent, without uploading the original or completed pages again.
+- The private preview contained 45 ordered page images. Import-review confirmation was disabled before opening preview, then became available and saved successfully. Permanent retention and returning to reviewed temporary retention both saved through actual UI controls.
+- The first-page suggestion opened the existing cover editor. The uploaded chapter appeared in the source selector; its first page produced an 800×1200 crop canvas. The actual canvas was exported and visually inspected. Public-cover consent was required before crop acceptance; the crop was cancelled and no public cover was saved.
+- At a 390px viewport, the upload panel had no horizontal overflow (scroll/client width 341px), the document fit the viewport, and its visible buttons were 44px high. These are DOM layout measurements, not a complete visual audit or mobile hardware test.
+- No upload-page JavaScript errors were observed. Ten successful browser receipts were saved privately, together with server state and the exported cover preview.
+- The temporary chapter and all 46 temporary R2 objects were removed. Final integrity verification again matched all pre-existing uploads, assets, revisions, public pages and covers. No real chapter was published, and the existing account/session was preserved.
+
+Test limitations: a network-interception experiment stalled the original request before the intended injected failure, so ordinary network operation plus the actual reload/reselection scenario were used for acceptance. Two Tabbit page screenshot attempts timed out after font loading; full-page pixel inspection is not claimed. Real Safari and mobile-device testing remains outstanding.
 
 Private snapshots and detailed acceptance reports remain under the ignored `.local-preview/readiness-audit/` directory; no credentials or database snapshots were committed.

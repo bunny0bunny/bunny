@@ -47,4 +47,11 @@ All45 supplied pages remain ordered/readable; compression has no fixed percent p
 - Implementation e4e8eae fast-forwarded to main. Worker ef4a24a5-09b8-492c-b5e9-0184e9043dd2 deployed at 100%; 30,000ms CPU, minute cron and required bindings verified.
 - Hosted actual-PDF acceptance: 125 checks passed, all 45 pages imported privately, resume/mismatch/retention/readback verified. Exact temporary fixture and all 46 owned R2 objects removed; no real chapter published.
 - Public-route smoke: seven passed. Final database integrity: all 12 existing uploads, 68 assets, 53 revisions, 295 chapter pages and all covers match baseline.
-- Browser/file-picker/mobile/Safari acceptance remains unverified because the native browser tool was unavailable. This limit is recorded in docs/handoff-automatic-pdf-uploads-2026-10-25.md.
+- Initial deployment browser acceptance was unavailable; follow-up verification is recorded below and in docs/handoff-automatic-pdf-uploads-2026-10-25.md.
+
+## Browser follow-up evidence
+- Tabbit Browser 154.0.8037.58: actual file chooser, 45-page preflight, balanced/high inspection, completed browser compression/upload, private preview, reviewed temporary/permanent retention controls, and first-page cover crop were exercised successfully.
+- Real reload after 11 completed pages: the same PDF resumed the same upload, sending only indices 11–44 and no original re-upload. Browser page images total 18,449,100 bytes; the original fingerprint remained unchanged. No upload-page JavaScript errors observed.
+- 390px layout measurements: no document/panel horizontal overflow and visible upload buttons at least 44px high. Actual cover canvas 800×1200 exported and visually inspected; no public cover saved.
+- Exact temporary chapter and 46 owned R2 objects removed. Original database integrity comparison passed again; existing account/session preserved. Browser scratch tabs closed and task finish confirmed without forced cleanup.
+- Limits retained: real Safari/mobile hardware not tested; two browser page screenshots timed out, so no full-page visual audit claim. Network interception was unsuitable for the initial experiment; acceptance used actual reload/reselection.
