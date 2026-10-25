@@ -38,7 +38,7 @@ POST `/api/content-requests` create; GET `/api/content-requests/catalog?q=...` p
 - [x] 1. Backend owner: schema/migration, contracts, pure input policy, transactional service+privacy serialization+notifications; meaningful red/green unit/service/real DB tests. Own `prisma/schema.prisma`, new migration, `src/lib/content-requests/**`, `tests/content-requests/**`, `tests/team-access/content-requests.test.ts`. Do not edit src/app routes/components/layouts. Coordinate generated-client timing with root; don't run broad checks/deploy/commit.
 - [x] 2. UI owner: reader form/list/detail, admin list/detail/status/reply/merge controls, discover/account/admin navigation and badge. Own `src/app/requests/**`, `src/app/admin/requests/**`, new `src/components/content-requests/**`, explore page, existing header/account nav, admin layout. Consume exact interfaces above. Read Impeccable context once and craft-floor before edit; meaningful client tests can live `tests/content-request-ui/**`. No schemas/backend/API mutation routes. No commits/deploy/broad TS/build.
 - [x] 3. Root: HTTP controller boundary red/green tests, route handlers, login destination if needed; regenerate clients, isolated local full-migration rehearsal/real transaction tests, consolidated scoped lint/TS, independent combined review with bounded fixes.
-- [ ] 4. Root: full Cloudflare build/private-artifact scan, private snapshot+versioned production additive migration+preservation checks, safe deploy, reader/admin browser and hosted privacy acceptance with exact owned-fixture cleanup, public smoke, commit/fast-forward/push, final handoff.
+- [x] 4. Root: full Cloudflare build/private-artifact scan, private snapshot+versioned production additive migration+preservation checks, safe deploy, reader/admin browser and hosted privacy acceptance with exact owned-fixture cleanup, public smoke, commit/fast-forward/push, final handoff.
 
 ## Verification evidence before deployment
 - HTTP controller 7 tests / 48 assertions, backend unit 6 tests / 18 assertions, UI 12 tests / 45 assertions passed independently (mock isolation).
@@ -48,3 +48,8 @@ POST `/api/content-requests` create; GET `/api/content-requests/catalog?q=...` p
 - Ruling: admin private replies and internal notes remain per original submission after merging; only statusNote is shared. Caller-visible DTO excludes group/user/internal identifiers. Request body cap16KiB accommodates valid multilingual fields while bounding raw reads.
 
 - Final client boundary: default 30-second deadline covers stalled fetch and response parsing even when an adapter ignores abort; two focused red/green regressions passed. No automatic mutation replay. A copy correction clarifies that readers can read the administration reply (no chat/reply feature is promised).
+
+## Production acceptance
+- Worker version `244b511b-d334-4b2e-91fa-5f44cabe1d04` deployed at 100%. Additive migration applied after snapshot; final integrity preserved every original row in eight tables.
+- 38 hosted acceptance checks and seven public smoke routes passed. Actual browser form, status/reply saves, private reader view, and confirmed merge passed; 390px reader screenshot inspected.
+- All synthetic and browser-owned request fixtures and notifications removed, existing account/session retained. Full evidence and operational limits: docs/handoff-private-work-requests-2026-10-25.md.
