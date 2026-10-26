@@ -1,3 +1,4 @@
+import { getWorkTitle, getWorkTitles } from '@/lib/work-title';
 import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
@@ -42,11 +43,11 @@ export async function generateMetadata({
   const s = await getSeriesBySlug(slug);
   if (!s) return { title: "عمل غير موجود" };
   return {
-    title: s.titleAr,
+    title: getWorkTitle(s),
     description: s.synopsisAr.slice(0, 120),
     openGraph: {
       siteName: "Bunyora Library",
-      title: s.titleAr,
+      title: getWorkTitle(s),
       description: s.synopsisAr.slice(0, 120),
       type: "article",
     },
@@ -62,6 +63,7 @@ export default async function SeriesDetailPage({
   const { slug } = await params;
   const s = await getSeriesBySlug(slug);
   if (!s) notFound();
+  const titles = getWorkTitles(s);
 
   const profile = await currentProfileOrNull();
   const progressMap = await getProgressMap(profile?.id ?? null, s.id);
@@ -150,7 +152,7 @@ export default async function SeriesDetailPage({
           <div className="grid items-start gap-6 lg:grid-cols-[260px_minmax(0,1fr)]">
             <aside aria-label="بيانات العمل والتأليف" className="hidden space-y-5 lg:block">
               <div className="relative aspect-[2/3] overflow-hidden rounded-xl border border-border">
-                {hasCover ? <Image src={s.coverPath} alt={'غلاف ' + s.titleAr} fill sizes="260px" className="object-cover" priority /> : <div role="img" aria-label="لا يوجد غلاف لهذا العمل" className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-card text-muted-foreground"><BookOpen className="size-10" aria-hidden /><span className="text-xs">الغلاف غير متاح</span></div>}
+                {hasCover ? <Image src={s.coverPath} alt={'غلاف ' + getWorkTitle(s)} fill sizes="260px" className="object-cover" priority /> : <div role="img" aria-label="لا يوجد غلاف لهذا العمل" className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-card text-muted-foreground"><BookOpen className="size-10" aria-hidden /><span className="text-xs">الغلاف غير متاح</span></div>}
               </div>
               <div className="flex flex-wrap gap-2">
                 {categoryLabel && <Link href={'/explore?category=' + s.category} className="inline-flex min-h-11 items-center rounded-lg border border-border px-3 text-xs hover:text-primary">{categoryLabel}</Link>}
@@ -182,15 +184,15 @@ export default async function SeriesDetailPage({
                 <div className="relative p-4 sm:p-5 lg:p-7">
                   <div className="grid grid-cols-[104px_minmax(0,1fr)] gap-4 sm:grid-cols-[120px_minmax(0,1fr)] lg:block">
                     <div className="relative aspect-[2/3] self-start overflow-hidden rounded-lg border border-border lg:hidden">
-                      {hasCover ? <Image src={s.coverPath} alt={'غلاف ' + s.titleAr} fill sizes="120px" className="object-cover" priority /> : <div role="img" aria-label="لا يوجد غلاف لهذا العمل" className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-card text-muted-foreground"><BookOpen className="size-7" aria-hidden /><span className="text-[10px]">الغلاف غير متاح</span></div>}
+                      {hasCover ? <Image src={s.coverPath} alt={'غلاف ' + getWorkTitle(s)} fill sizes="120px" className="object-cover" priority /> : <div role="img" aria-label="لا يوجد غلاف لهذا العمل" className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-card text-muted-foreground"><BookOpen className="size-7" aria-hidden /><span className="text-[10px]">الغلاف غير متاح</span></div>}
                     </div>
                     <div className="min-w-0">
                       <nav aria-label="تصنيف العمل" className="flex flex-wrap items-center gap-x-2 text-xs text-muted-foreground">
                         {categoryLabel ? <Link className="inline-flex min-h-11 items-center hover:text-primary" href={'/explore?category=' + s.category}>{categoryLabel}</Link> : <span>{formatLabel}</span>}
                         {primaryGenre && <><span aria-hidden>‹</span><Link className="inline-flex min-h-11 items-center hover:text-primary" href={'/explore?genre=' + encodeURIComponent(primaryGenre)}>{primaryGenre}</Link></>}
                       </nav>
-                      <h1 className="text-xl font-extrabold leading-snug text-foreground sm:text-2xl lg:text-3xl">{s.titleAr}</h1>
-                      {s.titleOriginal && <p className="mt-1 break-words text-right text-xs text-muted-foreground sm:text-sm" dir="auto">{s.titleOriginal}</p>}
+                      <h1 className="text-xl font-extrabold leading-snug text-foreground sm:text-2xl lg:text-3xl"><bdi>{titles.primary}</bdi></h1>
+                      {titles.secondary && <p className="mt-1 break-words text-right text-xs text-muted-foreground sm:text-sm" dir="auto">{titles.secondary}</p>}
                       <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-2 text-xs sm:text-sm">
                         {s.ratingCount > 0 ? <span className="inline-flex items-center gap-1 text-gold"><Star className="size-4 fill-current" aria-hidden />{s.ratingAvg.toFixed(1)}<span className="sr-only"> من 5، {s.ratingCount} تقييمًا</span></span> : <span className="text-muted-foreground">لم يُقيّم بعد</span>}
                         <span className="inline-flex items-center gap-1 text-muted-foreground"><BookOpen className="size-4" aria-hidden />{published.length} فصلاً</span>
@@ -201,7 +203,7 @@ export default async function SeriesDetailPage({
                   <div className="mt-4 lg:mt-6">
                     <WorkHeroActions slug={s.slug} format={s.format as Format} serverProgress={serverProgress}
                       chapters={published.map(c => ({ number: c.number, isPremiumDemo: c.isPremiumDemo }))}
-                      titleAr={s.titleAr} initialShelf={initialShelf} />
+                      titleAr={getWorkTitle(s)} initialShelf={initialShelf} />
                   </div>
                 </div>
               </section>
@@ -209,11 +211,11 @@ export default async function SeriesDetailPage({
               <div className="mt-5 lg:mt-4">
                 <WorkTabs slug={s.slug} format={s.format as Format} coverPath={s.coverPath}
                   publishedChapters={publishedView} scheduledChapters={scheduledView} serverProgress={serverProgress}
-                  progressMapEntries={progressEntries} aboutData={{ titleAr: s.titleAr, synopsisAr: s.synopsisAr,
+                  progressMapEntries={progressEntries} aboutData={{ titleAr: getWorkTitle(s), synopsisAr: s.synopsisAr,
                     author: s.author, translator: s.translator, categoryLabel, formatLabel, statusLabel, genres, tags }}>
                   <div className="grid items-start gap-5 xl:grid-cols-[240px_minmax(0,1fr)]">
                     <RatingWidget slug={s.slug} ratingAvg={s.ratingAvg} ratingCount={s.ratingCount} userValue={userRating?.value ?? null} />
-                    <div className="min-w-0"><CommentsSection seriesSlug={s.slug} seriesTitle={s.titleAr} comments={comments} /></div>
+                    <div className="min-w-0"><CommentsSection seriesSlug={s.slug} seriesTitle={getWorkTitle(s)} comments={comments} /></div>
                   </div>
                 </WorkTabs>
               </div>

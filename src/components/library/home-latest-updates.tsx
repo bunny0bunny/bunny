@@ -1,3 +1,4 @@
+import { getWorkTitle } from '@/lib/work-title';
 import Image from "next/image";
 import Link from "next/link";
 import { Clock, LockKeyhole } from "lucide-react";
@@ -9,6 +10,7 @@ export type GroupedSeriesUpdate = {
   series: {
     slug: string;
     titleAr: string;
+    titleOriginal?: string | null;
     coverPath: string;
     format: Format;
     category?: Category | null;
@@ -80,7 +82,7 @@ export function HomeLatestUpdates({
               >
                 <Image
                   src={item.series.coverPath || "/art/covers/no-cover.svg"}
-                  alt={`غلاف ${item.series.titleAr}`}
+                  alt={`غلاف ${getWorkTitle(item.series)}`}
                   fill
                   sizes="110px"
                   className="object-cover object-[50%_25%] transition duration-300 group-hover:scale-105"
@@ -95,13 +97,13 @@ export function HomeLatestUpdates({
                     href={`/series/${item.series.slug}`}
                     className="line-clamp-2 min-h-11 text-sm font-bold text-foreground transition hover:text-primary focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary"
                   >
-                    {item.series.titleAr}
+                    {getWorkTitle(item.series)}
                   </Link>
 
                 </div>
 
                 {/* Chapter links (up to 2 newest links) */}
-                <ul className="flex flex-wrap items-center gap-x-2" aria-label={`فصول ${item.series.titleAr}`}>
+                <ul className="flex flex-wrap items-center gap-x-2" aria-label={`فصول ${getWorkTitle(item.series)}`}>
                   {newest && (
                     <li>
                     <Link
@@ -110,7 +112,7 @@ export function HomeLatestUpdates({
                     >
                       <span>الفصل {newest.number}</span>
                       {newest.isPremiumDemo && <><LockKeyhole className="size-3 text-gold" aria-hidden /><span className="sr-only">فصل مقفل</span></>}
-                      <span className="sr-only"> — {newest.titleAr}، {item.series.titleAr}</span>
+                      <span className="sr-only"> — {newest.titleAr}، {getWorkTitle(item.series)}</span>
                       {isRecent && (
                         <span className="flex items-center gap-1 text-[10px] text-primary font-bold">
                           <span className="size-1.5 rounded-full bg-primary" />
@@ -127,7 +129,7 @@ export function HomeLatestUpdates({
                       href={readerHref(item.series.format, item.series.slug, second.number)}
                       className="inline-flex min-h-11 items-center rounded-md px-1 text-xs text-muted-foreground transition hover:text-primary"
                     >
-                      الفصل {second.number}{second.isPremiumDemo && <><LockKeyhole className="size-3 text-gold" aria-hidden /><span className="sr-only">فصل مقفل</span></>}<span className="sr-only"> — {second.titleAr}، {item.series.titleAr}</span>
+                      الفصل {second.number}{second.isPremiumDemo && <><LockKeyhole className="size-3 text-gold" aria-hidden /><span className="sr-only">فصل مقفل</span></>}<span className="sr-only"> — {second.titleAr}، {getWorkTitle(item.series)}</span>
                     </Link>
                     </li>
                   )}

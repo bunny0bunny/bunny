@@ -1,3 +1,4 @@
+import { getWorkTitle } from '@/lib/work-title';
 import "server-only";
 import { Prisma, type ContentRequest } from "@prisma/client";
 import { db } from "@/lib/db";
@@ -78,8 +79,8 @@ export async function createContentRequest(input:unknown):Promise<RequestResult<
 async function readerRequest(tx:Tx,row:ContentRequest):Promise<ReaderRequest>{
   const root=row.mergedIntoId?await tx.contentRequest.findUnique({where:{id:row.mergedIntoId}}):row;
   if(!root)throw new Error("Missing content request group");
-  const series=root.status==="available"&&root.fulfilledSeriesId?await tx.series.findFirst({where:{id:root.fulfilledSeriesId,chapters:{some:liveChapterWhere()}},select:{id:true,titleAr:true,slug:true}}):null;
-  return {id:row.id,title:row.title,category:row.category,referenceUrl:row.referenceUrl,message:row.message,reply:row.reply,status:root.status,statusNote:root.statusNote,createdAt:row.createdAt.toISOString(),updatedAt:new Date(Math.max(row.updatedAt.getTime(),root.updatedAt.getTime())).toISOString(),availableSeries:series?{id:series.id,title:series.titleAr,href:`/series/${series.slug}`}:null};
+  const series=root.status==="available"&&root.fulfilledSeriesId?await tx.series.findFirst({where:{id:root.fulfilledSeriesId,chapters:{some:liveChapterWhere()}},select:{id:true,titleAr:true,titleOriginal:true,slug:true}}):null;
+  return {id:row.id,title:row.title,category:row.category,referenceUrl:row.referenceUrl,message:row.message,reply:row.reply,status:root.status,statusNote:root.statusNote,createdAt:row.createdAt.toISOString(),updatedAt:new Date(Math.max(row.updatedAt.getTime(),root.updatedAt.getTime())).toISOString(),availableSeries:series?{id:series.id,title:getWorkTitle(series),href:`/series/${series.slug}`}:null};
 }
 export async function listMyRequests(input?:{page?:number}):Promise<RequestResult<{items:ReaderRequest[];page:number;pages:number;total:number}>>{
   return authenticated(false,async(tx,actor)=>{
@@ -117,7 +118,7 @@ export async function getAdminNewRequestCount():Promise<number>{
 }
 export async function findRequestCatalog(q:string):Promise<CatalogWork[]>{
   if(typeof q!=="string"||q.trim().length<2||q.length>150)return [];
-  return (await getPublishedSeries({q:q.trim()})).slice(0,8).map(row=>({id:row.id,title:row.titleAr,href:`/series/${row.slug}`,category:row.category??null}));
+  return (await getPublishedSeries({q:q.trim()})).slice(0,8).map(row=>({id:row.id,title:getWorkTitle(row),href:`/series/${row.slug}`,category:row.category??null}));
 }
 export async function getAdminRequest(id:string):Promise<RequestResult<AdminRequestDetail>>{
   return authenticated(true,async tx=>{
@@ -126,8 +127,8 @@ export async function getAdminRequest(id:string):Promise<RequestResult<AdminRequ
     const root=await tx.contentRequest.findUnique({where:{id:original.mergedIntoId??id},include:summaryInclude});if(!root)return fail("not_found");
     const members=await tx.contentRequest.findMany({where:groupWhere(root.id),include:{profile:{select:{nickname:true}}},orderBy:[{createdAt:"asc"},{id:"asc"}],take:200});
     const targets=root.status==="available"?[]:await tx.contentRequest.findMany({where:{id:{not:root.id},mergedIntoId:null,category:root.category,status:{not:"available"}},include:summaryInclude,orderBy:[{createdAt:"desc"},{id:"desc"}],take:200});
-    const works=await tx.series.findMany({where:{chapters:{some:liveChapterWhere()}},select:{id:true,titleAr:true,slug:true,category:true},orderBy:{titleAr:"asc"},take:200});
-    return ok({...summary(root),statusNote:root.statusNote,seriesId:root.fulfilledSeriesId,members:members.map(member=>({id:member.id,nickname:member.profile.nickname,title:member.title,referenceUrl:member.referenceUrl,message:member.message,reply:member.reply,internalNote:member.internalNote,version:member.version,createdAt:member.createdAt.toISOString()})),mergeTargets:targets.filter(target=>target.members.length+members.length+1<=200).map(summary),workOptions:works.map(row=>({id:row.id,title:row.titleAr,href:`/series/${row.slug}`,category:row.category}))});
+    const works=await tx.series.findMany({where:{chapters:{some:liveChapterWhere()}},select:{id:true,titleAr:true,titleOriginal:true,slug:true,category:true},orderBy:{titleAr:"asc"},take:200});
+    return ok({...summary(root),statusNote:root.statusNote,seriesId:root.fulfilledSeriesId,members:members.map(member=>({id:member.id,nickname:member.profile.nickname,title:member.title,referenceUrl:member.referenceUrl,message:member.message,reply:member.reply,internalNote:member.internalNote,version:member.version,createdAt:member.createdAt.toISOString()})),mergeTargets:targets.filter(target=>target.members.length+members.length+1<=200).map(summary),workOptions:works.map(row=>({id:row.id,title:getWorkTitle(row),href:`/series/${row.slug}`,category:row.category}))});
   });
 }
 export async function updateRequestStatus(input:unknown):Promise<RequestResult<{id:string}>>{

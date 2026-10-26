@@ -1,3 +1,4 @@
+import { getWorkTitle } from '@/lib/work-title';
 import Link from "next/link";
 import Image from "next/image";
 import { ExternalLink, Pencil, Plus } from "lucide-react";
@@ -64,7 +65,7 @@ export default async function AdminSeriesPage({
                       {s.coverPath ? <Image src={s.coverPath} alt="" fill sizes="44px" className="object-cover" /> : <span className="flex h-full items-center justify-center bg-secondary text-[10px] text-muted-foreground">بلا غلاف</span>}
                     </span>
                     <div className="min-w-0">
-                      <p className="truncate font-medium text-foreground">{s.titleAr}</p>
+                      <p className="truncate font-medium text-foreground">{getWorkTitle(s)}</p>
                       <p className="truncate text-[11px] text-muted-foreground" dir="ltr">{s.slug}</p>
                     </div>
                     {s.isFeatured && <Badge variant="secondary" className="hidden border-gold/40 bg-gold/10 text-gold lg:inline-flex">مميز</Badge>}

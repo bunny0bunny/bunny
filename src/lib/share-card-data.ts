@@ -1,6 +1,7 @@
-export type ShareCardData = { slug: string; titleAr: string; author: string; accent: string; format: string; genresJson: string; ratingAvg: number; ratingCount: number };
+import { getWorkTitle } from './work-title';
+export type ShareCardData = { slug: string; titleAr: string; titleOriginal?: string | null; author: string; accent: string; format: string; genresJson: string; ratingAvg: number; ratingCount: number };
 // Increment when changing layout, fonts, labels or the Arabic text treatment.
-export const SHARE_CARD_RENDERER_VERSION = "2";
+export const SHARE_CARD_RENDERER_VERSION = "3";
 export const DEFAULT_SHARE_CARD_PATH = "/share/bunyora-default.png";
 export type ShareCardManifest = {
   version: 1;
@@ -9,8 +10,8 @@ export type ShareCardManifest = {
 };
 
 export function toShareCardData(work: ShareCardData): ShareCardData {
-  const { slug, titleAr, author, accent, format, genresJson, ratingAvg, ratingCount } = work;
-  return { slug, titleAr, author, accent, format, genresJson, ratingAvg, ratingCount };
+  const { slug, author, accent, format, genresJson, ratingAvg, ratingCount } = work;
+  return { slug, titleAr: getWorkTitle(work), author, accent, format, genresJson, ratingAvg, ratingCount };
 }
 
 export function shareCardGenres(value: string): string[] {
@@ -22,7 +23,7 @@ export function shareCardGenres(value: string): string[] {
 
 /** Ratings are a preparation-time snapshot; routine reader activity does not invalidate cards. */
 export async function shareCardFingerprint(work: ShareCardData | null, version = SHARE_CARD_RENDERER_VERSION): Promise<string> {
-  const editorial = work ? [work.slug, work.titleAr, work.author, work.accent, work.format, shareCardGenres(work.genresJson)] : null;
+  const editorial = work ? [work.slug, getWorkTitle(work), work.author, work.accent, work.format, shareCardGenres(work.genresJson)] : null;
   const hash = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(JSON.stringify([version, editorial])));
   return Array.from(new Uint8Array(hash), (byte) => byte.toString(16).padStart(2, "0")).join("");
 }

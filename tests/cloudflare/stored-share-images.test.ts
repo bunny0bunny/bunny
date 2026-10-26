@@ -6,6 +6,12 @@ const hash = "a".repeat(64);
 const manifest = { cards: { "public-work": { fingerprint: hash, path: `/share/${hash}.png` } } };
 
 describe("stored share cards", () => {
+  test("English display titles take priority and invalidate stale share cards", async () => {
+    const english = {...work, titleOriginal: 'Strobe Edge'};
+    expect(toShareCardData(english).titleAr).toBe('Strobe Edge');
+    expect(await shareCardFingerprint(english)).not.toBe(await shareCardFingerprint(work));
+    expect(await shareCardFingerprint({...english, titleOriginal: 'Another title'})).not.toBe(await shareCardFingerprint(english));
+  });
   test("reader activity and rating churn leave editorial fingerprint unchanged", async () => {
     const before = await shareCardFingerprint(work);
     expect(before).toMatch(/^[a-f0-9]{64}$/);

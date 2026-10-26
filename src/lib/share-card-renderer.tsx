@@ -34,6 +34,7 @@ async function loadFonts() {
  * pure-Arabic strings — never apply to runs containing Latin/digits.
  */
 function ar(s: string): string {
+  if (/[A-Za-z0-9]/.test(s)) return s;
   return s.split(" ").reverse().join(" ");
 }
 

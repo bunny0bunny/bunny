@@ -64,7 +64,7 @@ try {
   // Match queries.ts liveChapterWhere; do not select draft-only or future-only works.
   const rows = await db.series.findMany({
     where: { chapters: { some: { workflow: "published", OR: [{ scheduledFor: null }, { scheduledFor: { lte: new Date() } }] } } },
-    select: { slug: true, titleAr: true, author: true, accent: true, format: true, genresJson: true, ratingAvg: true, ratingCount: true },
+    select: { slug: true, titleAr: true, titleOriginal: true, author: true, accent: true, format: true, genresJson: true, ratingAvg: true, ratingCount: true },
     orderBy: { slug: "asc" },
   });
   await mkdir(directory, { recursive: true });

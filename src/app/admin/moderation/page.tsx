@@ -1,3 +1,4 @@
+import { getWorkTitle } from '@/lib/work-title';
 import Link from "next/link";
 import { MessageSquareWarning, ShieldCheck } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -73,7 +74,7 @@ export default async function AdminModerationPage() {
                       </span>
                     )}
                     <Link href={`/series/${c.series.slug}`} className="text-[11px] text-muted-foreground hover:text-primary">
-                      على «{c.series.titleAr}»{c.chapter ? ` · الفصل ${c.chapter.number}` : ""}
+                      على «{getWorkTitle(c.series)}»{c.chapter ? ` · الفصل ${c.chapter.number}` : ""}
                     </Link>
                   </div>
                   <p className="mt-1.5 whitespace-pre-wrap text-sm leading-7 text-foreground/90">{c.body}</p>

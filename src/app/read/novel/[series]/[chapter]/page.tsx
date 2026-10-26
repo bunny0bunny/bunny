@@ -1,9 +1,12 @@
+import { cache } from 'react';
+import { getWorkTitle } from '@/lib/work-title';
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { NovelReader } from "@/components/readers/novel-reader";
 import { getChapterForReading, getVisibleComments, currentProfileOrNull, getReaderProgress } from "@/lib/queries";
 
 export const dynamic = "force-dynamic";
+const getReaderData = cache(getChapterForReading);
 
 export async function generateMetadata({
   params,
@@ -11,7 +14,9 @@ export async function generateMetadata({
   params: Promise<{ series: string; chapter: string }>;
 }): Promise<Metadata> {
   const { series, chapter } = await params;
-  return { title: `الفصل ${chapter} — ${series}` };
+  const num = Number(chapter);
+  const data = Number.isInteger(num) && num > 0 ? await getReaderData(series, num) : null;
+  return { title: `${data?.series.format === 'novel' ? getWorkTitle(data.series) : series} — الفصل ${chapter}` };
 }
 
 export default async function NovelReaderPage({
@@ -22,7 +27,7 @@ export default async function NovelReaderPage({
   const { series: seriesSlug, chapter } = await params;
   const num = Number(chapter);
   if (!Number.isInteger(num) || num < 1) notFound();
-  const data = await getChapterForReading(seriesSlug, num);
+  const data = await getReaderData(seriesSlug, num);
   if (!data || data.series.format !== "novel") notFound();
   const profile = await currentProfileOrNull();
   const [comments, initialProgress] = await Promise.all([
@@ -42,7 +47,7 @@ export default async function NovelReaderPage({
       chapters={data.chapterList}
       initialProgress={initialProgress}
       seriesSlug={data.series.slug}
-      seriesTitle={data.series.titleAr}
+      seriesTitle={getWorkTitle(data.series)}
       chapterNumber={data.chapter.number}
       chapterTitle={data.chapter.titleAr}
       isPremiumDemo={data.chapter.isPremiumDemo}

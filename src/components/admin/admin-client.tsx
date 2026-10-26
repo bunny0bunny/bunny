@@ -207,12 +207,13 @@ export function SeriesForm({ initial, readingFormatLocked = false, currentActorI
       <fieldset disabled={loading || pending || Boolean(createdId) || recoveryRequired} className="min-w-0 space-y-5">
       <div className="grid gap-4 sm:grid-cols-2">
         <div className="space-y-1.5">
-          <label htmlFor={`${formId}-title`} className="text-sm font-medium">العنوان العربي *</label>
-          <Input id={`${formId}-title`} required value={values.titleAr} onChange={(e) => set("titleAr", e.target.value)} className={field} placeholder="مثال: حارس بوابة الشفق" />
+          <label htmlFor={`${formId}-original`} className="text-sm font-medium">العنوان الإنجليزي {!values.id && '*'}</label>
+          <Input id={`${formId}-original`} dir="ltr" required={!values.id} minLength={2} maxLength={300} value={values.titleOriginal} onChange={(e) => set("titleOriginal", e.target.value)} className={`${field} text-left`} placeholder="Strobe Edge" />
+          <p className="text-[11px] text-muted-foreground">الاسم الإنجليزي أو المكتوب بالأحرف اللاتينية؛ يظهر كعنوان رئيسي للعمل. مطلوب للأعمال الجديدة.</p>
         </div>
         <div className="space-y-1.5">
-          <label htmlFor={`${formId}-original`} className="text-sm font-medium">العنوان الأصلي (اختياري)</label>
-          <Input id={`${formId}-original`} dir="ltr" value={values.titleOriginal} onChange={(e) => set("titleOriginal", e.target.value)} className={`${field} text-left`} placeholder="Original title" />
+          <label htmlFor={`${formId}-title`} className="text-sm font-medium">العنوان العربي (اختياري)</label>
+          <Input id={`${formId}-title`} minLength={2} maxLength={300} value={values.titleAr} onChange={(e) => set("titleAr", e.target.value)} className={field} placeholder="مثال: وميض الضوء" />
         </div>
         <div className="space-y-1.5">
           <label htmlFor={`${formId}-slug`} className="text-sm font-medium">المعرّف (slug) *</label>

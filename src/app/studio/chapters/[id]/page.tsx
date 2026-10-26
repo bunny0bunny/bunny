@@ -1,3 +1,4 @@
+import { getWorkTitle } from '@/lib/work-title';
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
@@ -129,7 +130,7 @@ async function loadStudioChapterPage(params: Promise<{ id: string }>) {
             </Link>
             <ChevronLeft className="size-3.5" aria-hidden />
             <Link href={`/admin/series/${chapter.seriesId}`} className="transition hover:text-foreground">
-              {chapter.series.titleAr}
+              {getWorkTitle(chapter.series)}
             </Link>
             <ChevronLeft className="size-3.5" aria-hidden />
             <span className="font-semibold text-foreground">
@@ -145,7 +146,7 @@ async function loadStudioChapterPage(params: Promise<{ id: string }>) {
                 إدارة نسخة الفصل {chapter.number}
               </h1>
               <p className="mt-1 text-sm text-muted-foreground">
-                {chapter.series.titleAr} — {chapter.titleAr}
+                {getWorkTitle(chapter.series)} — {chapter.titleAr}
               </p>
             </div>
 
@@ -175,7 +176,7 @@ async function loadStudioChapterPage(params: Promise<{ id: string }>) {
               number: chapter.number,
               titleAr: chapter.titleAr,
               seriesId: chapter.seriesId,
-              seriesTitleAr: chapter.series.titleAr,
+              seriesTitleAr: getWorkTitle(chapter.series),
               seriesSlug: chapter.series.slug,
               format: chapter.series.format,
               workflow: chapter.workflow,

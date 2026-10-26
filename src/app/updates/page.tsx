@@ -1,3 +1,4 @@
+import { getWorkTitle } from '@/lib/work-title';
 import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
@@ -192,12 +193,12 @@ export default async function UpdatesPage({
                         <Link
                           href={`/series/${f.series.slug}`}
                           className="relative aspect-[3/4] w-16 shrink-0 overflow-hidden rounded-xl border border-border/70 bg-secondary/40 shadow-xs sm:w-20"
-                          aria-label={`انتقل إلى صفحة عمل ${f.series.titleAr}`}
+                          aria-label={`انتقل إلى صفحة عمل ${getWorkTitle(f.series)}`}
                         >
                           {f.series.coverPath ? (
                             <Image
                               src={f.series.coverPath}
-                              alt={`غلاف ${f.series.titleAr}`}
+                              alt={`غلاف ${getWorkTitle(f.series)}`}
                               fill
                               sizes="80px"
                               className="object-cover transition duration-300 hover:scale-105"
@@ -252,7 +253,7 @@ export default async function UpdatesPage({
                               href={`/series/${f.series.slug}`}
                               className="flex min-h-11 items-center text-xs font-semibold text-muted-foreground transition hover:text-foreground"
                             >
-                              {f.series.titleAr}
+                              {getWorkTitle(f.series)}
                             </Link>
                           </div>
 
@@ -295,7 +296,7 @@ export default async function UpdatesPage({
                               ? "border border-border/70 bg-secondary/30 text-muted-foreground hover:border-primary/50 hover:text-foreground"
                               : "bg-primary text-primary-foreground hover:bg-primary/90"
                           }`}
-                          aria-label={`قراءة الفصل ${f.number} من ${f.series.titleAr}`}
+                          aria-label={`قراءة الفصل ${f.number} من ${getWorkTitle(f.series)}`}
                         >
                           <Play className="size-3.5 fill-current" aria-hidden />
                           <span>{f.read ? "إعادة القراءة" : "اقرأ الفصل"}</span>

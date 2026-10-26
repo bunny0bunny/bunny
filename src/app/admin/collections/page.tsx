@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { getWorkTitle } from '@/lib/work-title';
 import { GalleryVerticalEnd, Pencil, Plus } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -26,7 +27,7 @@ export default async function AdminCollectionsPage({
     getAdminCollections(),
     getAdminSeries({}),
   ]);
-  const seriesOptions = seriesRows.map((s) => ({ slug: s.slug, titleAr: s.titleAr }));
+  const seriesOptions = seriesRows.map((s) => ({ slug: s.slug, titleAr: getWorkTitle(s) }));
   const editing = edit ? collections.find((c) => c.id === edit) ?? null : null;
 
   return (

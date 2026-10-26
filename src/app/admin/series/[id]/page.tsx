@@ -1,3 +1,4 @@
+import { getWorkTitle } from '@/lib/work-title';
 import { EDITORIAL_LABELS, isPublicChapter } from "@/lib/editorial-state";
 import Link from "next/link";
 import Image from "next/image";
@@ -44,7 +45,7 @@ export default async function AdminSeriesDetailPage({
             {s.coverPath ? <Image src={s.coverPath} alt="" fill sizes="56px" className="object-cover" /> : <span className="flex h-full items-center justify-center bg-secondary text-xs text-muted-foreground">بلا غلاف</span>}
           </span>
           <div>
-            <h1 className="text-xl font-bold text-foreground">{s.titleAr}</h1>
+            <h1 className="text-xl font-bold text-foreground">{getWorkTitle(s)}</h1>
             <p className="mt-0.5 flex items-center gap-2 text-xs text-muted-foreground">
               {FORMAT_LABELS[s.format as Format]} · {STATUS_LABELS[s.status as SeriesStatus]} · {publishedCount}/{s.chapters.length} فصل منشور · {s.reads.toLocaleString("ar-EG")} قراءة
             </p>

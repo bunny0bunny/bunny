@@ -1,3 +1,4 @@
+import { getWorkTitle } from '@/lib/work-title';
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { db } from "@/lib/db";
@@ -25,12 +26,12 @@ export async function POST(request: Request) {
       number: t.chapterNumber, series: { slug: t.seriesSlug, format: t.format },
     })) }] },
     select: { number: true, titleAr: true, series: { select: {
-      slug: true, titleAr: true, format: true, coverPath: true, accent: true,
+      slug: true, titleAr: true, titleOriginal: true, format: true, coverPath: true, accent: true,
     } } },
   });
   return NextResponse.json({ readable: chapters.map(c => ({
     seriesSlug: c.series.slug, chapterNumber: c.number, format: c.series.format,
-    seriesTitle: c.series.titleAr, chapterTitle: c.titleAr,
+    seriesTitle: getWorkTitle(c.series), chapterTitle: c.titleAr,
     coverPath: displayCover(c.series.coverPath), accent: c.series.accent,
   })) });
 }

@@ -1,5 +1,8 @@
 "use client";
 
+import { getWorkTitle } from '@/lib/work-title';
+
+
 import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
@@ -151,7 +154,7 @@ export function ContinueReadingHero({
               <div className="relative w-[32%] shrink-0 overflow-hidden md:w-[58%]">
                 <Image
                   src={guestFeatured.coverPath || "/art/covers/no-cover.svg"}
-                  alt={`غلاف ${guestFeatured.titleAr}`}
+                  alt={`غلاف ${getWorkTitle(guestFeatured)}`}
                   fill
                   priority
                   className="object-cover object-[50%_28%] md:object-[50%_8%]"
@@ -167,7 +170,7 @@ export function ContinueReadingHero({
                 </span>
 
                 <h1 className="mt-1.5 line-clamp-2 text-lg sm:text-2xl lg:text-3xl font-extrabold text-foreground">
-                  {guestFeatured.titleAr}
+                  {getWorkTitle(guestFeatured)}
                 </h1>
 
                 <p className="mt-1 text-xs sm:text-sm text-muted-foreground">

@@ -1,4 +1,5 @@
 import "server-only";
+import { getWorkTitle } from '@/lib/work-title';
 import { EDITORIAL_LABELS, latestRevisionSelect, withWorkingState, isPublicChapter } from "@/lib/editorial-state";
 import { getServerSession } from "next-auth";
 import { redirect } from "next/navigation";
@@ -70,6 +71,7 @@ export type SeriesCard = {
   id: string;
   slug: string;
   titleAr: string;
+  titleOriginal?: string | null;
   format: Format;
   category?: Category | null;
   status: SeriesStatus;
@@ -97,6 +99,7 @@ export function toCard(s: {
   id: string;
   slug: string;
   titleAr: string;
+  titleOriginal?: string | null;
   format: string;
   category?: string | null;
   status: string;
@@ -118,6 +121,7 @@ export function toCard(s: {
     id: s.id,
     slug: s.slug,
     titleAr: s.titleAr,
+    titleOriginal: s.titleOriginal ?? null,
     format: s.format as Format,
     category: (s.category ?? null) as Category | null,
     status: s.status as SeriesStatus,
@@ -175,8 +179,8 @@ export async function getPublishedSeries(filters: ExploreFilters): Promise<Serie
     const scored = rows.map((row, i) => ({
       card: cards[i],
       score: scoreDocument(qTokens, [
-        { text: row.titleAr, weight: 3 },
-        ...(row.titleOriginal ? [{ text: row.titleOriginal, weight: 2 }] : []),
+        { text: row.titleAr, weight: 2 },
+        ...(row.titleOriginal ? [{ text: row.titleOriginal, weight: 3 }] : []),
         { text: row.author, weight: 2 },
         { text: parseJsonArray(row.genresJson).join(" "), weight: 2 },
         { text: parseJsonArray(row.tagsJson).join(" "), weight: 1 },
@@ -213,8 +217,10 @@ export async function getPublishedSeries(filters: ExploreFilters): Promise<Serie
  */
 export async function getSearchSuggestion(q: string): Promise<string | null> {
   if (!q.trim()) return null;
-  const rows = await db.series.findMany({ where: { chapters: { some: liveChapterWhere() } }, select: { titleAr: true } });
-  return suggestTitle(q, rows.map((r) => r.titleAr));
+  const rows = await db.series.findMany({ where: { chapters: { some: liveChapterWhere() } }, select: { titleAr: true, titleOriginal: true } });
+  const suggestion = suggestTitle(q, rows.flatMap(r => [r.titleAr, r.titleOriginal ?? '']).filter(Boolean));
+  const work = rows.find(r => r.titleAr === suggestion || r.titleOriginal === suggestion);
+  return work ? getWorkTitle(work) : null;
 }
 
 export async function getTrendingSeries(limit = 8): Promise<SeriesCard[]> {
@@ -402,13 +408,13 @@ export async function getContinueReading(profileId: string, limit = 3): Promise<
     orderBy: { updatedAt: "desc" },
     take: limit,
     include: {
-      series: { select: { slug: true, titleAr: true, coverPath: true, accent: true, format: true } },
+      series: { select: { slug: true, titleAr: true, titleOriginal: true, coverPath: true, accent: true, format: true } },
       chapter: { select: { number: true, titleAr: true } },
     },
   });
   return rows.map((r) => ({
     seriesSlug: r.series.slug,
-    seriesTitle: r.series.titleAr,
+    seriesTitle: getWorkTitle(r.series),
     coverPath: displayCover(r.series.coverPath),
     accent: r.series.accent,
     format: r.series.format as Format,
@@ -428,7 +434,7 @@ export async function getLatestUpdates(limit = 10) {
     where: liveChapterWhere(),
     orderBy: [{ publishedAt: "desc" }],
     take: limit,
-    include: { series: { select: { slug: true, titleAr: true, coverPath: true, accent: true, format: true, category: true } } },
+    include: { series: { select: { slug: true, titleAr: true, titleOriginal: true, coverPath: true, accent: true, format: true, category: true } } },
   });
   return chapters.map((c) => ({
     id: c.id,
@@ -470,7 +476,7 @@ export async function getAdminOverview() {
     take: 8,
     include: {
       profile: { select: { nickname: true } },
-      series: { select: { titleAr: true, slug: true } },
+      series: { select: { titleAr: true, titleOriginal: true, slug: true } },
     },
   });
   const topSeries = await db.series.findMany({ orderBy: { reads: "desc" }, take: 5 });
@@ -503,7 +509,7 @@ export async function getAdminSeries(filters: AdminSeriesFilters) {
   if (filters.format && (FORMATS as readonly string[]).includes(filters.format)) where.format = filters.format;
   if (filters.status && ["ongoing", "completed", "hiatus"].includes(filters.status))
     where.status = filters.status;
-  if (filters.q?.trim()) where.titleAr = { contains: filters.q.trim() };
+  if (filters.q?.trim()) where.OR = [{titleAr: {contains: filters.q.trim(), mode: 'insensitive'}}, {titleOriginal: {contains: filters.q.trim(), mode: 'insensitive'}}];
   return db.series.findMany({
     where,
     orderBy: { updatedAt: "desc" },
@@ -574,7 +580,7 @@ export async function getAdminChapters(filters: { workflow?: string; format?: st
     where: chapterWhere,
     orderBy: [{ publishedAt: "desc" }, { createdAt: "desc" }],
     include: {
-      series: { select: { id: true, slug: true, titleAr: true, format: true, accent: true } },
+      series: { select: { id: true, slug: true, titleAr: true, titleOriginal: true, format: true, accent: true } },
       _count: { select: { pages: true } },
       revisions: latestRevisionSelect,
     },
@@ -677,7 +683,7 @@ export type UpdatesFeedItem = {
   publishedAt: Date;
   isPremiumDemo: boolean;
   read: boolean;
-  series: { slug: string; titleAr: string; coverPath: string; accent: string; format: Format; category: Category | null };
+  series: { slug: string; titleAr: string; titleOriginal?: string | null; coverPath: string; accent: string; format: Format; category: Category | null };
 };
 
 export async function getLibraryUpdatesFeed(profileId: string, limit = 40): Promise<UpdatesFeedItem[]> {
@@ -689,7 +695,7 @@ export async function getLibraryUpdatesFeed(profileId: string, limit = 40): Prom
     orderBy: { publishedAt: "desc" },
     take: limit,
     include: {
-      series: { select: { slug: true, titleAr: true, coverPath: true, accent: true, format: true, category: true } },
+      series: { select: { slug: true, titleAr: true, titleOriginal: true, coverPath: true, accent: true, format: true, category: true } },
     },
   });
   if (chapters.length === 0) return [];
@@ -772,7 +778,7 @@ export async function getProfileStats(profileId: string) {
       orderBy: { updatedAt: "desc" },
       take: 5,
       include: {
-        series: { select: { slug: true, titleAr: true, coverPath: true, accent: true, format: true } },
+        series: { select: { slug: true, titleAr: true, titleOriginal: true, coverPath: true, accent: true, format: true } },
         chapter: { select: { number: true, titleAr: true } },
       },
     }),
@@ -785,7 +791,7 @@ export async function getProfileActivity(profileId: string, limit = 8) {
     where: { profileId },
     orderBy: { createdAt: "desc" },
     take: limit,
-    include: { series: { select: { slug: true, titleAr: true } } },
+    include: { series: { select: { slug: true, titleAr: true, titleOriginal: true } } },
   });
 }
 
@@ -813,7 +819,7 @@ export async function getModerationQueue() {
       orderBy: { updatedAt: "desc" },
       include: {
         profile: { select: { nickname: true, avatarSeed: true } },
-        series: { select: { slug: true, titleAr: true } },
+        series: { select: { slug: true, titleAr: true, titleOriginal: true } },
         chapter: { select: { number: true } },
         reports: { include: { profile: { select: { nickname: true } } } },
       },
@@ -951,7 +957,7 @@ export async function getStudioOverview(): Promise<StudioSeriesRow[]> {
     return {
       seriesId: s.id,
       slug: s.slug,
-      titleAr: s.titleAr,
+      titleAr: getWorkTitle(s),
       format: s.format as Format,
       accent: s.accent,
       reads: s.reads,

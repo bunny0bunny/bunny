@@ -1,4 +1,5 @@
 import Image from "next/image";
+import { getWorkTitle } from '@/lib/work-title';
 import Link from "next/link";
 import { Star, BookOpen } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -35,6 +36,7 @@ export function SeriesCardItem({
     "slug" | "titleAr" | "coverPath" | "format" | "ratingAvg" | "genres" | "status" | "chapterCount"
   > & {
     category?: Category | null;
+    titleOriginal?: string | null;
   };
   badge?: string;
   /** Release D "For You": explainable recommendation chip (FD-12) */
@@ -50,12 +52,12 @@ export function SeriesCardItem({
       className={`group block focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background rounded-xl ${
         className ?? "w-[150px] shrink-0 sm:w-[168px]"
       }`}
-      aria-label={series.titleAr}
+      aria-label={getWorkTitle(series)}
     >
       <div className="relative aspect-[2/3] w-full overflow-hidden rounded-xl border border-border/70 bg-card shadow-sm transition duration-300 group-hover:-translate-y-1 group-hover:border-primary/50 group-hover:shadow-[0_12px_32px_-12px_rgba(180,151,239,0.35)]">
         <Image
           src={series.coverPath || "/art/covers/no-cover.svg"}
-          alt={series.coverPath ? `غلاف ${series.titleAr}` : `الغلاف غير متاح — ${series.titleAr}`}
+          alt={series.coverPath ? `غلاف ${getWorkTitle(series)}` : `الغلاف غير متاح — ${getWorkTitle(series)}`}
           fill
           sizes="(max-width: 640px) 50vw, (max-width: 1024px) 25vw, 180px"
           priority={priority}
@@ -103,7 +105,7 @@ export function SeriesCardItem({
       {/* Title & Metadata */}
       <div className="mt-2 space-y-1">
         <p className="line-clamp-2 text-sm font-bold text-foreground transition group-hover:text-primary">
-          {series.titleAr}
+          <bdi>{getWorkTitle(series)}</bdi>
         </p>
 
         {reasonAr ? (

@@ -1,6 +1,7 @@
 "use server";
 
 import { z } from "zod";
+import { getWorkTitle, workTitleIssue } from '@/lib/work-title';
 import { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 import { currentProfileOrNull } from "@/lib/queries";
@@ -87,8 +88,8 @@ async function requireModerator() {
 const seriesSchema = z
   .object({
     id: z.string().optional(),
-    titleAr: z.string().min(2, "العنوان مطلوب"),
-    titleOriginal: z.string().optional(),
+    titleAr: z.string().trim().max(300).default(''),
+    titleOriginal: z.string().trim().max(300).default(''),
     slug: z
       .string()
       .min(2)
@@ -101,6 +102,10 @@ const seriesSchema = z
     translator: z.string().optional(),
     genres: z.array(z.string()).min(1, "اختر نوعًا واحدًا على الأقل"),
     isFeatured: z.boolean(),
+  })
+  .superRefine((data, ctx) => {
+    const issue = workTitleIssue(data);
+    if (issue) ctx.addIssue({code: 'custom', message: issue});
   })
   .refine(
     (data) => categoryMatchesFormat(data.category, data.format),
@@ -491,7 +496,7 @@ export async function toggleCommentLike(
       id: true,
       status: true,
       profileId: true,
-      series: { select: { slug: true, titleAr: true } },
+      series: { select: { slug: true, titleAr: true, titleOriginal: true } },
       _count: { select: { likes: true } },
     },
   });
@@ -511,7 +516,7 @@ export async function toggleCommentLike(
         authorProfileId: comment.profileId,
         likerNickname: profile.nickname,
         seriesSlug: comment.series.slug,
-        seriesTitle: comment.series.titleAr,
+        seriesTitle: getWorkTitle(comment.series),
       });
     }
   }

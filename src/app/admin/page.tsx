@@ -1,3 +1,4 @@
+import { getWorkTitle } from '@/lib/work-title';
 import Link from "next/link";
 import { AlertTriangle, ArrowUpLeft, BookOpen, CheckCircle2, FileEdit, LibraryBig, ListOrdered, Eye, Users } from "lucide-react";
 import { getAdminOverview, getDashboardActivity, getCommunityCounts, getStaffOverview, currentProfileOrNull } from "@/lib/queries";
@@ -71,7 +72,7 @@ export default async function AdminDashboard({
                   </div>
                   <CardTitle className="text-base mt-2 truncate">
                     <Link href={`/admin/series/${s.id}`} className="hover:text-primary transition-colors">
-                      {s.titleAr}
+                      {getWorkTitle(s)}
                     </Link>
                   </CardTitle>
                 </CardHeader>
@@ -198,7 +199,7 @@ export default async function AdminDashboard({
               <div key={e.id} className="flex items-center gap-2.5 rounded-lg border border-border/40 bg-secondary/40 px-3 py-2 text-sm">
                 <span className="size-1.5 shrink-0 rounded-full bg-primary" aria-hidden />
                 <span className="text-foreground/90">{EVENT_TEXT[e.type] ?? e.type}</span>
-                {e.series && <Link href={`/series/${e.series.slug}`} className="truncate text-muted-foreground hover:text-primary">{e.series.titleAr}</Link>}
+                {e.series && <Link href={`/series/${e.series.slug}`} className="truncate text-muted-foreground hover:text-primary">{getWorkTitle(e.series)}</Link>}
                 {e.profile?.nickname && <span className="ms-auto shrink-0 text-[11px] text-muted-foreground">{e.profile.nickname}</span>}
               </div>
             ))}
@@ -217,7 +218,7 @@ export default async function AdminDashboard({
                 <div key={s.id} className="flex items-center gap-3">
                   <span className="w-5 text-center text-sm font-bold text-gold">{i + 1}</span>
                   <Link href={`/series/${s.slug}`} className="flex-1 truncate text-sm text-foreground hover:text-primary">
-                    {s.titleAr}
+                    {getWorkTitle(s)}
                   </Link>
                   <span className="text-xs tabular-nums text-muted-foreground">{s.reads.toLocaleString("ar-EG")} قراءة</span>
                 </div>

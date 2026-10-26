@@ -1,3 +1,4 @@
+import { getWorkTitle } from '@/lib/work-title';
 import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
@@ -261,7 +262,7 @@ export default async function StudioWorkspacePage({
                           <div className="relative aspect-[3/4] w-12 shrink-0 overflow-hidden rounded-lg bg-secondary/40">
                             <img
                               src={ch.series.coverPath || "/art/covers/no-cover.svg"}
-                              alt={ch.series.titleAr}
+                              alt={getWorkTitle(ch.series)}
                               className="size-full object-cover"
                               loading="lazy"
                             />
@@ -274,7 +275,7 @@ export default async function StudioWorkspacePage({
                               الفصل {ch.number}: {ch.titleAr}
                             </Link>
                             <p className="mt-0.5 text-xs text-muted-foreground">
-                              {ch.series.titleAr} · {FORMAT_LABELS[ch.series.format as Format]}
+                              {getWorkTitle(ch.series)} · {FORMAT_LABELS[ch.series.format as Format]}
                             </p>
                             {/* Mobile badge */}
                             <div className="mt-1.5 flex flex-wrap items-center gap-1.5 sm:hidden">

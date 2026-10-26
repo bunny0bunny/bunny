@@ -1,3 +1,4 @@
+import { getWorkTitle } from '@/lib/work-title';
 import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
@@ -238,7 +239,7 @@ export default async function ProfilePage() {
                         <Image src={p.series.coverPath || "/art/covers/no-cover.svg"} alt="" fill sizes="44px" className="object-cover" />
                       </span>
                       <span className="min-w-0 flex-1">
-                        <span className="block truncate text-sm font-medium">{p.series.titleAr}</span>
+                        <span className="block truncate text-sm font-medium">{getWorkTitle(p.series)}</span>
                         <span className="block text-[11px] text-muted-foreground">
                           الفصل {p.chapter.number} · قارأتم {Math.round(p.percent)}٪
                         </span>
@@ -263,7 +264,7 @@ export default async function ProfilePage() {
                 <li key={a.id} className="flex items-center justify-between gap-3">
                   <span>
                     {EVENT_LABELS[a.type] ?? a.type}
-                    {a.series && <> — <Link href={`/series/${a.series.slug}`} className="text-foreground/80 hover:text-primary">{a.series.titleAr}</Link></>}
+                    {a.series && <> — <Link href={`/series/${a.series.slug}`} className="text-foreground/80 hover:text-primary">{getWorkTitle(a.series)}</Link></>}
                   </span>
                   <span className="shrink-0">{timeAgoAr(a.createdAt)}</span>
                 </li>

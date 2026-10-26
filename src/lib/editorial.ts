@@ -1,3 +1,4 @@
+import { getWorkTitle } from '@/lib/work-title';
 import "server-only";
 import { Prisma, type ChapterRevision, type ReadingDirection } from "@prisma/client";
 import { db } from "@/lib/db";
@@ -225,7 +226,7 @@ async function publishProjection(tx: Tx, actor: Actor, revision: ChapterRevision
   const followers = await tx.libraryItem.findMany({ where: { seriesId: chapter.seriesId }, select: { profileId: true } });
   const ids = [...new Set(followers.map(follower => follower.profileId))];
   for (let start = 0; start < ids.length; start += 500) await tx.notification.createMany({ data: ids.slice(start, start + 500).map(profileId => ({
-    profileId, type: "new_chapter" as const, titleAr: `تحديث في «${chapter.series.titleAr}»`, bodyAr: `الفصل ${chapter.number} — ${revision.titleAr} متاح الآن.`, href: `/read/${chapter.series.format}/${chapter.series.slug}/${chapter.number}`,
+    profileId, type: "new_chapter" as const, titleAr: `تحديث في «${getWorkTitle(chapter.series)}»`, bodyAr: `الفصل ${chapter.number} — ${revision.titleAr} متاح الآن.`, href: `/read/${chapter.series.format}/${chapter.series.slug}/${chapter.number}`,
   })) });
   return { ok: true, revision: updated, data: { processed: true } };
 }

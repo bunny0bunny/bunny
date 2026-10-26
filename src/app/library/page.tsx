@@ -1,3 +1,4 @@
+import { getWorkTitle } from '@/lib/work-title';
 import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
@@ -464,12 +465,12 @@ export default async function LibraryPage({
                       <Link
                         href={`/series/${e.series.slug}`}
                         className="relative block aspect-[3/4] overflow-hidden bg-secondary/40"
-                        aria-label={`انتقل إلى صفحة ${e.series.titleAr}`}
+                        aria-label={`انتقل إلى صفحة ${getWorkTitle(e.series)}`}
                       >
                         {e.series.coverPath ? (
                           <Image
                             src={e.series.coverPath}
-                            alt={`غلاف ${e.series.titleAr}`}
+                            alt={`غلاف ${getWorkTitle(e.series)}`}
                             fill
                             sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
                             className="object-cover transition duration-300 group-hover:scale-[1.03]"
@@ -505,7 +506,7 @@ export default async function LibraryPage({
                             href={`/series/${e.series.slug}`}
                             className="flex min-h-11 items-center text-sm font-semibold text-foreground transition hover:text-primary"
                           >
-                            {e.series.titleAr}
+                            {getWorkTitle(e.series)}
                           </Link>
 
                           {/* Chapter count */}
@@ -525,7 +526,7 @@ export default async function LibraryPage({
                                 cardProgress.chapterNumber
                               )}
                               className="inline-flex min-h-11 w-full items-center justify-center gap-1.5 rounded-lg bg-primary/15 px-3 py-1.5 text-xs font-semibold text-primary transition hover:bg-primary/25"
-                              aria-label={`متابعة قراءة ${e.series.titleAr} من الفصل ${cardProgress.chapterNumber}`}
+                              aria-label={`متابعة قراءة ${getWorkTitle(e.series)} من الفصل ${cardProgress.chapterNumber}`}
                             >
                               <Play className="size-3.5 fill-current" aria-hidden />
                               <span>
@@ -536,7 +537,7 @@ export default async function LibraryPage({
                             <Link
                               href={`/series/${e.series.slug}`}
                               className="inline-flex min-h-11 w-full items-center justify-center gap-1.5 rounded-lg border border-border/70 bg-secondary/30 px-3 py-1.5 text-xs font-medium text-foreground transition hover:bg-secondary/60"
-                              aria-label={`عرض تفاصيل ${e.series.titleAr}`}
+                              aria-label={`عرض تفاصيل ${getWorkTitle(e.series)}`}
                             >
                               <span>عرض العمل</span>
                             </Link>
@@ -544,7 +545,7 @@ export default async function LibraryPage({
                           <LibraryCardActions
                             slug={e.series.slug}
                             shelf={e.shelf as Shelf}
-                            title={e.series.titleAr}
+                            title={getWorkTitle(e.series)}
                           />
                         </div>
                       </div>

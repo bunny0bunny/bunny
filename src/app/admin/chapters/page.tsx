@@ -1,3 +1,4 @@
+import { getWorkTitle } from '@/lib/work-title';
 import { EDITORIAL_LABELS, isPublicChapter } from "@/lib/editorial-state";
 import Link from "next/link";
 import { FileEdit, Eye, Plus } from "lucide-react";
@@ -101,7 +102,7 @@ export default async function AdminChaptersPage({
                 </td>
                 <td className="hidden p-3 sm:table-cell">
                   <Link href={`/admin/series/${c.series.id}`} className="text-foreground hover:text-primary">
-                    {c.series.titleAr}
+                    {getWorkTitle(c.series)}
                   </Link>
                   <p className="text-[11px] text-muted-foreground">{FORMAT_LABELS[c.series.format as Format]}</p>
                 </td>

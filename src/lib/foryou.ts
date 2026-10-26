@@ -1,4 +1,5 @@
 import "server-only";
+import { getWorkTitle } from '@/lib/work-title';
 import { db } from "@/lib/db";
 import { cardInclude, toCard } from "@/lib/queries";
 import type { SeriesCard } from "@/lib/queries";
@@ -77,11 +78,11 @@ export async function getForYouSeries(profileId: string, limit = 8): Promise<For
 
   const historyRows = await db.series.findMany({
     where: { id: { in: [...historyIds] } },
-    select: { id: true, titleAr: true, genresJson: true },
+    select: { id: true, titleAr: true, titleOriginal: true, genresJson: true },
   });
   const history: HistorySeries[] = historyRows.map((s) => ({
     id: s.id,
-    titleAr: s.titleAr,
+    titleAr: getWorkTitle(s),
     genres: JSON.parse(s.genresJson || "[]") as string[],
   }));
 

@@ -1,3 +1,4 @@
+import { getWorkTitle } from '@/lib/work-title';
 import Link from "next/link";
 import Image from "next/image";
 import { Compass, Flame, LibraryBig, Sparkles } from "lucide-react";
@@ -50,7 +51,7 @@ export default async function HomePage() {
       groupedMap.set(ch.series.slug, {
         series: {
           slug: ch.series.slug,
-          titleAr: ch.series.titleAr,
+          titleAr: ch.series.titleAr, titleOriginal: ch.series.titleOriginal,
           coverPath: ch.series.coverPath,
           format: ch.series.format as Format,
           category: (ch.series as { category?: Category | null }).category ?? null,
@@ -95,7 +96,7 @@ export default async function HomePage() {
       const resolved = await Promise.all(
         slugs.map(async (slug) => {
           const s = await getSeriesBySlug(slug);
-          return s?.publishedChapters.length ? { slug, cover: s.coverPath, title: s.titleAr, genres: parseJsonArray(s.genresJson) } : null;
+          return s?.publishedChapters.length ? { slug, cover: s.coverPath, title: getWorkTitle(s), genres: parseJsonArray(s.genresJson) } : null;
         })
       );
       return {
