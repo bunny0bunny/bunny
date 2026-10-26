@@ -33,10 +33,10 @@ export async function saveReadingProgress(input: unknown): Promise<ActionResult>
   if (!parsed.success) return { ok: false, error: "invalid" };
   const { seriesSlug, chapterNumber, pageIndex, percent, completed } = parsed.data;
 
-  const series = await db.series.findUnique({ where: { slug: seriesSlug } });
+  const series = await db.series.findUnique({ where: { slug: seriesSlug, deletedAt: null } });
   if (!series) return { ok: false, error: "not_found" };
   const chapter = await db.chapter.findFirst({
-    where: { seriesId: series.id, number: chapterNumber, workflow: "published" },
+    where: { deletedAt: null, series: { deletedAt: null }, seriesId: series.id, number: chapterNumber, workflow: "published" },
   });
   if (!chapter) return { ok: false, error: "not_found" };
 
@@ -145,7 +145,7 @@ export async function upsertSeries(input: unknown): Promise<ActionResult & { slu
     const result = await withSerializableTx(async (tx, actor) => {
       if (actor.role !== "admin") return { ok: false, error: "forbidden" };
       const existing = await tx.series.findUnique({ where: { id: d.id }, include: { _count: { select: { chapters: true } } } });
-      if (!existing) return { ok: false, error: "not_found" };
+      if (!existing || existing.deletedAt) return { ok: false, error: "not_found" };
       if (existing.slug !== d.slug) return { ok: false, error: "لا يمكن تغيير معرّف العمل بعد إنشائه حفاظًا على الروابط المحفوظة." };
       if (existing.format !== d.format && existing._count.chapters > 0)
         return { ok: false, error: "لا يمكن تغيير طريقة القراءة بعد إضافة فصول للعمل. أنشئ عملًا مستقلًا للصيغة الجديدة حفاظًا على المحتوى والروابط." };
@@ -199,7 +199,7 @@ export async function updateChapterMeta(input: unknown): Promise<ActionResult> {
   const { id, ...patch } = parsed.data;
 
   const chapter = await db.chapter.findUnique({ where: { id }, include: { series: true } });
-  if (!chapter) return { ok: false, error: "not_found" };
+  if (!chapter || chapter.deletedAt || chapter.series.deletedAt) return { ok: false, error: "not_found" };
 
   if (await db.chapterRevision.count({ where: { chapterId: id } })) {
     if (actor.role !== "admin" && !await isAssignedToSeries(actor.id, chapter.seriesId)) return { ok: false, error: "forbidden" };
@@ -230,9 +230,11 @@ export async function updateChapterMeta(input: unknown): Promise<ActionResult> {
     const updateResult = await db.chapter.updateMany({
       where: {
         id,
+        deletedAt: null,
         workflow: { in: ["draft", "review"] },
         scheduledFor: null,
         series: {
+          deletedAt: null,
           assignments: {
             some: {
               profileId: actor.id,
@@ -275,7 +277,8 @@ export async function updateChapterMeta(input: unknown): Promise<ActionResult> {
     ...(patch.workflow !== undefined ? { workflow: patch.workflow } : {}),
     ...(patch.isPremiumDemo !== undefined ? { isPremiumDemo: patch.isPremiumDemo } : {}),
   };
-  await db.chapter.update({ where: { id }, data });
+  const changed = await db.chapter.updateMany({ where: { id, deletedAt: null, series: { deletedAt: null } }, data });
+  if (changed.count !== 1) return { ok: false, error: "not_found" };
 
   revalidatePath("/admin/chapters");
   revalidatePath(`/admin/series/${chapter.seriesId}`);
@@ -322,7 +325,7 @@ export async function createChapter(input: unknown): Promise<ActionResult & { id
     return { ok: false, error: "لا يمكن إنشاء فصل منشور أو مجدول مباشرة؛ يُنشأ كمسودة ثم يُعتمد ويُنشر من الاستوديو." };
   }
 
-  const series = await db.series.findUnique({ where: { id: d.seriesId } });
+  const series = await db.series.findUnique({ where: { id: d.seriesId, deletedAt: null } });
   if (!series) return { ok: false, error: "not_found" };
 
   const exists = await db.chapter.findUnique({
@@ -332,7 +335,9 @@ export async function createChapter(input: unknown): Promise<ActionResult & { id
 
   let chapter;
   try {
-    chapter = await db.chapter.create({
+    chapter = await db.$transaction(async tx => {
+      if (!await tx.series.findFirst({ where: { id: series.id, deletedAt: null }, select: { id: true } })) throw new Error("content_unavailable");
+      return tx.chapter.create({
       data: {
         seriesId: series.id,
         number: d.number,
@@ -344,8 +349,10 @@ export async function createChapter(input: unknown): Promise<ActionResult & { id
         readingDirection: d.readingDirection,
         novelBody: d.novelBody ?? null,
       },
-    });
+      });
+    }, { isolationLevel: "Serializable" });
   } catch (err: any) {
+    if (err?.message === "content_unavailable" || err?.code === "P2034") return { ok: false, error: "not_found" };
     if (err?.code === "P2002") {
       return { ok: false, error: "رقم الفصل مستخدم في هذا العمل" };
     }
@@ -380,7 +387,7 @@ export async function setLibraryItem(input: unknown): Promise<ActionResult> {
   const parsed = librarySchema.safeParse(input);
   if (!parsed.success) return { ok: false, error: "invalid" };
   const { seriesSlug, shelf } = parsed.data;
-  const series = await db.series.findUnique({ where: { slug: seriesSlug }, select: { id: true, slug: true } });
+  const series = await db.series.findUnique({ where: { slug: seriesSlug, deletedAt: null }, select: { id: true, slug: true } });
   if (!series) return { ok: false, error: "not_found" };
 
   if (shelf === null) {
@@ -401,11 +408,11 @@ export async function setLibraryItem(input: unknown): Promise<ActionResult> {
 export async function markSeriesRead(seriesSlug: string): Promise<ActionResult> {
   const profile = await currentProfileOrNull();
   if (!profile) return { ok: false, error: "unauthenticated" };
-  const series = await db.series.findUnique({ where: { slug: seriesSlug } });
+  const series = await db.series.findUnique({ where: { slug: seriesSlug, deletedAt: null } });
   if (!series) return { ok: false, error: "not_found" };
   const now = new Date();
   const chapters = await db.chapter.findMany({
-    where: { seriesId: series.id, workflow: "published", OR: [{ scheduledFor: null }, { scheduledFor: { lte: now } }] },
+    where: { deletedAt: null, series: { deletedAt: null }, seriesId: series.id, workflow: "published", OR: [{ scheduledFor: null }, { scheduledFor: { lte: now } }] },
     select: { id: true },
   });
   for (const c of chapters) {
@@ -433,13 +440,13 @@ export async function postComment(input: unknown): Promise<ActionResult> {
   const parsed = commentSchema.safeParse(input);
   if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "invalid" };
   const { seriesSlug, chapterNumber, body } = parsed.data;
-  const series = await db.series.findUnique({ where: { slug: seriesSlug }, select: { id: true, slug: true } });
+  const series = await db.series.findUnique({ where: { slug: seriesSlug, deletedAt: null }, select: { id: true, slug: true } });
   if (!series) return { ok: false, error: "not_found" };
   let chapterId: string | null = null;
   if (chapterNumber) {
     const now = new Date();
     const chapter = await db.chapter.findFirst({
-      where: { seriesId: series.id, number: chapterNumber, workflow: "published", OR: [{ scheduledFor: null }, { scheduledFor: { lte: now } }] },
+      where: { deletedAt: null, series: { deletedAt: null }, seriesId: series.id, number: chapterNumber, workflow: "published", OR: [{ scheduledFor: null }, { scheduledFor: { lte: now } }] },
       select: { id: true },
     });
     if (!chapter) return { ok: false, error: "not_found" };
@@ -460,7 +467,7 @@ export async function reportComment(input: unknown): Promise<ActionResult> {
   if (!profile) return { ok: false, error: "unauthenticated" };
   const parsed = reportSchema.safeParse(input);
   if (!parsed.success) return { ok: false, error: "invalid" };
-  const comment = await db.comment.findUnique({ where: { id: parsed.data.commentId }, select: { id: true, status: true, seriesId: true } });
+  const comment = await db.comment.findUnique({ where: { id: parsed.data.commentId, series: { deletedAt: null }, OR: [{ chapterId: null }, { chapter: { deletedAt: null } }] }, select: { id: true, status: true, seriesId: true } });
   if (!comment) return { ok: false, error: "not_found" };
   await db.commentReport.upsert({
     where: { commentId_profileId: { commentId: comment.id, profileId: profile.id } },
@@ -491,7 +498,7 @@ export async function toggleCommentLike(
   const parsed = likeSchema.safeParse(input);
   if (!parsed.success) return { ok: false, error: "invalid" };
   const comment = await db.comment.findUnique({
-    where: { id: parsed.data.commentId },
+    where: { id: parsed.data.commentId, series: { deletedAt: null }, OR: [{ chapterId: null }, { chapter: { deletedAt: null } }] },
     select: {
       id: true,
       status: true,
@@ -533,7 +540,7 @@ export async function setRating(input: unknown): Promise<ActionResult & { rating
   if (!profile) return { ok: false, error: "unauthenticated" };
   const parsed = ratingSchema.safeParse(input);
   if (!parsed.success) return { ok: false, error: "invalid" };
-  const series = await db.series.findUnique({ where: { slug: parsed.data.seriesSlug }, select: { id: true, slug: true } });
+  const series = await db.series.findUnique({ where: { slug: parsed.data.seriesSlug, deletedAt: null }, select: { id: true, slug: true } });
   if (!series) return { ok: false, error: "not_found" };
   await db.rating.upsert({
     where: { profileId_seriesId: { profileId: profile.id, seriesId: series.id } },
@@ -582,9 +589,9 @@ export async function moderateComment(input: unknown): Promise<ActionResult> {
   }
   const parsed = moderationSchema.safeParse(input);
   if (!parsed.success) return { ok: false, error: "invalid" };
-  const comment = await db.comment.findUnique({ where: { id: parsed.data.commentId }, select: { series: { select: { slug: true } } } });
+  const comment = await db.comment.findUnique({ where: { id: parsed.data.commentId, series: { deletedAt: null }, OR: [{ chapterId: null }, { chapter: { deletedAt: null } }] }, select: { series: { select: { slug: true } } } });
   if (!comment) return { ok: false, error: "not_found" };
-  await db.comment.update({ where: { id: parsed.data.commentId }, data: { status: parsed.data.status } });
+  await db.comment.update({ where: { id: parsed.data.commentId, series: { deletedAt: null }, OR: [{ chapterId: null }, { chapter: { deletedAt: null } }] }, data: { status: parsed.data.status } });
   revalidatePath("/admin/moderation");
   revalidatePath(`/series/${comment.series.slug}`);
   return { ok: true };
@@ -713,7 +720,7 @@ export async function setSeriesAssignment(input: unknown): Promise<ActionResult>
             return { ok: false, error: "forbidden" };
           }
           const [series, target] = await Promise.all([
-            tx.series.findUnique({ where: { id: seriesId }, select: { id: true } }),
+            tx.series.findUnique({ where: { id: seriesId, deletedAt: null }, select: { id: true } }),
             tx.profile.findUnique({ where: { id: profileId }, select: { id: true, role: true } }),
           ]);
           if (!series || !target) return { ok: false, error: "not_found" };

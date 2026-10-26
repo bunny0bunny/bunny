@@ -92,6 +92,7 @@ test("public repeated signup never overwrites existing password or discloses exi
     email: "new-reader@bunny.test",
     nickname: "تكرار التسجيل",
     password: "DifferentPassword456!",
+    next: "/explore",
   });
 
   expect(repeatResult.ok).toBe(true);
@@ -214,7 +215,9 @@ test("team invitation: existing verified account requires matching session and n
 
   const mailbox = await accountService.getLocalMailbox(adminUser.id);
   const mail = mailbox.find((m) => m.to === "existing-invitee@bunny.test");
-  const rawToken = mail?.text.match(/token=([a-f0-9]+)/)![1]!;
+  const match = mail?.text.match(/token=([a-f0-9]+)/);
+  if (!match) throw new Error("Invitation verification link missing");
+  const rawToken = match[1];
 
   // Wrong session fails
   const wrongAccept = await withActor(readerUser.id, () =>

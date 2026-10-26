@@ -55,15 +55,15 @@ function affinityFromRatings(value: number): number {
 export async function getForYouSeries(profileId: string, limit = 8): Promise<ForYouItem[]> {
   const [progress, library, ratings] = await Promise.all([
     db.readingProgress.findMany({
-      where: { profileId },
+      where: { profileId, chapter: { deletedAt: null, series: { deletedAt: null } } },
       select: { seriesId: true, percent: true, completed: true, updatedAt: true },
     }),
     db.libraryItem.findMany({
-      where: { profileId, shelf: { in: ["reading", "finished"] } },
+      where: { profileId, series: { deletedAt: null }, shelf: { in: ["reading", "finished"] } },
       select: { seriesId: true },
     }),
     db.rating.findMany({
-      where: { profileId },
+      where: { profileId, series: { deletedAt: null } },
       select: { seriesId: true, value: true },
     }),
   ]);
@@ -77,7 +77,7 @@ export async function getForYouSeries(profileId: string, limit = 8): Promise<For
   if (historyIds.size < 2) return [];
 
   const historyRows = await db.series.findMany({
-    where: { id: { in: [...historyIds] } },
+    where: { deletedAt: null, id: { in: [...historyIds] } },
     select: { id: true, titleAr: true, titleOriginal: true, genresJson: true },
   });
   const history: HistorySeries[] = historyRows.map((s) => ({
@@ -113,7 +113,7 @@ export async function getForYouSeries(profileId: string, limit = 8): Promise<For
 
   // ── candidates: untouched published series ──────────────────────
   const rows = await db.series.findMany({
-    where: { id: { notIn: [...historyIds] } },
+    where: { deletedAt: null, id: { notIn: [...historyIds] } },
     include: cardInclude,
   });
   const candidates = rows.map(toCard).filter((c) => c.chapterCount > 0);

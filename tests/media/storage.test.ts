@@ -88,3 +88,25 @@ test("Node early 412 responses reject and cancel the streamed producer", async (
   const db = createS3Storage({ accountId: "a".repeat(32), accessKeyId: "test-access", secretAccessKey: "test-secret", bucketName: "private-media" }, async () => new Response(null, { status: 412 }));
   await expect(db.putSource(key, stream(pdf), pdf.length)).rejects.toThrow("already exists");
 });
+test("S3 cover listing signs scoped pagination and refuses incomplete manifests", async () => {
+  const prefix = "media/test/covers-series123/";
+  let xml = '<ListBucketResult><IsTruncated>true</IsTruncated><Contents><Key>media/test/covers-series123/old.webp</Key></Contents><NextContinuationToken>a&amp;b</NextContinuationToken></ListBucketResult>';
+  const storage = createS3Storage({ accountId: "a".repeat(32), accessKeyId: "test-access", secretAccessKey: "test-secret", bucketName: "private-media" }, async input => {
+    const request = input as Request, url = new URL(request.url);
+    expect(request.method).toBe("GET"); expect(url.searchParams.get("prefix")).toBe(prefix);
+    expect(url.searchParams.get("continuation-token")).toBe("previous");
+    expect(request.headers.get("authorization")).toContain("AWS4-HMAC-SHA256");
+    return new Response(xml);
+  });
+  expect(await storage.listObjects!(prefix, "previous")).toEqual({ keys: [prefix + "old.webp"], cursor: "a&b" });
+  for (const invalid of ['<Error/>', '<ListBucketResult><IsTruncated>true</IsTruncated></ListBucketResult>', '<ListBucketResult/>']) {
+    xml = invalid; await expect(storage.listObjects!(prefix, "previous")).rejects.toThrow("Invalid storage listing");
+  }
+  await expect(storage.listObjects!("media/test/", "previous")).rejects.toThrow();
+});
+
+test("binding cover listing cannot silently truncate its manifest", async () => {
+  const prefix = "media/test/covers-series123/";
+  const storage = createBindingStorage({ put: async () => null, delete: async () => {}, list: async () => ({ objects: [], truncated: true }) }, async () => "signed-url");
+  await expect(storage.listObjects!(prefix)).rejects.toThrow("Invalid storage listing");
+});

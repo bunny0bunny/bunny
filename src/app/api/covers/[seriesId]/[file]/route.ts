@@ -7,7 +7,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ ser
   if (!/^[a-zA-Z0-9-]{1,96}$/.test(seriesId) || !/^[a-zA-Z0-9-]{1,96}\.(webp|jpg)$/.test(file)) return new Response(null, { status: 404, headers });
   try {
     return await withDatabaseScope(async () => {
-      const series = await db.series.findUnique({ where: { id: seriesId }, select: { coverPath: true } });
+      const series = await db.series.findUnique({ where: { id: seriesId, deletedAt: null }, select: { coverPath: true } });
       const key = currentCoverKey(seriesId, file, series?.coverPath ?? '', process.env.MEDIA_STORAGE_PREFIX || 'prod');
       if (!key) return new Response(null, { status: 404, headers });
       return new Response(null, { status: 307, headers: { ...headers, Location: await (await getMediaStorage()).signGet(key, { expiresIn: 300 }) } });

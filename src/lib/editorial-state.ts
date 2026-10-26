@@ -28,6 +28,6 @@ export function withWorkingState<T extends WorkingChapter>(chapter: T) {
   };
 }
 
-export function isPublicChapter(chapter: { workflow: string; scheduledFor: Date | null }, now = new Date()) {
-  return chapter.workflow === 'published' && (!chapter.scheduledFor || chapter.scheduledFor <= now);
+export function isPublicChapter(chapter: { workflow: string; scheduledFor: Date | null; deletedAt?: Date | null; series?: object }, now = new Date()) {
+  return !chapter.deletedAt && !(chapter.series && 'deletedAt' in chapter.series && chapter.series.deletedAt) && chapter.workflow === 'published' && (!chapter.scheduledFor || chapter.scheduledFor <= now);
 }

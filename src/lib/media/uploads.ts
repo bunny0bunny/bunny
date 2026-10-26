@@ -33,7 +33,7 @@ async function event(tx: Tx, actor: Actor, revisionId: string, chapterId: string
 }
 async function active(tx: Tx, actor: Actor, id: string, creator = true) {
   const upload = await tx.chapterUpload.findUnique({ where: { id }, include: { revision: { include: { chapter: true } } } });
-  if (!upload) return { error: "not_found" } as const;
+  if (!upload || upload.revision.chapter.deletedAt) return { error: "not_found" } as const;
   if (!await checkStaffSeriesAccess(tx, actor, upload.revision.chapter.seriesId) || (creator && upload.createdById !== actor.id)) return { error: "forbidden" } as const;
   if (upload.expiresAt.getTime() <= Date.now() && ["uploading", "failed"].includes(upload.state)) {
     await tx.chapterUpload.update({ where: { id }, data: { state: "cancelled", errorCode: "expired" } });
@@ -144,11 +144,17 @@ export async function writeUploadAsset(id: string, index: number, request: Reque
     const storage = await getMediaStorage();
     const stored = index === -1 ? await storage.putSource(data.asset!.objectKey, request.body!, length, data.sourceSha256) : await storage.putPage(data.asset!.objectKey, bytes!, mime as "image/webp" | "image/jpeg");
     if (stored.bytes !== length) throw new Error("invalid_length");
-    return await withSerializableTx(async (tx, actor) => {
+    const finalized = await withSerializableTx(async (tx, actor) => {
       const found = await active(tx, actor, id); if (found.error) return fail(found.error);
       const asset = await tx.mediaAsset.findUnique({ where: { id: data.asset!.id } }); if (!asset || asset.pageIndex !== index) return fail("conflict");
       await tx.mediaAsset.update({ where: { id: asset.id }, data: { readyAt: new Date() } }); return { ok: true };
     }, { invalidate: false });
+    // A definite rejected callback cannot attach this immutable reservation.
+    // Ambiguous transaction exceptions retain bytes for journal maintenance.
+    if (!finalized.ok && ["not_found", "forbidden"].includes(finalized.error ?? "")) {
+      try { await storage.deleteObject(data.asset!.objectKey); } catch { /* durable manifest retries cleanup */ }
+    }
+    return finalized;
   } catch {
     await withSerializableTx(async (tx, actor) => { const found = await active(tx, actor, id); if (found.error) return fail(found.error); const asset = await tx.mediaAsset.findUnique({ where: { id: data.asset!.id } }); if (!asset || asset.pageIndex !== index) return fail("conflict"); await tx.chapterUpload.update({ where: { id }, data: { state: "failed", errorCode: `storage_failed:${asset.id}` } }); return { ok: true }; }, { invalidate: false });
     return fail("storage_failed");
@@ -158,7 +164,7 @@ export async function completeUpload(id: string, expectedVersion: number): Promi
   if (!enabled()) return fail("disabled");
   return withSerializableTx(async (tx, actor) => {
     const ready = await tx.chapterUpload.findUnique({ where: { id }, include: { revision: { include: { chapter: true } } } });
-    if (ready?.state === "ready") {
+    if (ready?.state === "ready" && !ready.revision.chapter.deletedAt) {
       if (ready.createdById !== actor.id || !await checkStaffSeriesAccess(tx, actor, ready.revision.chapter.seriesId)) return fail("forbidden");
       if (expectedVersion !== ready.revisionVersion || ready.revision.version !== ready.revisionVersion + 1) return fail("conflict");
       return { ok: true, revision: ready.revision };
@@ -190,7 +196,7 @@ export async function uploadStatus(id: string): Promise<EditorialResult> {
     // Resolve expiry here as well, so abandoned sessions can be explicitly cleared by polling.
     const checked = await active(tx, actor, id, false); if (checked.error && !["expired", "conflict"].includes(checked.error)) return fail(checked.error);
     const upload = await tx.chapterUpload.findUnique({ where: { id }, include: { revision: { include: { chapter: true } }, assets: { select: { pageIndex: true, readyAt: true, bytes: true } } } });
-    if (!upload) return fail("not_found"); if (!await checkStaffSeriesAccess(tx, actor, upload.revision.chapter.seriesId)) return fail("forbidden");
+    if (!upload || upload.revision.chapter.deletedAt) return fail("not_found"); if (!await checkStaffSeriesAccess(tx, actor, upload.revision.chapter.seriesId)) return fail("forbidden");
     return { ok: true, data: { status: toUploadStatus(upload) } };
   }, { invalidate: false });
 }

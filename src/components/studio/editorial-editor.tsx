@@ -1,5 +1,6 @@
 "use client";
 
+import { MoveToTrashButton } from "@/components/admin/content-trash-controls";
 import { useUnsavedChanges } from "@/hooks/use-unsaved-changes";
 import { useSessionTextDraft } from "@/hooks/use-session-text-draft";
 import { createSubmissionGate } from "@/lib/unsaved-text";
@@ -629,7 +630,8 @@ export function EditorialEditor({
           )}
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          {isAdmin && <MoveToTrashButton kind="chapter" id={chapter.id} returnTo={`/admin/series/${chapter.seriesId}`} disabled={uploadBusy || hasUnsavedChanges} />}
           {/* If published or withdrawn, allow opening new working draft */}
           {isReadOnlyStatus && (
             <Button

@@ -9,11 +9,13 @@ export interface MediaStorage {
   putSource(key: string, body: ReadableStream<Uint8Array>, expectedBytes: number, expectedSha256?: string): Promise<{ bytes: number }>;
   signGet(key: string, options?: SignGetOptions): Promise<string>;
   deleteObject(key: string): Promise<void>;
+  listObjects?(prefix: string, cursor?: string): Promise<{ keys: string[]; cursor?: string }>;
 }
 type HttpMetadata = { contentType: string; cacheControl: string; contentDisposition?: string };
 export interface MediaBinding {
   put(key: string, value: Uint8Array | ReadableStream<Uint8Array>, options: { onlyIf: { etagDoesNotMatch: string }; httpMetadata: HttpMetadata }): Promise<unknown | null>;
   delete(key: string): Promise<void>;
+  list?(options: { prefix: string; cursor?: string; limit: number }): Promise<{ objects: { key: string }[]; truncated: boolean; cursor?: string }>;
 }
 type BytePipe = { readable: ReadableStream<Uint8Array>; writable: WritableStream<Uint8Array> };
 type FixedLengthFactory = (bytes: number) => BytePipe;
@@ -24,6 +26,9 @@ export function validateMediaKey(key: string): void {
   if (!/^media\/[A-Za-z0-9][A-Za-z0-9_-]{0,63}\/[A-Za-z0-9][A-Za-z0-9-]{0,127}\/[A-Za-z0-9][A-Za-z0-9-]{0,127}\.(webp|jpg|pdf)$/.test(key)) {
     throw new Error("Invalid media object key");
   }
+}
+export function validateManagedPrefix(prefix: string): void {
+  if (!/^media\/[A-Za-z0-9][A-Za-z0-9_-]{0,63}\/covers-[A-Za-z0-9][A-Za-z0-9-]{0,95}\/$/.test(prefix)) throw new Error("Invalid managed cover prefix");
 }
 function validatePage(key: string, bytes: Uint8Array, mime: PageMime) {
   validateMediaKey(key);
@@ -108,6 +113,13 @@ export function createBindingStorage(binding: MediaBinding, signGet: MediaStorag
     },
     async signGet(key, options) { validateMediaKey(key); return signGet(key, options); },
     async deleteObject(key) { validateMediaKey(key); await binding.delete(key); },
+    async listObjects(prefix, cursor) {
+      validateManagedPrefix(prefix);
+      if (!binding.list) throw new Error("Storage listing unavailable");
+      const page = await binding.list({ prefix, cursor, limit: 500 });
+      if (page.truncated && !page.cursor) throw new Error("Invalid storage listing");
+      return { keys: page.objects.map(object => object.key), cursor: page.truncated ? page.cursor : undefined };
+    },
   };
 }
 
@@ -140,6 +152,21 @@ export function createS3Storage(config: S3MediaConfig, fetchRequest: Fetch = fet
       url.searchParams.set("response-cache-control", "private, no-store");
       if (key.endsWith(".pdf") || options.downloadName !== undefined) url.searchParams.set("response-content-disposition", attachment(options.downloadName ?? "source.pdf"));
       return (await client.sign(url, { method: "GET", aws: { signQuery: true } })).url;
+    },
+    async listObjects(prefix, cursor) {
+      validateManagedPrefix(prefix);
+      const url = new URL(`https://${config.accountId}.r2.cloudflarestorage.com/${config.bucketName}`);
+      url.searchParams.set("list-type", "2"); url.searchParams.set("prefix", prefix); url.searchParams.set("max-keys", "500");
+      if (cursor) url.searchParams.set("continuation-token", cursor);
+      const response = await fetchRequest(await client.sign(url, { method: "GET" }));
+      if (!response.ok) { await response.body?.cancel(); throw new Error("Storage listing failed"); }
+      const xml = await response.text();
+      if (!/<ListBucketResult(?:\s[^>]*)?>/.test(xml) || !/<IsTruncated>(?:true|false)<\/IsTruncated>/.test(xml)) throw new Error("Invalid storage listing");
+      const decode = (value: string) => value.replace(/&(?:amp|lt|gt|quot|apos);/g, entity => ({ '&amp;': '&', '&lt;': '<', '&gt;': '>', '&quot;': '"', '&apos;': "'" })[entity]!);
+      const keys = [...xml.matchAll(/<Key>([^<]*)<\/Key>/g)].map(match => decode(match[1]));
+      const next = /<NextContinuationToken>([^<]*)<\/NextContinuationToken>/.exec(xml);
+      if (/<IsTruncated>true<\/IsTruncated>/.test(xml) && !next) throw new Error("Invalid storage listing");
+      return { keys, cursor: /<IsTruncated>true<\/IsTruncated>/.test(xml) && next ? decode(next[1]) : undefined };
     },
     async deleteObject(key) {
       const response = await fetchRequest(await client.sign(objectUrl(key), { method: "DELETE" }));

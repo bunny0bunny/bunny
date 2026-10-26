@@ -191,6 +191,8 @@ model AccountRateLimit {
 
 model Series {
   id            String             @id @default(cuid())
+  deletedAt     DateTime?
+  trashBatchId  String?
   slug          String             @unique
   titleAr       String
   titleOriginal String?
@@ -221,6 +223,8 @@ model Series {
   assignments   SeriesAssignment[]
 
   @@index([category])
+  @@index([deletedAt])
+  @@index([trashBatchId])
 }
 
 model SeriesAssignment {
@@ -237,6 +241,8 @@ model SeriesAssignment {
 
 model Chapter {
   id               String           @id @default(cuid())
+  deletedAt        DateTime?
+  trashBatchId     String?
   seriesId         String
   number           Int
   titleAr          String
@@ -258,6 +264,34 @@ model Chapter {
   editorialEvents  ChapterEditorialEvent[]
 
   @@unique([seriesId, number])
+  @@index([deletedAt])
+  @@index([trashBatchId])
+}
+
+// Durable deletion journal: intentionally survives purging the owned content.
+model ContentTrash {
+  id             String   @id @default(cuid())
+  activeKey      String?  @unique
+  entityType     String
+  entityId       String
+  seriesId       String?
+  title          String
+  deletedById    String?
+  deletedAt      DateTime @default(now())
+  purgeAfter     DateTime
+  state          String   @default("trashed")
+  version        Int      @default(1)
+  objectsJson    Json     @default("[]")
+  detailsJson    Json     @default("{}")
+  errorCode      String?
+  purgeStartedAt DateTime?
+  purgedAt       DateTime?
+  restoredAt     DateTime?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  @@index([state, purgeAfter])
+  @@index([entityType, entityId])
+  @@index([seriesId])
 }
 
 enum ChapterRevisionStatus {

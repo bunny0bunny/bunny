@@ -1,3 +1,4 @@
+import { MoveToTrashButton } from "@/components/admin/content-trash-controls";
 import { getWorkTitle } from '@/lib/work-title';
 import { EDITORIAL_LABELS, isPublicChapter } from "@/lib/editorial-state";
 import Link from "next/link";
@@ -28,7 +29,8 @@ export default async function AdminSeriesDetailPage({
   const staff = isAdmin ? await getAssignableStaff() : [];
   const assignedProfileIds = (s as any).assignments?.map((a: any) => a.profileId) ?? [];
 
-  const publishedCount = s.chapters.filter((c) => isPublicChapter(c)).length;
+  const activeChapters = s.chapters.filter((c) => !c.deletedAt);
+  const publishedCount = activeChapters.filter((c) => isPublicChapter(c)).length;
 
   return (
     <main className="mx-auto max-w-5xl p-4 pt-6 sm:p-6">
@@ -47,7 +49,7 @@ export default async function AdminSeriesDetailPage({
           <div>
             <h1 className="text-xl font-bold text-foreground">{getWorkTitle(s)}</h1>
             <p className="mt-0.5 flex items-center gap-2 text-xs text-muted-foreground">
-              {FORMAT_LABELS[s.format as Format]} · {STATUS_LABELS[s.status as SeriesStatus]} · {publishedCount}/{s.chapters.length} فصل منشور · {s.reads.toLocaleString("ar-EG")} قراءة
+              {FORMAT_LABELS[s.format as Format]} · {STATUS_LABELS[s.status as SeriesStatus]} · {publishedCount}/{activeChapters.length} فصل منشور · {s.reads.toLocaleString("ar-EG")} قراءة
             </p>
           </div>
         </div>
@@ -84,7 +86,7 @@ export default async function AdminSeriesDetailPage({
               </tr>
             </thead>
             <tbody>
-              {s.chapters.map((c) => (
+              {activeChapters.map((c) => (
                 <tr key={c.id} className="border-b border-border/40 last:border-0">
                   <td className="p-3">
                     <p className="font-medium text-foreground">الفصل {c.number}: {c.workingTitleAr}</p>
@@ -129,8 +131,8 @@ export default async function AdminSeriesDetailPage({
               ))}
             </tbody>
           </table>
-          {s.chapters.length === 0 && (
-            <p className="px-4 py-10 text-center text-sm text-muted-foreground">لا فصول بعد — أنشئ أول فصل.</p>
+          {activeChapters.length === 0 && (
+            <p className="px-4 py-10 text-center text-sm text-muted-foreground">لا فصول نشطة حاليًا. يمكنك إنشاء فصل جديد أو مراجعة السلة.</p>
           )}
         </div>
       </section>
@@ -173,6 +175,7 @@ export default async function AdminSeriesDetailPage({
           </div>
         </section>
       )}
+      {isAdmin && <section className="mt-8 space-y-3 rounded-2xl border border-danger/40 p-5" aria-label="نقل العمل إلى السلة"><h2 className="font-bold text-danger">سلة المحتوى</h2><p className="text-sm leading-7 text-muted-foreground">نقل العمل وفصوله النشطة إلى السلة يخفيها فورًا ويتيح استعادتها كمسودات خلال 30 يومًا.</p><MoveToTrashButton kind="series" id={s.id} returnTo="/admin/series" /></section>}
     </main>
   );
 }

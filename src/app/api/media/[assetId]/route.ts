@@ -8,17 +8,17 @@ export async function GET(_request: Request, { params }: { params: Promise<{ ass
   if (!/^[a-z0-9]+$/.test(assetId)) return uploadResponse({ ok: false, error: "not_found" });
   try {
     return await withDatabaseScope(async () => {
-    const asset = await db.mediaAsset.findUnique({ where: { id: assetId }, include: { chapter: true, upload: true } });
-    if (!asset?.readyAt || asset.pageIndex < -1) return uploadResponse({ ok: false, error: "not_found" });
+    const asset = await db.mediaAsset.findUnique({ where: { id: assetId }, include: { chapter: { include: { series: true } }, upload: true } });
+    if (!asset?.readyAt || asset.chapter.deletedAt || asset.chapter.series.deletedAt || asset.pageIndex < -1) return uploadResponse({ ok: false, error: "not_found" });
     let authorized = false;
     // Public access follows current projection membership, never historical snapshots.
     if (asset.pageIndex >= 0 && !asset.chapter.isPremiumDemo && asset.chapter.workflow === "published" && (!asset.chapter.scheduledFor || asset.chapter.scheduledFor <= new Date())) {
-      authorized = Boolean(await db.chapterPage.findFirst({ where: { chapterId: asset.chapterId, imagePath: `/api/media/${asset.id}`, chapter: { workflow: "published", isPremiumDemo: false, OR: [{ scheduledFor: null }, { scheduledFor: { lte: new Date() } }] } }, select: { id: true } }));
+      authorized = Boolean(await db.chapterPage.findFirst({ where: { chapterId: asset.chapterId, imagePath: `/api/media/${asset.id}`, chapter: { deletedAt: null, series: { deletedAt: null }, workflow: "published", isPremiumDemo: false, OR: [{ scheduledFor: null }, { scheduledFor: { lte: new Date() } }] } }, select: { id: true } }));
     }
     if (!authorized) {
       const result = await withSerializableTx(async (tx, actor) => {
         const current = await tx.mediaAsset.findUnique({ where: { id: assetId }, include: { chapter: true } });
-        return { ok: Boolean(current?.readyAt && await checkStaffSeriesAccess(tx, actor, current.chapter.seriesId)) };
+        return { ok: Boolean(current?.readyAt && !current.chapter.deletedAt && await checkStaffSeriesAccess(tx, actor, current.chapter.seriesId)) };
       }, { invalidate: false });
       if (!result.ok) return uploadResponse({ ok: false, error: "forbidden" });
     }

@@ -1,4 +1,5 @@
 import "server-only";
+import type { Prisma } from "@prisma/client";
 import { getWorkTitle } from '@/lib/work-title';
 import { EDITORIAL_LABELS, latestRevisionSelect, withWorkingState, isPublicChapter } from "@/lib/editorial-state";
 import { getServerSession } from "next-auth";
@@ -152,6 +153,8 @@ export const cardInclude = {
  */
 export function liveChapterWhere() {
   return {
+    deletedAt: null,
+    series: { deletedAt: null },
     workflow: "published" as Workflow,
     OR: [{ scheduledFor: null }, { scheduledFor: { lte: new Date() } }],
   };
@@ -283,10 +286,10 @@ export type ChapterListItem = {
 
 export async function getSeriesBySlug(slug: string) {
   const s = await db.series.findUnique({
-    where: { slug },
+    where: { slug, deletedAt: null },
     include: {
       chapters: {
-        where: { workflow: "published" as Workflow },
+        where: { deletedAt: null, workflow: "published" as Workflow },
         orderBy: { number: "asc" as const },
         include: { _count: { select: { pages: true } } },
       },
@@ -334,13 +337,15 @@ export async function getRelatedSeries(seriesId: string, genres: string[], limit
 /* ------------------------------------------------------------------ */
 
 export async function getChapterForReading(seriesSlug: string, chapterNumber: number) {
-  const series = await db.series.findUnique({ where: { slug: seriesSlug } });
+  const series = await db.series.findUnique({ where: { slug: seriesSlug, deletedAt: null } });
   if (!series) return null;
   const now = new Date();
   const chapter = await db.chapter.findFirst({
     where: {
       seriesId: series.id,
       number: chapterNumber,
+      deletedAt: null,
+      series: { deletedAt: null },
       workflow: "published",
       OR: [{ scheduledFor: null }, { scheduledFor: { lte: now } }],
     },
@@ -375,7 +380,7 @@ export async function getChapterForReading(seriesSlug: string, chapterNumber: nu
 export async function getReaderProgress(profileId: string | null, chapterId: string) {
   if (!profileId) return null;
   const row = await db.readingProgress.findUnique({
-    where: { profileId_chapterId: { profileId, chapterId } },
+    where: { profileId_chapterId: { profileId, chapterId }, chapter: liveChapterWhere() },
     select: { pageIndex: true, percent: true, updatedAt: true },
   });
   return row ? { ...row, updatedAt: row.updatedAt.getTime() } : null;
@@ -384,7 +389,7 @@ export async function getReaderProgress(profileId: string | null, chapterId: str
 export async function getProgressMap(profileId: string | null, seriesId: string) {
   if (!profileId) return new Map<string, { pageIndex: number; percent: number; completed: boolean }>();
   const rows = await db.readingProgress.findMany({
-    where: { profileId, seriesId },
+    where: { profileId, seriesId, chapter: liveChapterWhere() },
     select: { chapterId: true, pageIndex: true, percent: true, completed: true },
   });
   return new Map(rows.map((r) => [r.chapterId, { pageIndex: r.pageIndex, percent: r.percent, completed: r.completed }]));
@@ -454,14 +459,28 @@ export async function getFeaturedCollections() {
 /* Admin queries (role already enforced by caller)                     */
 /* ------------------------------------------------------------------ */
 
+// Analytics stores a scalar chapterId without a Chapter relation. Filter those
+// IDs explicitly while retaining account events that have no content target.
+async function liveAnalyticsWhere(): Promise<Prisma.AnalyticsEventWhereInput> {
+  const hidden = await db.chapter.findMany({
+    where: { OR: [{ deletedAt: { not: null } }, { series: { deletedAt: { not: null } } }] },
+    select: { id: true },
+  });
+  return { AND: [
+    { OR: [{ seriesId: null }, { series: { deletedAt: null } }] },
+    { OR: [{ chapterId: null }, { chapterId: { notIn: hidden.map(chapter => chapter.id) } }] },
+  ] };
+}
+
 export async function getAdminOverview() {
   const profile = await currentProfileOrNull();
   if (!profile || profile.role !== "admin") return null;
 
+  const analyticsWhere = await liveAnalyticsWhere();
   const [seriesCount, chapters, profileCount, eventCount] = await Promise.all([
-    db.series.count(),
-    db.chapter.findMany({ select: { workflow: true, scheduledFor: true, revisions: { ...latestRevisionSelect, select: { status: true } } } }),
-    db.profile.count(), db.analyticsEvent.count(),
+    db.series.count({ where: { deletedAt: null } }),
+    db.chapter.findMany({ where: { deletedAt: null, series: { deletedAt: null } }, select: { workflow: true, scheduledFor: true, revisions: { ...latestRevisionSelect, select: { status: true } } } }),
+    db.profile.count(), db.analyticsEvent.count({ where: analyticsWhere }),
   ]);
   const chapterCount = chapters.length;
   const publishedCount = chapters.filter((c) => isPublicChapter(c)).length;
@@ -472,6 +491,7 @@ export async function getAdminOverview() {
   const approvedCount = statusCount("approved");
   const scheduledCount = statusCount("scheduled");
   const recentEvents = await db.analyticsEvent.findMany({
+    where: analyticsWhere,
     orderBy: { createdAt: "desc" },
     take: 8,
     include: {
@@ -479,7 +499,7 @@ export async function getAdminOverview() {
       series: { select: { titleAr: true, titleOriginal: true, slug: true } },
     },
   });
-  const topSeries = await db.series.findMany({ orderBy: { reads: "desc" }, take: 5 });
+  const topSeries = await db.series.findMany({ where: { deletedAt: null }, orderBy: { reads: "desc" }, take: 5 });
   return {
     seriesCount,
     chapterCount,
@@ -502,7 +522,7 @@ export async function getAdminSeries(filters: AdminSeriesFilters) {
   const profile = await currentProfileOrNull();
   if (!profile || !isStaffRole(profile.role)) return [];
 
-  const where: Record<string, unknown> = {};
+  const where: Record<string, unknown> = { deletedAt: null };
   if (profile.role !== "admin") {
     where.assignments = { some: { profileId: profile.id } };
   }
@@ -513,7 +533,7 @@ export async function getAdminSeries(filters: AdminSeriesFilters) {
   return db.series.findMany({
     where,
     orderBy: { updatedAt: "desc" },
-    include: { _count: { select: { chapters: true } } },
+    include: { _count: { select: { chapters: { where: { deletedAt: null } } } } },
   });
 }
 
@@ -523,7 +543,7 @@ export async function getAdminSeriesById(id: string) {
 
   if (profile.role === "admin") {
     const series = await db.series.findUnique({
-      where: { id },
+      where: { id, deletedAt: null },
       include: {
         chapters: {
           orderBy: { number: "asc" },
@@ -543,6 +563,7 @@ export async function getAdminSeriesById(id: string) {
   const series = await db.series.findFirst({
     where: {
       id,
+      deletedAt: null,
       assignments: {
         some: {
           profileId: profile.id,
@@ -564,12 +585,12 @@ export async function getAdminChapters(filters: { workflow?: string; format?: st
   const profile = await currentProfileOrNull();
   if (!profile || !isStaffRole(profile.role)) return [];
 
-  const chapterWhere: Record<string, unknown> = {};
+  const chapterWhere: Record<string, unknown> = { deletedAt: null };
   if (filters.seriesId) {
     chapterWhere.seriesId = filters.seriesId;
   }
 
-  const seriesWhere: Record<string, unknown> = {};
+  const seriesWhere: Record<string, unknown> = { deletedAt: null };
   if (filters.format && (FORMATS as readonly string[]).includes(filters.format)) seriesWhere.format = filters.format;
   if (profile.role !== "admin") {
     seriesWhere.assignments = { some: { profileId: profile.id } };
@@ -595,9 +616,9 @@ export async function getStaffOverview() {
   const profile = await currentProfileOrNull();
   if (!profile || !isStaffRole(profile.role)) return null;
   const series = await db.series.findMany({
-    where: profile.role === "admin" ? {} : { assignments: { some: { profileId: profile.id } } },
+    where: { deletedAt: null, ...(profile.role === "admin" ? {} : { assignments: { some: { profileId: profile.id } } }) },
     orderBy: { updatedAt: "desc" },
-    include: { _count: { select: { chapters: true } } },
+    include: { _count: { select: { chapters: { where: { deletedAt: null } } } } },
   });
   return { profile, series };
 }
@@ -606,7 +627,7 @@ export async function getSeriesAssignments(seriesId: string) {
   const profile = await currentProfileOrNull();
   if (!profile || profile.role !== "admin") return [];
   return db.seriesAssignment.findMany({
-    where: { seriesId },
+    where: { seriesId, series: { deletedAt: null } },
     include: {
       profile: { select: { id: true, email: true, nickname: true, role: true } },
     },
@@ -642,7 +663,7 @@ export async function getLibrary(profileId: string, shelf?: string): Promise<Lib
       ? { profileId, shelf: shelf as "reading" | "plan" | "finished" }
       : { profileId };
   const items = await db.libraryItem.findMany({
-    where: shelfFilter,
+    where: { ...shelfFilter, series: { deletedAt: null } },
     orderBy: { updatedAt: "desc" },
     include: { series: { include: cardInclude } },
   });
@@ -672,7 +693,7 @@ export async function getLibrary(profileId: string, shelf?: string): Promise<Lib
 }
 
 export async function getLibrarySeriesIds(profileId: string): Promise<Set<string>> {
-  const rows = await db.libraryItem.findMany({ where: { profileId }, select: { seriesId: true } });
+  const rows = await db.libraryItem.findMany({ where: { profileId, series: { deletedAt: null } }, select: { seriesId: true } });
   return new Set(rows.map((r) => r.seriesId));
 }
 
@@ -687,7 +708,7 @@ export type UpdatesFeedItem = {
 };
 
 export async function getLibraryUpdatesFeed(profileId: string, limit = 40): Promise<UpdatesFeedItem[]> {
-  const items = await db.libraryItem.findMany({ where: { profileId }, select: { seriesId: true } });
+  const items = await db.libraryItem.findMany({ where: { profileId, series: { deletedAt: null } }, select: { seriesId: true } });
   if (items.length === 0) return [];
   const seriesIds = items.map((i) => i.seriesId);
   const chapters = await db.chapter.findMany({
@@ -733,7 +754,7 @@ export async function getVisibleComments(
   limit = 30
 ): Promise<CommentView[]> {
   const rows = await db.comment.findMany({
-    where: { seriesId, chapterId, status: "visible" },
+    where: { seriesId, chapterId, series: { deletedAt: null }, OR: [{ chapterId: null }, { chapter: liveChapterWhere() }], status: "visible" },
     orderBy: { createdAt: "desc" },
     take: limit,
     include: {
@@ -756,25 +777,25 @@ export async function getVisibleComments(
 }
 
 export async function getCommentCount(seriesId: string) {
-  return db.comment.count({ where: { seriesId, status: "visible" } });
+  return db.comment.count({ where: { seriesId, series: { deletedAt: null }, OR: [{ chapterId: null }, { chapter: liveChapterWhere() }], status: "visible" } });
 }
 
 export async function getUserRating(profileId: string | null, seriesId: string) {
   if (!profileId) return null;
   return db.rating.findUnique({
-    where: { profileId_seriesId: { profileId, seriesId } },
+    where: { profileId_seriesId: { profileId, seriesId }, series: { deletedAt: null } },
     select: { value: true },
   });
 }
 
 export async function getProfileStats(profileId: string) {
   const [libraryCount, chaptersRead, commentCount, ratingCount, recentProgress] = await Promise.all([
-    db.libraryItem.count({ where: { profileId } }),
-    db.readingProgress.count({ where: { profileId, completed: true } }),
-    db.comment.count({ where: { profileId, status: "visible" } }),
-    db.rating.count({ where: { profileId } }),
+    db.libraryItem.count({ where: { profileId, series: { deletedAt: null } } }),
+    db.readingProgress.count({ where: { profileId, completed: true, chapter: liveChapterWhere() } }),
+    db.comment.count({ where: { profileId, status: "visible", series: { deletedAt: null }, OR: [{ chapterId: null }, { chapter: { deletedAt: null } }] } }),
+    db.rating.count({ where: { profileId, series: { deletedAt: null } } }),
     db.readingProgress.findMany({
-      where: { profileId },
+      where: { profileId, chapter: liveChapterWhere() },
       orderBy: { updatedAt: "desc" },
       take: 5,
       include: {
@@ -788,7 +809,7 @@ export async function getProfileStats(profileId: string) {
 
 export async function getProfileActivity(profileId: string, limit = 8) {
   return db.analyticsEvent.findMany({
-    where: { profileId },
+    where: { profileId, ...await liveAnalyticsWhere() },
     orderBy: { createdAt: "desc" },
     take: limit,
     include: { series: { select: { slug: true, titleAr: true, titleOriginal: true } } },
@@ -797,7 +818,7 @@ export async function getProfileActivity(profileId: string, limit = 8) {
 
 export async function getFavoriteGenres(profileId: string) {
   const items = await db.libraryItem.findMany({
-    where: { profileId },
+    where: { profileId, series: { deletedAt: null } },
     include: { series: { select: { genresJson: true } } },
   });
   const counts = new Map<string, number>();
@@ -815,7 +836,7 @@ export async function getModerationQueue() {
   }
   const [items, hiddenCount, reportCount] = await Promise.all([
     db.comment.findMany({
-      where: { status: { in: ["flagged", "hidden"] as ("flagged" | "hidden")[] } },
+      where: { series: { deletedAt: null }, OR: [{ chapterId: null }, { chapter: { deletedAt: null } }], status: { in: ["flagged", "hidden"] as ("flagged" | "hidden")[] } },
       orderBy: { updatedAt: "desc" },
       include: {
         profile: { select: { nickname: true, avatarSeed: true } },
@@ -824,7 +845,7 @@ export async function getModerationQueue() {
         reports: { include: { profile: { select: { nickname: true } } } },
       },
     }),
-    db.comment.count({ where: { status: "hidden" } }),
+    db.comment.count({ where: { series: { deletedAt: null }, OR: [{ chapterId: null }, { chapter: { deletedAt: null } }], status: "hidden" } }),
     db.commentReport.count(),
   ]);
   return { items, hiddenCount, reportCount };
@@ -857,6 +878,7 @@ export async function getDashboardActivity(days = 14): Promise<DashboardPoint[]>
   const since = new Date(Date.now() - days * 86400000);
   const events = await db.analyticsEvent.findMany({
     where: {
+      ...await liveAnalyticsWhere(),
       createdAt: { gte: since },
       type: { in: ["read_start", "login", "publish"] as ("read_start" | "login" | "publish")[] },
     },
@@ -879,10 +901,10 @@ export async function getDashboardActivity(days = 14): Promise<DashboardPoint[]>
 
 export async function getCommunityCounts() {
   const [comments, ratings, libraryItems, avg] = await Promise.all([
-    db.comment.count({ where: { status: "visible" } }),
-    db.rating.count(),
-    db.libraryItem.count(),
-    db.rating.aggregate({ _avg: { value: true } }),
+    db.comment.count({ where: { series: { deletedAt: null }, OR: [{ chapterId: null }, { chapter: { deletedAt: null } }], status: "visible" } }),
+    db.rating.count({ where: { series: { deletedAt: null } } }),
+    db.libraryItem.count({ where: { series: { deletedAt: null } } }),
+    db.rating.aggregate({ where: { series: { deletedAt: null } }, _avg: { value: true } }),
   ]);
   return { comments, ratings, libraryItems, avgRating: avg._avg.value ?? 0 };
 }
@@ -914,7 +936,7 @@ export async function getStudioOverview(): Promise<StudioSeriesRow[]> {
   const profile = await currentProfileOrNull();
   if (!profile || !isStaffRole(profile.role)) return [];
 
-  const where: Record<string, unknown> = {};
+  const where: Record<string, unknown> = { deletedAt: null };
   if (profile.role !== "admin") {
     where.assignments = { some: { profileId: profile.id } };
   }
@@ -924,12 +946,12 @@ export async function getStudioOverview(): Promise<StudioSeriesRow[]> {
     orderBy: { reads: "desc" },
     include: {
       _count: { select: { libraryItems: true } },
-      chapters: { select: { id: true, number: true, workflow: true, publishedAt: true, scheduledFor: true } },
+      chapters: { where: { deletedAt: null }, select: { id: true, number: true, workflow: true, publishedAt: true, scheduledFor: true } },
     },
   });
   if (rows.length === 0) return [];
   const [commentCounts, topEvents] = await Promise.all([
-    db.comment.groupBy({ by: ["seriesId"], where: { status: "visible" }, _count: { _all: true } }),
+    db.comment.groupBy({ by: ["seriesId"], where: { series: { deletedAt: null }, OR: [{ chapterId: null }, { chapter: { deletedAt: null } }], status: "visible" }, _count: { _all: true } }),
     db.analyticsEvent.groupBy({
       by: ["seriesId", "chapterId"],
       where: { type: "read_start", chapterId: { not: null } },

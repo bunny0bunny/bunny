@@ -36,7 +36,7 @@ async function loadStudioChapterPage(params: Promise<{ id: string }>) {
 
   // 2. Load chapter with series and check assigned series access
   let chapter = await db.chapter.findUnique({
-    where: { id: chapterId },
+    where: { id: chapterId, deletedAt: null, series: { deletedAt: null } },
     include: {
       series: true,
       revisions: {
@@ -51,7 +51,7 @@ async function loadStudioChapterPage(params: Promise<{ id: string }>) {
     },
   });
 
-  if (!chapter) {
+  if (!chapter || chapter.deletedAt || chapter.series.deletedAt) {
     notFound();
   }
 
@@ -101,7 +101,7 @@ async function loadStudioChapterPage(params: Promise<{ id: string }>) {
   // Opening can initialize/fork snapshots: render the resulting public version
   // and history, including the event just written, rather than the old query.
   chapter = await db.chapter.findUniqueOrThrow({
-    where: { id: chapterId },
+    where: { id: chapterId, deletedAt: null, series: { deletedAt: null } },
     include: { series: true, revisions: { orderBy: { revisionNumber: "desc" } }, editorialEvents: { orderBy: { createdAt: "desc" }, include: { actor: { select: { nickname: true } } } } },
   });
 

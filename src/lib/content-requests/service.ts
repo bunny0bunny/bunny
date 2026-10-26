@@ -79,7 +79,7 @@ export async function createContentRequest(input:unknown):Promise<RequestResult<
 async function readerRequest(tx:Tx,row:ContentRequest):Promise<ReaderRequest>{
   const root=row.mergedIntoId?await tx.contentRequest.findUnique({where:{id:row.mergedIntoId}}):row;
   if(!root)throw new Error("Missing content request group");
-  const series=root.status==="available"&&root.fulfilledSeriesId?await tx.series.findFirst({where:{id:root.fulfilledSeriesId,chapters:{some:liveChapterWhere()}},select:{id:true,titleAr:true,titleOriginal:true,slug:true}}):null;
+  const series=root.status==="available"&&root.fulfilledSeriesId?await tx.series.findFirst({where:{id:root.fulfilledSeriesId,deletedAt:null,chapters:{some:liveChapterWhere()}},select:{id:true,titleAr:true,titleOriginal:true,slug:true}}):null;
   return {id:row.id,title:row.title,category:row.category,referenceUrl:row.referenceUrl,message:row.message,reply:row.reply,status:root.status,statusNote:root.statusNote,createdAt:row.createdAt.toISOString(),updatedAt:new Date(Math.max(row.updatedAt.getTime(),root.updatedAt.getTime())).toISOString(),availableSeries:series?{id:series.id,title:getWorkTitle(series),href:`/series/${series.slug}`}:null};
 }
 export async function listMyRequests(input?:{page?:number}):Promise<RequestResult<{items:ReaderRequest[];page:number;pages:number;total:number}>>{
@@ -127,7 +127,7 @@ export async function getAdminRequest(id:string):Promise<RequestResult<AdminRequ
     const root=await tx.contentRequest.findUnique({where:{id:original.mergedIntoId??id},include:summaryInclude});if(!root)return fail("not_found");
     const members=await tx.contentRequest.findMany({where:groupWhere(root.id),include:{profile:{select:{nickname:true}}},orderBy:[{createdAt:"asc"},{id:"asc"}],take:200});
     const targets=root.status==="available"?[]:await tx.contentRequest.findMany({where:{id:{not:root.id},mergedIntoId:null,category:root.category,status:{not:"available"}},include:summaryInclude,orderBy:[{createdAt:"desc"},{id:"desc"}],take:200});
-    const works=await tx.series.findMany({where:{chapters:{some:liveChapterWhere()}},select:{id:true,titleAr:true,titleOriginal:true,slug:true,category:true},orderBy:{titleAr:"asc"},take:200});
+    const works=await tx.series.findMany({where:{deletedAt:null,chapters:{some:liveChapterWhere()}},select:{id:true,titleAr:true,titleOriginal:true,slug:true,category:true},orderBy:{titleAr:"asc"},take:200});
     return ok({...summary(root),statusNote:root.statusNote,seriesId:root.fulfilledSeriesId,members:members.map(member=>({id:member.id,nickname:member.profile.nickname,title:member.title,referenceUrl:member.referenceUrl,message:member.message,reply:member.reply,internalNote:member.internalNote,version:member.version,createdAt:member.createdAt.toISOString()})),mergeTargets:targets.filter(target=>target.members.length+members.length+1<=200).map(summary),workOptions:works.map(row=>({id:row.id,title:getWorkTitle(row),href:`/series/${row.slug}`,category:row.category}))});
   });
 }
@@ -137,7 +137,7 @@ export async function updateRequestStatus(input:unknown):Promise<RequestResult<{
     const data=parsed.data,row=await tx.contentRequest.findUnique({where:{id:data.id}});
     if(!row)return fail("not_found");if(row.mergedIntoId)return fail("invalid_merge");if(row.version!==data.expectedVersion)return fail("conflict");
     const seriesId=data.status==="available"?data.seriesId??null:null;
-    if(seriesId&&!await tx.series.findFirst({where:{id:seriesId,chapters:{some:liveChapterWhere()}},select:{id:true}}))return fail("invalid_series");
+    if(seriesId&&!await tx.series.findFirst({where:{id:seriesId,deletedAt:null,chapters:{some:liveChapterWhere()}},select:{id:true}}))return fail("invalid_series");
     if(row.status===data.status && row.statusNote===data.statusNote && row.fulfilledSeriesId===seriesId)return ok({id:row.id});
     const changed=await tx.contentRequest.updateMany({where:{id:row.id,version:data.expectedVersion,mergedIntoId:null},data:{status:data.status,statusNote:data.statusNote,fulfilledSeriesId:seriesId,version:{increment:1}}});
     if(changed.count!==1)return fail("conflict");

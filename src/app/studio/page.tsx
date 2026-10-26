@@ -79,7 +79,7 @@ export default async function StudioWorkspacePage({
   // 3. Load chapters with series, assignments, and revisions
   // Note: Avoid opening a draft for every row on list render!
   const chapters = await db.chapter.findMany({
-    where: seriesWhere,
+    where: { AND: [seriesWhere, { deletedAt: null, series: { deletedAt: null } }] },
     include: {
       series: {
         include: {

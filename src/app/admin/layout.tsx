@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { ExternalLink, GalleryVerticalEnd, LayoutDashboard, LibraryBig, ListOrdered, LogOut, MessageSquareWarning, PenTool, ShieldAlert, UsersRound, MessageSquarePlus } from "lucide-react";
+import { ExternalLink, GalleryVerticalEnd, LayoutDashboard, LibraryBig, ListOrdered, LogOut, MessageSquareWarning, PenTool, ShieldAlert, UsersRound, MessageSquarePlus, Trash2 } from "lucide-react";
 import { BrandMark } from "@/components/library/brand-mark";
 import { currentProfileOrNull } from "@/lib/queries";
 import { isStaffRole } from "@/lib/team-access";
@@ -49,6 +49,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
     ...(isAdmin || isEditor ? [{ href: "/admin/moderation", label: "الإشراف", icon: MessageSquareWarning }] : []),
     ...(isAdmin ? [{ href: "/admin/collections", label: "المجموعات", icon: GalleryVerticalEnd }] : []),
     ...(isAdmin ? [{ href: "/admin/requests", label: `طلبات القراء${newRequestCount ? ` (${newRequestCount})` : ""}`, icon: MessageSquarePlus }] : []),
+    ...(isAdmin ? [{ href: "/admin/trash", label: "سلة المحتوى", icon: Trash2 }] : []),
     ...(isAdmin ? [{ href: "/admin/users", label: "المستخدمون", icon: UsersRound }] : []),
   ];
 

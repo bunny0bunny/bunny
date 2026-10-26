@@ -6,6 +6,9 @@ mock.module("../../src/lib/media/source-retention", () => ({
   maintainCompletedSources: async ({ limit }: { limit: number }) => { expect(limit).toBe(5); runs++; return summary; },
   maintainAbandonedUploads: async ({ limit }: { limit: number }) => { expect(limit).toBe(3); runs++; return summary; },
 }));
+mock.module("../../src/lib/content-trash/service", () => ({
+  maintainContentTrash: async ({ limit, objectLimit }: { limit: number; objectLimit: number }) => { expect(limit).toBe(2); expect(objectLimit).toBe(10); runs++; return summary; },
+}));
 const route = await import("../../src/app/api/media/maintenance/route");
 beforeEach(() => { scopes = 0; runs = 0; process.env.EDITORIAL_CRON_SECRET = "test-secret"; });
 test("missing, empty, and wrong bearer tokens cannot enter database scope", async () => {
@@ -18,6 +21,6 @@ test("missing, empty, and wrong bearer tokens cannot enter database scope", asyn
 });
 test("authorized maintenance uses bounded request scope without a user mutation guard", async () => {
   const result = await route.POST(new Request("https://test.invalid/api/media/maintenance", { method: "POST", headers: { authorization: "Bearer test-secret" } }));
-  expect(result.status).toBe(200); expect(await result.json()).toEqual({ ok: true, completed: summary, abandoned: summary }); expect(scopes).toBe(1); expect(runs).toBe(2);
+  expect(result.status).toBe(200); expect(await result.json()).toEqual({ ok: true, completed: summary, abandoned: summary, trash: summary }); expect(scopes).toBe(1); expect(runs).toBe(3);
   expect("GET" in route).toBe(false);
 });

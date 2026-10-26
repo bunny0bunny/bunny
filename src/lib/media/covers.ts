@@ -31,8 +31,8 @@ export async function saveCover(request: Request, seriesId: string): Promise<Res
         storage: { putPage: async (...args) => (await getMediaStorage()).putPage(...args), deleteObject: async key => (await getMediaStorage()).deleteObject(key) },
         transaction: work => withSerializableTx(async (tx, actor) => work({
           role: actor.role,
-          findSeries: id => tx.series.findUnique({ where: { id }, select: { coverPath: true } }),
-          replaceSeries: async (id, old, next) => (await tx.series.updateMany({ where: { id, coverPath: old }, data: { coverPath: next } })).count === 1,
+          findSeries: id => tx.series.findUnique({ where: { id, deletedAt: null }, select: { coverPath: true } }),
+          replaceSeries: async (id, old, next) => (await tx.series.updateMany({ where: { id, deletedAt: null, coverPath: old }, data: { coverPath: next } })).count === 1,
           reserve: async () => {
             const now = Date.now(), windowMs = 3600000;
             const keyHash = `cover:${actor.id}:${Math.floor(now / windowMs)}`;

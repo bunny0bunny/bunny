@@ -15,6 +15,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
+import { MoveToTrashButton } from "@/components/admin/content-trash-controls";
 import { updateChapterMeta, upsertSeries, createChapter } from "@/lib/actions";
 import { SeriesCoverEditor, uploadSeriesCover } from './series-cover-editor';
 import { UploadRequestError } from '@/lib/media/upload-request';
@@ -378,6 +379,7 @@ export function ChapterWorkflowControls({
           إدارة النسخة
         </Link>
       </Button>
+      {isAdmin && <MoveToTrashButton kind="chapter" id={chapter.id} />}
     </div>
   );
 }

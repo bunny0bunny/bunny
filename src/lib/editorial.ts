@@ -26,7 +26,7 @@ export async function withSerializableTx(
         return work(tx, actor);
       }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, maxWait: 10000, timeout: 15000 });
       if (result.ok && options.invalidate !== false) {
-        for (const route of ["/studio", "/admin/chapters", "/updates", "/explore", "/"]) revalidatePath(route);
+        for (const route of ["/studio", "/admin/trash", "/admin/series", "/library", "/admin/chapters", "/updates", "/explore", "/"]) revalidatePath(route);
         revalidatePath("/series/[slug]", "page");
         revalidatePath("/studio/chapters/[id]", "page");
         for (const format of ["manga", "webtoon", "novel"]) revalidatePath(`/read/${format}/[series]/[chapter]`, "page");
@@ -46,6 +46,7 @@ export async function withSerializableTx(
 }
 
 export async function checkStaffSeriesAccess(tx: Tx, actor: Actor, seriesId: string) {
+  if (!await tx.series.findFirst({ where: { id: seriesId, deletedAt: null }, select: { id: true } })) return false;
   if (actor.role === "admin") return true;
   if (!actor.id || !["contributor", "editor"].includes(actor.role)) return false;
   return Boolean(await tx.seriesAssignment.findUnique({ where: { profileId_seriesId: { profileId: actor.id, seriesId } }, select: { id: true } }));
@@ -94,8 +95,8 @@ export function validateRevisionContent(format: string, revision: { titleAr?: st
 
 export async function ensureChapterRevisionsInitialized(tx: Tx, chapterId: string) {
   if (await tx.chapterRevision.count({ where: { chapterId } })) return;
-  const chapter = await tx.chapter.findUnique({ where: { id: chapterId }, include: { pages: { orderBy: { pageIndex: "asc" } } } });
-  if (!chapter) return;
+  const chapter = await tx.chapter.findUnique({ where: { id: chapterId, deletedAt: null, series: { deletedAt: null } }, include: { pages: { orderBy: { pageIndex: "asc" } } } });
+  if (!chapter || chapter.deletedAt) return;
   const scheduled = chapter.workflow === "published" && chapter.scheduledFor && chapter.scheduledFor > new Date();
   const revision = await tx.chapterRevision.create({ data: {
     chapterId, revisionNumber: 1, status: scheduled ? "scheduled" : chapter.workflow,
@@ -111,7 +112,7 @@ export async function ensureChapterRevisionsInitialized(tx: Tx, chapterId: strin
 export async function openOrCreateDraft(chapterId: string): Promise<EditorialResult> {
   return withSerializableTx(async (tx, actor) => {
     const chapter = await tx.chapter.findUnique({ where: { id: chapterId } });
-    if (!chapter) return { ok: false, error: "not_found" };
+    if (!chapter || chapter.deletedAt) return { ok: false, error: "not_found" };
     if (!await checkStaffSeriesAccess(tx, actor, chapter.seriesId)) return { ok: false, error: "forbidden" };
     await ensureChapterRevisionsInitialized(tx, chapterId);
     const latest = await tx.chapterRevision.findFirstOrThrow({ where: { chapterId }, orderBy: { revisionNumber: "desc" } });
@@ -127,7 +128,7 @@ export async function openOrCreateDraft(chapterId: string): Promise<EditorialRes
 
 export async function editableRevision(tx: Tx, actor: Actor, input: VersionInput) {
   const revision = await tx.chapterRevision.findUnique({ where: { id: input.revisionId }, include: { chapter: { include: { series: true } } } });
-  if (!revision) return { error: "not_found" } as const;
+  if (!revision || revision.chapter.deletedAt || revision.chapter.series.deletedAt) return { error: "not_found" } as const;
   if (!await checkStaffSeriesAccess(tx, actor, revision.chapter.seriesId)) return { error: "forbidden" } as const;
   if (!Number.isInteger(input.expectedVersion) || input.expectedVersion !== revision.version) return { error: "conflict" } as const;
   const latest = await tx.chapterRevision.findFirst({ where: { chapterId: revision.chapterId }, orderBy: { revisionNumber: "desc" }, select: { id: true } });
@@ -206,6 +207,7 @@ export const cancelScheduledRevision = (input: VersionInput) => transition(input
 async function publishProjection(tx: Tx, actor: Actor, revision: ChapterRevision, scheduled: boolean): Promise<EditorialResult> {
   if (revision.pendingUploadId) return { ok: false, error: "upload_pending" };
   const chapter = await tx.chapter.findUniqueOrThrow({ where: { id: revision.chapterId }, include: { series: true } });
+  if (chapter.deletedAt || chapter.series.deletedAt) return { ok: false, error: "not_found" };
   if (!revision.approvedAt || !["approved", "scheduled"].includes(revision.status)) return { ok: false, error: "يلزم اعتماد النسخة قبل النشر" };
   const valid = validateRevisionContent(chapter.series.format, revision);
   if (!valid.valid) return { ok: false, error: valid.error };
@@ -244,8 +246,8 @@ export async function withdrawPublishedChapter(input: { chapterId: string; expec
     if (actor.role !== "admin") return { ok: false, error: "forbidden" };
     if (!input.reason?.trim() || input.reason.length > 2000) return { ok: false, error: "reason_required" };
     await ensureChapterRevisionsInitialized(tx, input.chapterId);
-    const chapter = await tx.chapter.findUnique({ where: { id: input.chapterId } });
-    if (!chapter) return { ok: false, error: "not_found" };
+    const chapter = await tx.chapter.findUnique({ where: { id: input.chapterId, deletedAt: null, series: { deletedAt: null } } });
+    if (!chapter || chapter.deletedAt) return { ok: false, error: "not_found" };
     const active = await tx.chapterRevision.findFirst({ where: { chapterId: chapter.id, status: "published" }, orderBy: { revisionNumber: "desc" } });
     if (chapter.workflow !== "published" || !active || active.id !== input.expectedRevisionId || active.version !== input.expectedVersion) return { ok: false, error: "conflict" };
     await tx.chapter.update({ where: { id: chapter.id }, data: { workflow: "draft", scheduledFor: null } });
@@ -264,7 +266,7 @@ export async function executeDuePublications(limit = 20, options: { system?: boo
   for (let count = 0; count < maximum; count++) {
     const result = await withSerializableTx(async (tx, actor) => {
       if (actor.role !== "admin") return { ok: false, error: "forbidden" };
-      const due = await tx.chapterRevision.findFirst({ where: { status: "scheduled", approvedAt: { not: null }, scheduledFor: { lte: new Date() } }, orderBy: [{ scheduledFor: "asc" }, { id: "asc" }] });
+      const due = await tx.chapterRevision.findFirst({ where: { chapter: { deletedAt: null, series: { deletedAt: null } }, status: "scheduled", approvedAt: { not: null }, scheduledFor: { lte: new Date() } }, orderBy: [{ scheduledFor: "asc" }, { id: "asc" }] });
       if (!due) return { ok: true, data: { processed: false } };
       const latest = await tx.chapterRevision.findFirst({ where: { chapterId: due.chapterId }, orderBy: { revisionNumber: "desc" }, select: { id: true } });
       if (latest?.id !== due.id) return { ok: false, error: "conflict" };

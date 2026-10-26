@@ -23,7 +23,7 @@ export async function POST(request: Request) {
   if (!targets.length) return NextResponse.json({ readable: [] });
   const chapters = await db.chapter.findMany({
     where: { AND: [liveChapterWhere(), { isPremiumDemo: false }, { OR: targets.map(t => ({
-      number: t.chapterNumber, series: { slug: t.seriesSlug, format: t.format },
+      number: t.chapterNumber, deletedAt: null, series: { slug: t.seriesSlug, format: t.format, deletedAt: null },
     })) }] },
     select: { number: true, titleAr: true, series: { select: {
       slug: true, titleAr: true, titleOriginal: true, format: true, coverPath: true, accent: true,

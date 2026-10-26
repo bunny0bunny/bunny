@@ -14,7 +14,7 @@ export async function latestRevisionUpload(revisionId: string): Promise<Editoria
   if (!revisionId || typeof revisionId !== "string") return fail("invalid_input");
   return withSerializableTx(async (tx, actor) => {
     const revision = await tx.chapterRevision.findUnique({ where: { id: revisionId }, include: { chapter: true } });
-    if (!revision) return fail("not_found");
+    if (!revision || revision.chapter.deletedAt) return fail("not_found");
     if (!await checkStaffSeriesAccess(tx, actor, revision.chapter.seriesId)) return fail("forbidden");
     const upload = await tx.chapterUpload.findFirst({ where: { revisionId }, orderBy: [{ createdAt: "desc" }, { id: "desc" }], include: statusInclude });
     return { ok: true, data: { upload: upload ? toUploadStatus(upload) : null } };
@@ -26,7 +26,7 @@ export async function changeSourcePolicy(id: string, input: { keepSource: boolea
   if (!input || typeof input.keepSource !== "boolean" || (input.reviewed !== undefined && typeof input.reviewed !== "boolean")) return fail("invalid_input");
   return withSerializableTx(async (tx, actor) => {
     const upload = await tx.chapterUpload.findUnique({ where: { id }, include: statusInclude });
-    if (!upload) return fail("not_found");
+    if (!upload || upload.revision.chapter.deletedAt) return fail("not_found");
     if (!await checkStaffSeriesAccess(tx, actor, upload.revision.chapter.seriesId) || (actor.role !== "admin" && upload.createdById !== actor.id)) return fail("forbidden");
     if (upload.sourceDeletingAt || upload.sourceDeletedAt) return fail("conflict");
     // Legacy uploads cannot be enrolled into automatic deletion retroactively.
@@ -44,8 +44,8 @@ export async function changeSourcePolicy(id: string, input: { keepSource: boolea
 }
 
 async function claimSource(tx: Prisma.TransactionClient, id: string, now: Date): Promise<EditorialResult> {
-  const upload = await tx.chapterUpload.findUnique({ where: { id }, include: { assets: true } });
-  if (!upload || !sourceDeletionEligible(upload, now)) return fail("ineligible");
+  const upload = await tx.chapterUpload.findUnique({ where: { id }, include: { assets: true, chapter: { select: { deletedAt: true, series: { select: { deletedAt: true } } } } } });
+  if (!upload || upload.chapter.deletedAt || upload.chapter.series.deletedAt || !sourceDeletionEligible(upload, now)) return fail("ineligible");
   const source = upload.assets.find(asset => asset.pageIndex === -1);
   if (!source || !source.readyAt || source.mime !== "application/pdf" || source.chapterId !== upload.chapterId || source.bytes !== upload.sourceBytes || !source.objectKey.endsWith(`/${upload.id}/${source.id}.pdf`)) return fail("unsafe_source");
   try { validateMediaKey(source.objectKey); } catch { return fail("unsafe_source"); }
@@ -68,7 +68,7 @@ export async function maintainCompletedSources(options: { limit?: number; now?: 
   const summary = { examined: 0, deleted: 0, failed: 0, skipped: 0 };
   if (process.env.MEDIA_UPLOADS_ENABLED !== "1") return summary;
   const candidates = await withSerializableTx(async tx => ({ ok: true, data: await tx.chapterUpload.findMany({
-    where: { state: "ready", keepSource: false, completedAt: { not: null }, sourceSha256: { not: null }, processingProfile: { not: null }, sourceReviewedAt: { not: null }, sourceDeletedAt: null, sourceDeleteAfter: { lte: now } },
+    where: { chapter: { deletedAt: null, series: { deletedAt: null } }, state: "ready", keepSource: false, completedAt: { not: null }, sourceSha256: { not: null }, processingProfile: { not: null }, sourceReviewedAt: { not: null }, sourceDeletedAt: null, sourceDeleteAfter: { lte: now } },
     orderBy: [{ sourceDeleteAfter: "asc" }, { id: "asc" }], select: { id: true }, take: limit,
   }) }), { system: true, invalidate: false });
   if (!candidates.ok) return summary;
@@ -100,8 +100,8 @@ async function lockAbandonedReferences(tx: Prisma.TransactionClient) {
   await tx.$executeRawUnsafe('LOCK TABLE "ChapterUpload", "MediaAsset", "ChapterPage", "ChapterRevision", "Series" IN SHARE ROW EXCLUSIVE MODE');
 }
 async function abandonedCandidate(tx: Prisma.TransactionClient, id: string, now: Date, prefix: string) {
-  const asset = await tx.mediaAsset.findUnique({ where: { id } });
-  if (!asset) return null;
+  const asset = await tx.mediaAsset.findUnique({ where: { id }, include: { chapter: { select: { deletedAt: true, series: { select: { deletedAt: true } } } } } });
+  if (!asset || asset.chapter.deletedAt || asset.chapter.series.deletedAt) return null;
   const upload = await tx.chapterUpload.findUnique({ where: { id: asset.uploadId } });
   // Superseded reservation keys are immutable tombstones: neither the reader
   // nor draft attachment can select an index below -1, even on a ready upload.
@@ -141,7 +141,7 @@ export async function maintainAbandonedUploads(options: { limit?: number; now?: 
   if (!/^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/.test(prefix)) return summary;
   const limit = Math.max(1, Math.min(3, Math.trunc(options.limit ?? 3) || 3));
   const candidates = await db.mediaAsset.findMany({
-    where: { createdAt: { lte: new Date(now.getTime() - abandonedReserveMs) }, upload: {
+    where: { chapter: { deletedAt: null, series: { deletedAt: null } }, createdAt: { lte: new Date(now.getTime() - abandonedReserveMs) }, upload: {
       sourceSha256: { not: null }, processingProfile: { in: ["balanced-v1", "high-v1"] },
     }, OR: [
       { pageIndex: { lt: -1 } },

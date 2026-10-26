@@ -7,7 +7,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ ser
     return await withDatabaseScope(async () => {
       const result = await withSerializableTx(async (tx, actor) => {
         if (actor.role !== 'admin') return { ok: false, error: 'forbidden' };
-        const revisions = await tx.chapterRevision.findMany({ where: { chapter: { seriesId } }, include: { chapter: { select: { titleAr: true, number: true } } }, orderBy: [{ chapterId: 'asc' }, { revisionNumber: 'desc' }], take: 200 });
+        const revisions = await tx.chapterRevision.findMany({ where: { chapter: { seriesId, deletedAt: null, series: { deletedAt: null } } }, include: { chapter: { select: { titleAr: true, number: true } } }, orderBy: [{ chapterId: 'asc' }, { revisionNumber: 'desc' }], take: 200 });
         const candidates = revisions.flatMap(revision => {
           const first = validatePagesSnapshot(revision.pagesJson)?.[0];
           return first && /^\/api\/media\/[a-z0-9]+$/.test(first.imagePath) ? [{ revision, first }] : [];

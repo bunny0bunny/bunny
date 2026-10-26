@@ -11,6 +11,6 @@ export async function runMediaMaintenance(env: MaintenanceEnv): Promise<void> {
     method: "POST", headers: { authorization: `Bearer ${secret}`, origin: origin.origin }, signal: AbortSignal.timeout(90_000),
   }));
   if (!response.ok) { await response.body?.cancel(); throw new Error(`Media maintenance failed (${response.status}).`); }
-  const result = await response.json() as { ok?: boolean; completed?: Record<string, number>; abandoned?: Record<string, number> };
-  if (!result.ok || [result.completed, result.abandoned].some(batch => !batch || ["examined", "deleted", "failed", "skipped"].some(key => !Number.isSafeInteger(batch[key]) || batch[key] < 0) || batch.failed !== 0)) throw new Error("Media maintenance did not finish its batch.");
+  const result = await response.json() as { ok?: boolean; completed?: Record<string, number>; abandoned?: Record<string, number>; trash?: Record<string, number> };
+  if (!result.ok || [result.completed, result.abandoned, result.trash].some(batch => !batch || ["examined", "deleted", "failed", "skipped"].some(key => !Number.isSafeInteger(batch[key]) || batch[key] < 0) || batch.failed !== 0)) throw new Error("Media maintenance did not finish its batch.");
 }

@@ -8,7 +8,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ ser
     return await withDatabaseScope(async () => {
       const result = await withSerializableTx(async (tx, actor) => {
         if (actor.role !== 'admin') return { ok: false, error: 'forbidden' };
-        const revision = await tx.chapterRevision.findFirst({ where: { id: revisionId, chapter: { seriesId } } });
+        const revision = await tx.chapterRevision.findFirst({ where: { id: revisionId, chapter: { seriesId, deletedAt: null, series: { deletedAt: null } } } });
         const first = revision && validatePagesSnapshot(revision.pagesJson)?.[0];
         if (!first || !/^\/api\/media\/[a-z0-9]+$/.test(first.imagePath)) return { ok: false, error: 'not_found' };
         const asset = await tx.mediaAsset.findFirst({ where: { id: first.imagePath.slice(11), chapterId: revision!.chapterId, pageIndex: 0, readyAt: { not: null }, mime: { in: ['image/jpeg', 'image/webp'] } }, select: { objectKey: true, mime: true, bytes: true } });
