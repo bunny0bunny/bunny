@@ -2,11 +2,13 @@ import { readFile, readdir, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { createRequire } from "node:module";
+import { prepareRouteChunks } from './prepare-route-chunks.mjs';
 
 const require = createRequire(import.meta.url);
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const output = path.join(root, ".open-next");
 const assets = path.join(output, "assets");
+console.log(`Prepared ${await prepareRouteChunks(output)} dynamic-route chunk aliases.`);
 const privateInputs = path.join(assets, "series");
 if (path.dirname(privateInputs) !== assets) throw new Error("Invalid private asset cleanup target");
 await rm(privateInputs, { recursive: true, force: true });
