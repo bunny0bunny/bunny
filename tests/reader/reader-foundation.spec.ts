@@ -88,12 +88,19 @@ test("manga: footer controls fit the viewport with usable buttons, slider and im
   await expect.poll(async () => (await next.boundingBox())!.y + (await next.boundingBox())!.height).toBeLessThanOrEqual(viewport.height);
 });
 
-test("manga: supported image-half gesture advances the page", async ({ page }) => {
+test("manga: edge tap advances the page and center tap toggles reader tools", async ({ page }) => {
   await page.goto("/read/manga/qa-reader-manga/1");
   await sessionReady(page);
-  const image = page.getByRole("application", { name: /^صفحة/ });
+  const image = page.getByRole("region", { name: "منطقة تقليب صفحات المانجا", exact: true });
   if ((page.viewportSize()?.width ?? 1280) < 640) await image.tap({ position: { x: 30, y: 100 } });
   else await image.click({ position: { x: 30, y: 100 } });
+  await expect(page.getByRole("img", { name: "صفحة 2 من 5", exact: true })).toBeVisible();
+  const box = await image.boundingBox();
+  expect(box).not.toBeNull();
+  const center = { x: box!.width / 2, y: 100 };
+  if ((page.viewportSize()?.width ?? 1280) < 640) await image.tap({ position: center });
+  else await image.click({ position: center });
+  await expect(page.getByRole("button", { name: "إظهار أدوات القراءة", exact: true }).last()).toBeVisible();
   await expect(page.getByRole("img", { name: "صفحة 2 من 5", exact: true })).toBeVisible();
 });
 async function ratio(page: Page) {

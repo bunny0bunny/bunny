@@ -7,6 +7,7 @@ import { ChevronLeft, ChevronRight, ArrowLeftRight, Lock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ReaderChapterSelect, EmptyReaderContent, type ReaderChapter } from "@/components/readers/reader-tools";
 import { ReaderImage } from "@/components/readers/reader-image";
+import { MangaTouchSurface } from "@/components/readers/manga-touch-surface";
 import { ReaderChrome, ChapterEndCard, LockedChapterPanel } from "@/components/readers/reader-chrome";
 import { ChapterCommentsDialog } from "@/components/community/chapter-comments-dialog";
 import { saveReadingProgress } from "@/lib/actions";
@@ -152,7 +153,7 @@ export function MangaReader({
           />
         }
       >
-        <p className="text-sm leading-7 text-muted-foreground">استخدم الأسهم أو جانبي الصفحة للتنقل. زر الاتجاه أسفل الشاشة يغيّر اتجاه القراءة.</p>
+        <p className="text-sm leading-7 text-muted-foreground">المس طرف الصفحة أو اسحب أفقيًا للتقليب حسب اتجاه القراءة. المس المنتصف لإظهار الأدوات أو إخفائها. التمرير الرأسي والتكبير متاحان، ويمكنك استخدام الأسهم أيضًا.</p>
         <button type="button" onClick={() => setDirection(value => value === "rtl" ? "ltr" : "rtl")}
           className="mt-4 min-h-11 rounded-lg border border-border px-4 text-sm hover:bg-accent focus-visible:outline-2 focus-visible:outline-ring"
           aria-label="تبديل اتجاه المانجا">{direction === "rtl" ? "من اليمين لليسار" : "من اليسار لليمين"}</button>
@@ -161,26 +162,22 @@ export function MangaReader({
       <main className="flex min-h-screen flex-col items-center justify-center px-0 pb-40 pt-20 sm:px-6 sm:pb-32" aria-label="صفحات الفصل">
         {!total && <EmptyReaderContent format="manga" />}
         {page && (
+          <MangaTouchSurface direction={direction} onNext={() => go(1)} onPrevious={() => go(-1)} onToggle={() => setImmersive(value => !value)}>
           <div
-            className="relative w-full max-w-[560px] cursor-pointer select-none"
-            onClick={(e) => {
-              const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-              const clickedLeft = e.clientX - rect.left < rect.width / 2;
-              go(direction === "rtl" ? (clickedLeft ? 1 : -1) : clickedLeft ? -1 : 1);
-            }}
-            role="application"
-            aria-label={`صفحة ${index + 1} من ${total} — انقر يمين الشاشة أو يسارها للتنقل`}
+            data-manga-page
+            className="relative mx-auto w-full max-w-[560px] cursor-pointer select-none"
+            aria-label={`صفحة ${index + 1} من ${total}`}
           >
             <ReaderImage key={page.id} src={page.imagePath} fallbackImagePath={page.fallbackImagePath} alt={`صفحة ${index + 1} من ${total}`} width={page.width} height={page.height} sizes="(max-width: 592px) 100vw, 560px" eager />
             {/* Subtle tap zones hint */}
-            <div className="pointer-events-none absolute inset-y-0 start-0 w-1/2 opacity-0 transition hover:opacity-100">
+            <div aria-hidden="true" className="pointer-events-none absolute inset-y-0 start-0 w-[30%] opacity-0 transition hover:opacity-100">
               <div className="flex h-full items-center justify-start ps-3">
                 <span className="grid size-9 place-items-center rounded-full bg-background/80 text-foreground backdrop-blur">
                   {direction === "rtl" ? <ChevronLeft className="size-5" /> : <ChevronRight className="size-5" />}
                 </span>
               </div>
             </div>
-            <div className="pointer-events-none absolute inset-y-0 end-0 w-1/2 opacity-0 transition hover:opacity-100">
+            <div aria-hidden="true" className="pointer-events-none absolute inset-y-0 end-0 w-[30%] opacity-0 transition hover:opacity-100">
               <div className="flex h-full items-center justify-end pe-3">
                 <span className="grid size-9 place-items-center rounded-full bg-background/80 text-foreground backdrop-blur">
                   {direction === "rtl" ? <ChevronRight className="size-5" /> : <ChevronLeft className="size-5" />}
@@ -188,6 +185,7 @@ export function MangaReader({
               </div>
             </div>
           </div>
+          </MangaTouchSurface>
         )}
 
         {/* Reader toolbar: Charcoal/violet styling, preserving required test structure & accessibility */}
