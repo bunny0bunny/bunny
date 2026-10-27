@@ -21,6 +21,7 @@ type Page = { id: string; pageIndex: number; imagePath: string; fallbackImagePat
 export function MangaReader({
   seriesSlug,
   seriesTitle,
+  isAdult = false,
   chapterNumber,
   chapterTitle,
   chapters,
@@ -34,6 +35,7 @@ export function MangaReader({
 }: {
   seriesSlug: string;
   seriesTitle: string;
+  isAdult?: boolean;
   chapterNumber: number;
   chapterTitle: string;
   chapters: ReaderChapter[];
@@ -135,6 +137,7 @@ export function MangaReader({
   return (
     <div className="min-h-screen bg-background">
       <ReaderChrome
+        isAdult={isAdult}
         seriesSlug={seriesSlug}
         seriesTitle={seriesTitle}
         chapterNumber={chapterNumber}

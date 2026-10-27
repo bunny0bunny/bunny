@@ -1,3 +1,5 @@
+import { AdultBadge } from "@/components/library/adult-badge";
+import { normalizeGenres } from "@/lib/genres";
 import { getWorkTitle, getWorkTitles } from '@/lib/work-title';
 import type { Metadata } from "next";
 import Image from "next/image";
@@ -67,7 +69,7 @@ export default async function SeriesDetailPage({
 
   const profile = await currentProfileOrNull();
   const progressMap = await getProgressMap(profile?.id ?? null, s.id);
-  const genres = parseJsonArray(s.genresJson);
+  const genres = normalizeGenres(parseJsonArray(s.genresJson));
   const tags = parseJsonArray(s.tagsJson);
   const related = await getRelatedSeries(s.id, genres);
 
@@ -191,6 +193,7 @@ export default async function SeriesDetailPage({
                         {categoryLabel ? <Link className="inline-flex min-h-11 items-center hover:text-primary" href={'/explore?category=' + s.category}>{categoryLabel}</Link> : <span>{formatLabel}</span>}
                         {primaryGenre && <><span aria-hidden>‹</span><Link className="inline-flex min-h-11 items-center hover:text-primary" href={'/explore?genre=' + encodeURIComponent(primaryGenre)}>{primaryGenre}</Link></>}
                       </nav>
+                      {s.isAdult && <div className="mb-2 flex items-center gap-2"><AdultBadge /><span className="text-xs font-semibold text-red-700 dark:text-red-300">محتوى للبالغين</span></div>}
                       <h1 className="text-xl font-extrabold leading-snug text-foreground sm:text-2xl lg:text-3xl"><bdi>{titles.primary}</bdi></h1>
                       {titles.secondary && <p className="mt-1 break-words text-right text-xs text-muted-foreground sm:text-sm" dir="auto">{titles.secondary}</p>}
                       <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-2 text-xs sm:text-sm">

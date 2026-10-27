@@ -16,6 +16,7 @@ type Panel = { id: string; pageIndex: number; imagePath: string; fallbackImagePa
 export function WebtoonReader({
   seriesSlug,
   seriesTitle,
+  isAdult = false,
   chapterNumber,
   chapterTitle,
   chapters,
@@ -28,6 +29,7 @@ export function WebtoonReader({
 }: {
   seriesSlug: string;
   seriesTitle: string;
+  isAdult?: boolean;
   chapterNumber: number;
   chapterTitle: string;
   chapters: ReaderChapter[];
@@ -123,6 +125,7 @@ export function WebtoonReader({
   return (
     <div className="min-h-screen bg-background" ref={containerRef}>
       <ReaderChrome
+        isAdult={isAdult}
         seriesSlug={seriesSlug}
         seriesTitle={seriesTitle}
         chapterNumber={chapterNumber}

@@ -1,3 +1,4 @@
+import { normalizeGenres } from "@/lib/genres";
 import { getWorkTitle } from '@/lib/work-title';
 import Link from "next/link";
 import Image from "next/image";
@@ -96,7 +97,7 @@ export default async function HomePage() {
       const resolved = await Promise.all(
         slugs.map(async (slug) => {
           const s = await getSeriesBySlug(slug);
-          return s?.publishedChapters.length ? { slug, cover: s.coverPath, title: getWorkTitle(s), genres: parseJsonArray(s.genresJson) } : null;
+          return s?.publishedChapters.length ? { slug, cover: s.coverPath, title: getWorkTitle(s), genres: normalizeGenres(parseJsonArray(s.genresJson)) } : null;
         })
       );
       return {

@@ -1,3 +1,4 @@
+import { normalizeGenres } from "@/lib/genres";
 import { MoveToTrashButton } from "@/components/admin/content-trash-controls";
 import { getWorkTitle } from '@/lib/work-title';
 import { EDITORIAL_LABELS, isPublicChapter } from "@/lib/editorial-state";
@@ -24,7 +25,7 @@ export default async function AdminSeriesDetailPage({
   const isAdmin = profile?.role === "admin";
   const s = await getAdminSeriesById(id);
   if (!s) notFound();
-  const genres = parseJsonArray(s.genresJson);
+  const genres = normalizeGenres(parseJsonArray(s.genresJson));
 
   const staff = isAdmin ? await getAssignableStaff() : [];
   const assignedProfileIds = (s as any).assignments?.map((a: any) => a.profileId) ?? [];
@@ -170,6 +171,7 @@ export default async function AdminSeriesDetailPage({
                 translator: s.translator ?? "",
                 genres,
                 isFeatured: s.isFeatured,
+                isAdult: s.isAdult,
               }}
             />
           </div>

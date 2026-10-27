@@ -1,3 +1,4 @@
+import { normalizeGenre, normalizeGenres } from "@/lib/genres";
 import "server-only";
 import type { Prisma } from "@prisma/client";
 import { getWorkTitle } from '@/lib/work-title';
@@ -73,6 +74,7 @@ export type SeriesCard = {
   slug: string;
   titleAr: string;
   titleOriginal?: string | null;
+  isAdult: boolean;
   format: Format;
   category?: Category | null;
   status: SeriesStatus;
@@ -101,6 +103,7 @@ export function toCard(s: {
   slug: string;
   titleAr: string;
   titleOriginal?: string | null;
+  isAdult?: boolean;
   format: string;
   category?: string | null;
   status: string;
@@ -123,10 +126,11 @@ export function toCard(s: {
     slug: s.slug,
     titleAr: s.titleAr,
     titleOriginal: s.titleOriginal ?? null,
+    isAdult: s.isAdult ?? false,
     format: s.format as Format,
     category: (s.category ?? null) as Category | null,
     status: s.status as SeriesStatus,
-    genres: parseJsonArray(s.genresJson),
+    genres: normalizeGenres(parseJsonArray(s.genresJson)),
     author: s.author,
     coverPath: displayCover(s.coverPath),
     accent: s.accent,
@@ -185,7 +189,7 @@ export async function getPublishedSeries(filters: ExploreFilters): Promise<Serie
         { text: row.titleAr, weight: 2 },
         ...(row.titleOriginal ? [{ text: row.titleOriginal, weight: 3 }] : []),
         { text: row.author, weight: 2 },
-        { text: parseJsonArray(row.genresJson).join(" "), weight: 2 },
+        { text: normalizeGenres(parseJsonArray(row.genresJson)).join(" "), weight: 2 },
         { text: parseJsonArray(row.tagsJson).join(" "), weight: 1 },
         { text: row.synopsisAr, weight: 1 },
       ]),
@@ -194,12 +198,12 @@ export async function getPublishedSeries(filters: ExploreFilters): Promise<Serie
       .filter((s) => s.score > 0)
       .sort((a, b) => b.score - a.score)
       .map((s) => s.card);
-    if (filters.genre) cards = cards.filter((c) => c.genres.includes(filters.genre!));
+    if (filters.genre) cards = cards.filter((c) => c.genres.includes(normalizeGenre(filters.genre!)));
     // Relevance beats sort filters when the reader typed a query.
     return cards;
   }
 
-  if (filters.genre) cards = cards.filter((c) => c.genres.includes(filters.genre!));
+  if (filters.genre) cards = cards.filter((c) => c.genres.includes(normalizeGenre(filters.genre!)));
 
   switch (filters.sort) {
     case "newest":
@@ -263,7 +267,7 @@ export async function getGenreCounts(): Promise<{ genre: string; count: number }
   const rows = await db.series.findMany({ where: { chapters: { some: liveChapterWhere() } }, select: { genresJson: true } });
   const counts = new Map<string, number>();
   for (const r of rows)
-    for (const g of parseJsonArray(r.genresJson)) counts.set(g, (counts.get(g) ?? 0) + 1);
+    for (const g of normalizeGenres(parseJsonArray(r.genresJson))) counts.set(g, (counts.get(g) ?? 0) + 1);
   return [...counts.entries()]
     .map(([genre, count]) => ({ genre, count }))
     .sort((a, b) => b.count - a.count);
@@ -325,7 +329,7 @@ export async function getRelatedSeries(seriesId: string, genres: string[], limit
   });
   const cards = rows.map(toCard);
   return cards
-    .map((c) => ({ c, score: c.genres.filter((g) => genres.includes(g)).length }))
+    .map((c) => ({ c, score: c.genres.filter((g) => normalizeGenres(genres).includes(g)).length }))
     .filter((x) => x.score > 0)
     .sort((a, b) => b.score - a.score || b.c.reads - a.c.reads)
     .slice(0, limit)
@@ -396,6 +400,7 @@ export async function getProgressMap(profileId: string | null, seriesId: string)
 }
 
 export type ContinueReadingItem = {
+  isAdult?: boolean;
   seriesSlug: string;
   seriesTitle: string;
   coverPath: string;
@@ -413,13 +418,14 @@ export async function getContinueReading(profileId: string, limit = 3): Promise<
     orderBy: { updatedAt: "desc" },
     take: limit,
     include: {
-      series: { select: { slug: true, titleAr: true, titleOriginal: true, coverPath: true, accent: true, format: true } },
+      series: { select: { slug: true, titleAr: true, titleOriginal: true, coverPath: true, accent: true, format: true, isAdult: true } },
       chapter: { select: { number: true, titleAr: true } },
     },
   });
   return rows.map((r) => ({
     seriesSlug: r.series.slug,
     seriesTitle: getWorkTitle(r.series),
+    isAdult: r.series.isAdult,
     coverPath: displayCover(r.series.coverPath),
     accent: r.series.accent,
     format: r.series.format as Format,
@@ -799,7 +805,7 @@ export async function getProfileStats(profileId: string) {
       orderBy: { updatedAt: "desc" },
       take: 5,
       include: {
-        series: { select: { slug: true, titleAr: true, titleOriginal: true, coverPath: true, accent: true, format: true } },
+        series: { select: { slug: true, titleAr: true, titleOriginal: true, coverPath: true, accent: true, format: true, isAdult: true } },
         chapter: { select: { number: true, titleAr: true } },
       },
     }),
@@ -823,7 +829,7 @@ export async function getFavoriteGenres(profileId: string) {
   });
   const counts = new Map<string, number>();
   for (const i of items)
-    for (const g of parseJsonArray(i.series.genresJson)) counts.set(g, (counts.get(g) ?? 0) + 1);
+    for (const g of normalizeGenres(parseJsonArray(i.series.genresJson))) counts.set(g, (counts.get(g) ?? 0) + 1);
   return [...counts.entries()].map(([genre, count]) => ({ genre, count })).sort((a, b) => b.count - a.count).slice(0, 5);
 }
 

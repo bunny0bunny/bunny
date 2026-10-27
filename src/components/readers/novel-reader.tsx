@@ -43,6 +43,7 @@ const THEME_KEY = "bunny.novel.theme.v1";
 export function NovelReader({
   seriesSlug,
   seriesTitle,
+  isAdult = false,
   chapterNumber,
   chapterTitle,
   chapters,
@@ -55,6 +56,7 @@ export function NovelReader({
 }: {
   seriesSlug: string;
   seriesTitle: string;
+  isAdult?: boolean;
   chapterNumber: number;
   chapterTitle: string;
   chapters: ReaderChapter[];
@@ -170,6 +172,7 @@ export function NovelReader({
   return (
     <div className={`min-h-screen transition-colors ${t.page}`}>
       <ReaderChrome
+        isAdult={isAdult}
         seriesSlug={seriesSlug}
         seriesTitle={seriesTitle}
         chapterNumber={chapterNumber}

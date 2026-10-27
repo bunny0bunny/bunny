@@ -206,6 +206,7 @@ model Series {
   translator    String?
   coverPath     String
   accent        String             @default("#9B7BFF")
+  isAdult       Boolean            @default(false)
   isFeatured    Boolean            @default(false)
   ratingAvg     Float              @default(0)
   ratingCount   Int                @default(0)

@@ -1,4 +1,5 @@
 "use server";
+import { normalizeGenres } from "@/lib/genres";
 
 import { z } from "zod";
 import { getWorkTitle, workTitleIssue } from '@/lib/work-title';
@@ -102,6 +103,7 @@ const seriesSchema = z
     translator: z.string().optional(),
     genres: z.array(z.string()).min(1, "اختر نوعًا واحدًا على الأقل"),
     isFeatured: z.boolean(),
+    isAdult: z.boolean().optional(),
   })
   .superRefine((data, ctx) => {
     const issue = workTitleIssue(data);
@@ -136,7 +138,8 @@ export async function upsertSeries(input: unknown): Promise<ActionResult & { slu
     status: d.status,
     author: d.author,
     translator: d.translator || null,
-    genresJson: JSON.stringify(d.genres),
+    genresJson: JSON.stringify(normalizeGenres(d.genres)),
+    ...(d.isAdult !== undefined ? { isAdult: d.isAdult } : {}),
     isFeatured: d.isFeatured,
     ...(d.category !== undefined ? { category: d.category } : {}),
   };
@@ -157,6 +160,8 @@ export async function upsertSeries(input: unknown): Promise<ActionResult & { slu
     if (!result.ok) return { ok: false, error: result.error };
     revalidatePath("/admin/series");
     revalidatePath(`/series/${d.slug}`);
+    revalidatePath("/explore");
+    for (const format of ["manga", "webtoon", "novel"]) revalidatePath(`/read/${format}/[series]/[chapter]`, "page");
     revalidatePath("/");
     return { ok: true, slug: d.slug, id: d.id };
   }

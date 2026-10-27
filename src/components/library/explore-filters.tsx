@@ -1,4 +1,5 @@
 "use client";
+import { normalizeGenre } from "@/lib/genres";
 
 import { useState, useTransition } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -82,7 +83,8 @@ function useExploreFilters() {
   const q = searchParams.get("q") ?? "";
   const category = searchParams.get("category");
   const format = searchParams.get("format");
-  const genre = searchParams.get("genre");
+  const rawGenre = searchParams.get("genre");
+  const genre = rawGenre ? normalizeGenre(rawGenre) : null;
   const status = searchParams.get("status");
   const sort = searchParams.get("sort") ?? "popular";
 

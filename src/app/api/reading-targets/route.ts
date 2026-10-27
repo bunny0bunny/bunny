@@ -26,12 +26,12 @@ export async function POST(request: Request) {
       number: t.chapterNumber, deletedAt: null, series: { slug: t.seriesSlug, format: t.format, deletedAt: null },
     })) }] },
     select: { number: true, titleAr: true, series: { select: {
-      slug: true, titleAr: true, titleOriginal: true, format: true, coverPath: true, accent: true,
+      slug: true, titleAr: true, titleOriginal: true, format: true, coverPath: true, accent: true, isAdult: true,
     } } },
   });
   return NextResponse.json({ readable: chapters.map(c => ({
     seriesSlug: c.series.slug, chapterNumber: c.number, format: c.series.format,
-    seriesTitle: getWorkTitle(c.series), chapterTitle: c.titleAr,
+    seriesTitle: getWorkTitle(c.series), chapterTitle: c.titleAr, isAdult: c.series.isAdult,
     coverPath: displayCover(c.series.coverPath), accent: c.series.accent,
   })) });
 }

@@ -1,4 +1,5 @@
 "use client";
+import { AdultBadge } from "@/components/library/adult-badge";
 
 import Link from "next/link";
 import { ChevronRight, ChevronLeft, Maximize, Minimize, X, Lock, BookOpen, List, Settings } from "lucide-react";
@@ -50,6 +51,7 @@ export function LockedChapterPanel({
 }
 
 export function ReaderChrome({
+  isAdult = false,
   seriesSlug,
   seriesTitle,
   chapterNumber,
@@ -67,6 +69,7 @@ export function ReaderChrome({
   chapterNumber: number;
   chapterTitle: string;
   format: string;
+  isAdult?: boolean;
   percent: number;
   immersive: boolean;
   onToggleImmersive: () => void;
@@ -97,7 +100,7 @@ export function ReaderChrome({
           </Button>
 
           <div className="min-w-0 flex-1 text-center">
-            <p className="truncate text-xs font-bold text-foreground sm:text-sm">{seriesTitle}</p>
+            <div className="flex items-center justify-center gap-2"><p className="truncate text-xs font-bold text-foreground sm:text-sm">{seriesTitle}</p>{isAdult && <AdultBadge className="py-0.5 text-[10px]" />}</div>
             {chapterControl ? (
               <div className="flex items-center justify-center">
                 {chapterControl}

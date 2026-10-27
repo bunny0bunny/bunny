@@ -1,4 +1,5 @@
 "use client";
+import { normalizeGenres } from "@/lib/genres";
 
 import { EDITORIAL_LABELS } from "@/lib/editorial-state";
 
@@ -99,10 +100,15 @@ type SeriesFormValues = {
   translator: string;
   genres: string[];
   isFeatured: boolean;
+  isAdult: boolean;
 };
 
+function recoverGenres(value: string | undefined, fallback: string[]) {
+  try { const parsed: unknown = JSON.parse(value ?? ""); return Array.isArray(parsed) && parsed.every(g => typeof g === "string") ? normalizeGenres(parsed) : fallback; } catch { return fallback; }
+}
+
 function seriesText(values: SeriesFormValues) {
-  return { titleAr: values.titleAr, titleOriginal: values.titleOriginal, slug: values.slug, synopsisAr: values.synopsisAr, author: values.author, translator: values.translator };
+  return { titleAr: values.titleAr, titleOriginal: values.titleOriginal, slug: values.slug, synopsisAr: values.synopsisAr, author: values.author, translator: values.translator, isAdult: String(values.isAdult), genres: JSON.stringify(values.genres) };
 }
 
 export function SeriesForm({ initial, readingFormatLocked = false, currentActorId }: { initial?: SeriesFormValues; readingFormatLocked?: boolean; currentActorId: string }) {
@@ -122,6 +128,7 @@ export function SeriesForm({ initial, readingFormatLocked = false, currentActorI
       translator: "",
       genres: [],
       isFeatured: false,
+      isAdult: false,
     }
   );
   const [loading, setLoading] = useState(false);
@@ -196,7 +203,7 @@ export function SeriesForm({ initial, readingFormatLocked = false, currentActorI
             if (textDirty && !window.confirm("استبدال النص الحالي بالنص المستعاد؟")) return;
             const recovered = formRecovery.recovered;
             if (!recovered) return;
-            setValues(previous => ({ ...previous, titleAr: recovered.titleAr, titleOriginal: recovered.titleOriginal, slug: previous.id ? previous.slug : recovered.slug, synopsisAr: recovered.synopsisAr, author: recovered.author, translator: recovered.translator }));
+            setValues(previous => ({ ...previous, titleAr: recovered.titleAr, titleOriginal: recovered.titleOriginal, slug: previous.id ? previous.slug : recovered.slug, synopsisAr: recovered.synopsisAr, author: recovered.author, translator: recovered.translator, isAdult: recovered.isAdult === "true" ? true : recovered.isAdult === "false" ? false : previous.isAdult, genres: recoverGenres(recovered.genres, previous.genres) }));
             if (recovered.resultUncertain === "true") { setRecoveryRequired(true); setErrors("تعذّر تأكيد الحفظ السابق. تحقق من قائمة الأعمال قبل إنشاء عمل آخر."); }
             formRecovery.dismiss();
           }}>استعادة النص</Button>
@@ -300,6 +307,10 @@ export function SeriesForm({ initial, readingFormatLocked = false, currentActorI
         </div>
       </div>
 
+      <label className="flex min-h-11 cursor-pointer items-start gap-3 rounded-xl border border-red-500/40 bg-red-500/10 p-4 text-sm">
+        <input type="checkbox" checked={values.isAdult} onChange={e => set("isAdult", e.target.checked)} className="mt-1 size-4 shrink-0 accent-red-600" />
+        <span><span className="font-bold text-red-700 dark:text-red-300">محتوى للبالغين <bdi dir="ltr">+18</bdi></span><span className="mt-1 block text-xs leading-6 text-muted-foreground">فعّله إذا كان العمل مخصصًا للبالغين. يظهر تحذير أحمر للقارئ قبل بدء القراءة، ويمكنه المتابعة أو الرجوع.</span></span>
+      </label>
       <label className="flex min-h-11 cursor-pointer items-center gap-2.5 text-sm">
         <input
           type="checkbox"

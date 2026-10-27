@@ -1,0 +1,33 @@
+import {afterAll, beforeAll, expect, test} from 'bun:test';
+import {actions, db, setActor} from './session-fixture';
+import {getPublishedSeries, getSeriesBySlug} from '../../src/lib/queries';
+import {GENRES} from '../../src/lib/constants';
+let adminId:string, readerId:string;
+const ids:string[]=[];
+const slug='classification-'+crypto.randomUUID();
+const base={titleOriginal:'Classification QA',titleAr:'اختبار التصنيف',slug,synopsisAr:'ملخص طويل لاختبار حفظ التصنيفات والتحذير العمري',category:'novel',format:'novel',status:'ongoing',author:'QA Author',genres:['شوجو','موسيقى'],isFeatured:false};
+beforeAll(async()=>{for(const role of ['admin','reader'] as const){const p=await db.profile.create({data:{email:slug+role+'@bunny.test',nickname:role,passwordHash:'x',role,emailVerifiedAt:new Date()}});if(role==='admin')adminId=p.id;else readerId=p.id;}setActor(adminId);});
+afterAll(async()=>{setActor(null);await db.series.deleteMany({where:{id:{in:ids}}});await db.profile.deleteMany({where:{id:{in:[adminId,readerId]}}});});
+test('adult flag defaults off, persists true/false, and omitted legacy edits preserve it',async()=>{
+ const result=await actions.upsertSeries(base);expect(result.ok).toBe(true);ids.push(result.id!);
+ let work=await db.series.findUniqueOrThrow({where:{id:result.id}});expect(work.isAdult).toBe(false);
+ const edit={...base,id:work.id,isAdult:true};expect((await actions.upsertSeries(edit)).ok).toBe(true);
+ work=await db.series.findUniqueOrThrow({where:{id:work.id}});expect(work.isAdult).toBe(true);
+ expect((await actions.upsertSeries({...base,id:work.id})).ok).toBe(true);
+ expect((await db.series.findUniqueOrThrow({where:{id:work.id}})).isAdult).toBe(true);
+ expect((await actions.upsertSeries({...edit,isAdult:'false'})).ok).toBe(false);
+ setActor(readerId);expect((await actions.upsertSeries({...edit,isAdult:false})).ok).toBe(false);setActor(adminId);
+ await db.chapter.create({data:{seriesId:work.id,number:1,titleAr:'فصل',workflow:'published',publishedAt:new Date(),novelBody:'text'}});
+ expect((await getPublishedSeries({})).find(w=>w.id===work.id)?.isAdult).toBe(true);
+ expect((await getSeriesBySlug(work.slug))?.isAdult).toBe(true);
+ expect((await actions.upsertSeries({...edit,isAdult:false})).ok).toBe(true);
+ expect((await getPublishedSeries({})).find(w=>w.id===work.id)?.isAdult).toBe(false);
+});
+test('new genres are selectable; daily-life aliases share filters and display without changing old records',async()=>{
+ for(const genre of ['شوجو','موسيقى','مدرسي','تجسيد','إعادة زمن','شونين','نفسي','أساطير','لعبة','عائلي','سحر','الحياة اليومية'])expect(GENRES).toContain(genre);
+ const work=await db.series.create({data:{...{slug:slug+'-legacy',titleAr:'قديم',titleOriginal:'Legacy daily life',synopsisAr:'test',author:'QA',format:'novel',coverPath:''},genresJson:JSON.stringify(['شريحة من الحياة'])}});ids.push(work.id);
+ await db.chapter.create({data:{seriesId:work.id,number:1,titleAr:'فصل',workflow:'published',publishedAt:new Date()}});
+ for(const genre of ['الحياة اليومية','شريحة من الحياة'])expect((await getPublishedSeries({genre})).some(w=>w.id===work.id)).toBe(true);
+ expect((await getSeriesBySlug(work.slug))?.genresJson).toBe(JSON.stringify(['شريحة من الحياة']));
+ expect((await getPublishedSeries({})).find(w=>w.id===work.id)?.genres).toEqual(['الحياة اليومية']);
+});

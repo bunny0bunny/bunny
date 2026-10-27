@@ -1,3 +1,4 @@
+import { AdultBadge } from "@/components/library/adult-badge";
 import { getWorkTitle } from '@/lib/work-title';
 import Link from "next/link";
 import Image from "next/image";
@@ -68,6 +69,7 @@ export default async function AdminSeriesPage({
                       <p className="truncate font-medium text-foreground">{getWorkTitle(s)}</p>
                       <p className="truncate text-[11px] text-muted-foreground" dir="ltr">{s.slug}</p>
                     </div>
+                    {s.isAdult && <AdultBadge />}
                     {s.isFeatured && <Badge variant="secondary" className="hidden border-gold/40 bg-gold/10 text-gold lg:inline-flex">مميز</Badge>}
                   </div>
                 </td>

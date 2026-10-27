@@ -1,4 +1,5 @@
 "use client";
+import { AdultBadge } from "@/components/library/adult-badge";
 
 import { getWorkTitle } from '@/lib/work-title';
 
@@ -86,6 +87,7 @@ export function ContinueReadingHero({
 
               {/* Progress Content */}
               <div className="flex min-w-0 flex-1 flex-col justify-center p-4 sm:p-5 md:p-6">
+                {hero.isAdult && <div className="mb-2"><AdultBadge /></div>}
                 <span className="text-xs font-semibold text-primary">
                   كمّل القراءة
                 </span>
@@ -140,6 +142,7 @@ export function ContinueReadingHero({
                       className="inline-flex min-h-11 items-center gap-2 rounded-lg border border-border/60 bg-card/60 px-2.5 py-1 text-foreground transition hover:border-primary/50 hover:text-primary"
                     >
                       <span className="truncate max-w-[140px] font-medium">{it.seriesTitle}</span>
+                      {it.isAdult && <AdultBadge />}
                       <span className="text-[11px] text-muted-foreground">فصل {it.chapterNumber} ({Math.round(it.percent)}٪)</span>
                     </Link>
                   ))}
@@ -165,6 +168,7 @@ export function ContinueReadingHero({
               </div>
 
               <div className="flex min-w-0 flex-1 flex-col justify-center p-4 sm:p-5 md:p-6">
+                {guestFeatured.isAdult && <div className="mb-2"><AdultBadge /></div>}
                 <span className="text-xs font-semibold text-primary">
                   اختيار مميز للقراءة
                 </span>

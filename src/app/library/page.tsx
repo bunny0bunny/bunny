@@ -1,3 +1,4 @@
+import { AdultBadge } from "@/components/library/adult-badge";
 import { getWorkTitle } from '@/lib/work-title';
 import type { Metadata } from "next";
 import Image from "next/image";
@@ -200,7 +201,7 @@ export default async function LibraryPage({
                           href={`/series/${item.seriesSlug}`}
                           className="block truncate text-sm font-semibold text-foreground transition hover:text-primary"
                         >
-                          {item.seriesTitle}
+                          {item.seriesTitle} {item.isAdult && <AdultBadge />}
                         </Link>
                         <p className="mt-0.5 truncate text-xs text-muted-foreground">
                           الفصل {item.chapterNumber}
@@ -506,7 +507,7 @@ export default async function LibraryPage({
                             href={`/series/${e.series.slug}`}
                             className="flex min-h-11 items-center text-sm font-semibold text-foreground transition hover:text-primary"
                           >
-                            {getWorkTitle(e.series)}
+                            {getWorkTitle(e.series)} {e.series.isAdult && <AdultBadge />}
                           </Link>
 
                           {/* Chapter count */}

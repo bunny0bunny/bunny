@@ -1,3 +1,4 @@
+import { AdultBadge } from "@/components/library/adult-badge";
 import Image from "next/image";
 import { getWorkTitle } from '@/lib/work-title';
 import Link from "next/link";
@@ -36,6 +37,7 @@ export function SeriesCardItem({
     "slug" | "titleAr" | "coverPath" | "format" | "ratingAvg" | "genres" | "status" | "chapterCount"
   > & {
     category?: Category | null;
+    isAdult?: boolean;
     titleOriginal?: string | null;
   };
   badge?: string;
@@ -52,7 +54,7 @@ export function SeriesCardItem({
       className={`group block focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background rounded-xl ${
         className ?? "w-[150px] shrink-0 sm:w-[168px]"
       }`}
-      aria-label={getWorkTitle(series)}
+      aria-label={`${getWorkTitle(series)}${series.isAdult ? " — للبالغين +18" : ""}`}
     >
       <div className="relative aspect-[2/3] w-full overflow-hidden rounded-xl border border-border/70 bg-card shadow-sm transition duration-300 group-hover:-translate-y-1 group-hover:border-primary/50 group-hover:shadow-[0_12px_32px_-12px_rgba(180,151,239,0.35)]">
         <Image
@@ -66,6 +68,7 @@ export function SeriesCardItem({
 
         {/* Top Badges */}
         <div className="absolute inset-x-0 top-0 flex items-start justify-between p-2">
+          {series.isAdult && <AdultBadge />}
           {badge ? (
             <span className="rounded-md bg-background/85 px-2 py-0.5 text-[11px] font-semibold text-gold shadow-sm backdrop-blur">
               {badge}

@@ -1,3 +1,4 @@
+import { normalizeGenres } from "@/lib/genres";
 import "server-only";
 import { getWorkTitle } from '@/lib/work-title';
 import { db } from "@/lib/db";
@@ -83,7 +84,7 @@ export async function getForYouSeries(profileId: string, limit = 8): Promise<For
   const history: HistorySeries[] = historyRows.map((s) => ({
     id: s.id,
     titleAr: getWorkTitle(s),
-    genres: JSON.parse(s.genresJson || "[]") as string[],
+    genres: normalizeGenres(JSON.parse(s.genresJson || "[]") as string[]),
   }));
 
   // ── genre affinity ──────────────────────────────────────────────

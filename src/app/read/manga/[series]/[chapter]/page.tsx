@@ -1,3 +1,4 @@
+import { AdultContentGate } from "@/components/readers/adult-content-gate";
 import { cache } from 'react';
 import { getWorkTitle } from '@/lib/work-title';
 import type { Metadata } from "next";
@@ -37,7 +38,9 @@ export default async function MangaReaderPage({
   ]);
 
   return (
+    <AdultContentGate key={data.series.id} isAdult={data.series.isAdult} seriesId={data.series.id} seriesSlug={data.series.slug} seriesTitle={getWorkTitle(data.series)}>
     <MangaReader
+      isAdult={data.series.isAdult}
       key={data.chapter.id}
       chapters={data.chapterList}
       initialProgress={initialProgress}
@@ -59,5 +62,6 @@ export default async function MangaReaderPage({
       next={data.next ? { number: data.next.number, isPremiumDemo: data.next.isPremiumDemo } : null}
       prev={data.prev ? { number: data.prev.number, isPremiumDemo: data.prev.isPremiumDemo } : null}
     />
+    </AdultContentGate>
   );
 }
