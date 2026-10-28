@@ -1,11 +1,13 @@
-export type ReaderProgress = { pageIndex: number; percent: number; updatedAt: number };
+export type ReaderProgress = { pageIndex: number; percent: number; updatedAt: number; pageOffset?: number | null; completed?: boolean };
 
 export function isReaderProgress(value: unknown): value is ReaderProgress {
   if (!value || typeof value !== "object") return false;
   const p = value as ReaderProgress;
   return Number.isSafeInteger(p.pageIndex) && p.pageIndex >= 0 &&
     typeof p.percent === "number" && Number.isFinite(p.percent) && p.percent >= 0 && p.percent <= 100 &&
-    typeof p.updatedAt === "number" && Number.isFinite(p.updatedAt) && p.updatedAt > 0;
+    typeof p.updatedAt === "number" && Number.isFinite(p.updatedAt) && p.updatedAt > 0 &&
+    (p.pageOffset == null || (typeof p.pageOffset === 'number' && Number.isFinite(p.pageOffset) && p.pageOffset >= 0 && p.pageOffset <= 1)) &&
+    (p.completed === undefined || typeof p.completed === 'boolean');
 }
 
 export function selectReaderProgress(local: unknown, server: unknown): ReaderProgress | null {

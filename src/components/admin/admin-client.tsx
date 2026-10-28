@@ -95,6 +95,8 @@ type SeriesFormValues = {
   synopsisAr: string;
   category?: Category | null;
   format: Format;
+  defaultPresentation?: "paged" | "continuous";
+  defaultReadingDirection?: "rtl" | "ltr";
   status: "ongoing" | "completed" | "hiatus";
   author: string;
   translator: string;
@@ -108,7 +110,7 @@ function recoverGenres(value: string | undefined, fallback: string[]) {
 }
 
 function seriesText(values: SeriesFormValues) {
-  return { titleAr: values.titleAr, titleOriginal: values.titleOriginal, slug: values.slug, synopsisAr: values.synopsisAr, author: values.author, translator: values.translator, isAdult: String(values.isAdult), genres: JSON.stringify(values.genres) };
+  return { titleAr: values.titleAr, titleOriginal: values.titleOriginal, slug: values.slug, synopsisAr: values.synopsisAr, author: values.author, translator: values.translator, isAdult: String(values.isAdult), genres: JSON.stringify(values.genres), defaultPresentation: values.defaultPresentation ?? "paged", defaultReadingDirection: values.defaultReadingDirection ?? "rtl" };
 }
 
 export function SeriesForm({ initial, readingFormatLocked = false, currentActorId }: { initial?: SeriesFormValues; readingFormatLocked?: boolean; currentActorId: string }) {
@@ -123,6 +125,8 @@ export function SeriesForm({ initial, readingFormatLocked = false, currentActorI
       synopsisAr: "",
       category: null,
       format: "manga",
+      defaultPresentation: "paged",
+      defaultReadingDirection: "rtl",
       status: "ongoing",
       author: "",
       translator: "",
@@ -203,7 +207,7 @@ export function SeriesForm({ initial, readingFormatLocked = false, currentActorI
             if (textDirty && !window.confirm("استبدال النص الحالي بالنص المستعاد؟")) return;
             const recovered = formRecovery.recovered;
             if (!recovered) return;
-            setValues(previous => ({ ...previous, titleAr: recovered.titleAr, titleOriginal: recovered.titleOriginal, slug: previous.id ? previous.slug : recovered.slug, synopsisAr: recovered.synopsisAr, author: recovered.author, translator: recovered.translator, isAdult: recovered.isAdult === "true" ? true : recovered.isAdult === "false" ? false : previous.isAdult, genres: recoverGenres(recovered.genres, previous.genres) }));
+            setValues(previous => ({ ...previous, titleAr: recovered.titleAr, titleOriginal: recovered.titleOriginal, slug: previous.id ? previous.slug : recovered.slug, synopsisAr: recovered.synopsisAr, author: recovered.author, translator: recovered.translator, isAdult: recovered.isAdult === "true" ? true : recovered.isAdult === "false" ? false : previous.isAdult, genres: recoverGenres(recovered.genres, previous.genres), defaultPresentation: recovered.defaultPresentation === "continuous" ? "continuous" : recovered.defaultPresentation === "paged" ? "paged" : previous.defaultPresentation, defaultReadingDirection: recovered.defaultReadingDirection === "ltr" ? "ltr" : recovered.defaultReadingDirection === "rtl" ? "rtl" : previous.defaultReadingDirection }));
             if (recovered.resultUncertain === "true") { setRecoveryRequired(true); setErrors("تعذّر تأكيد الحفظ السابق. تحقق من قائمة الأعمال قبل إنشاء عمل آخر."); }
             formRecovery.dismiss();
           }}>استعادة النص</Button>
@@ -251,7 +255,7 @@ export function SeriesForm({ initial, readingFormatLocked = false, currentActorI
             </SelectContent>
           </Select>
           {readingFormatLocked && <p className="text-xs text-muted-foreground">لا يمكن تغيير تنسيق القراءة بعد إضافة فصول حفاظًا على محتواها وروابط القراءة.</p>}
-          <p className="text-[11px] text-muted-foreground">أسلوب عرض الصفحات أو التمرير أو النص في القارئ.</p>
+          <p className="text-[11px] text-muted-foreground">الويب تون يُعرض رأسيًا بدون فواصل. الصفحات المصوّرة تتيح أيضًا التمرير الرأسي دون تغيير الصيغة أو الروابط.</p>
         </div>
         <div className="space-y-1.5">
           <label htmlFor={`${formId}-status`} className="text-sm font-medium">حالة العمل *</label>
@@ -272,6 +276,27 @@ export function SeriesForm({ initial, readingFormatLocked = false, currentActorI
         </div>
       </div>
 
+      {values.format === "manga" && <fieldset className="space-y-4 rounded-xl border border-border p-4">
+        <legend className="px-2 text-sm font-semibold">إعدادات عرض الصفحات</legend>
+        <div className="grid gap-4 sm:grid-cols-2">
+          <div className="space-y-1.5">
+            <label htmlFor={`${formId}-presentation`} className="text-sm font-medium">طريقة العرض الافتراضية</label>
+            <Select value={values.defaultPresentation ?? "paged"} onValueChange={v => set("defaultPresentation", v as "paged" | "continuous")}>
+              <SelectTrigger id={`${formId}-presentation`} className={field}><SelectValue /></SelectTrigger>
+              <SelectContent><SelectItem value="paged">صفحة واحدة مع التقليب</SelectItem><SelectItem value="continuous">تمرير رأسي بين الصفحات</SelectItem></SelectContent>
+            </Select>
+            <p className="text-xs leading-6 text-muted-foreground">يُطبّق عند فتح القارئ ما لم يختَر القارئ طريقة عرض أخرى لهذا العمل.</p>
+          </div>
+          <div className="space-y-1.5">
+            <label htmlFor={`${formId}-default-direction`} className="text-sm font-medium">اتجاه التقليب للفصول الجديدة</label>
+            <Select value={values.defaultReadingDirection ?? "rtl"} onValueChange={v => set("defaultReadingDirection", v as "rtl" | "ltr")}>
+              <SelectTrigger id={`${formId}-default-direction`} className={field}><SelectValue /></SelectTrigger>
+              <SelectContent><SelectItem value="rtl">من اليمين إلى اليسار</SelectItem><SelectItem value="ltr">من اليسار إلى اليمين</SelectItem></SelectContent>
+            </Select>
+            <p className="text-xs leading-6 text-muted-foreground">تغيير الافتراضي لا يغيّر اتجاه الفصول الموجودة. يمكن تخصيص الاتجاه عند إنشاء الفصل.</p>
+          </div>
+        </div>
+      </fieldset>}
       <div className="space-y-1.5">
         <label htmlFor={`${formId}-synopsis`} className="text-sm font-medium">الملخص العربي *</label>
         <textarea
@@ -403,7 +428,7 @@ export function ChapterForm({
   currentActorId,
 }: {
   currentActorId: string;
-  seriesOptions: { id: string; titleAr: string; format: Format; nextNumber?: number }[];
+  seriesOptions: { id: string; titleAr: string; format: Format; nextNumber?: number; defaultReadingDirection?: "rtl" | "ltr"; defaultPresentation?: "paged" | "continuous" }[];
   isAdmin?: boolean;
 }) {
   const formId = useId();
@@ -413,7 +438,7 @@ export function ChapterForm({
   const [number, setNumber] = useState(String(seriesOptions[0]?.nextNumber ?? 1));
   const [titleAr, setTitleAr] = useState("");
   const [workflow, setWorkflow] = useState<"draft" | "review">("draft");
-  const [readingDirection, setReadingDirection] = useState<"rtl" | "ltr">("rtl");
+  const [readingDirection, setReadingDirection] = useState<"rtl" | "ltr">(seriesOptions[0]?.defaultReadingDirection ?? "rtl");
 
   const [novelBody, setNovelBody] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -422,11 +447,11 @@ export function ChapterForm({
   const submitGate = useRef(createSubmissionGate());
   const selected = seriesOptions.find((s) => s.id === seriesId);
   const suggestedNumber = String(selected?.nextNumber ?? 1);
-  const { markSaved } = useUnsavedChanges(Boolean(titleAr || novelBody || number !== suggestedNumber || seriesId !== (seriesOptions[0]?.id ?? "") || workflow !== "draft" || readingDirection !== "rtl"));
+  const { markSaved } = useUnsavedChanges(Boolean(titleAr || novelBody || number !== suggestedNumber || seriesId !== (seriesOptions[0]?.id ?? "") || workflow !== "draft" || readingDirection !== (selected?.defaultReadingDirection ?? "rtl")));
   const formRecovery = useSessionFormDraft(
     { actorId: currentActorId, entityId: `chapter:new:${seriesId}`, serverSnapshot: "new-chapter-v1" },
-    { titleAr, novelBody, number, resultUncertain: String(recoveryRequired) },
-    Boolean(titleAr || novelBody || number !== suggestedNumber || recoveryRequired),
+    { titleAr, novelBody, number, readingDirection, resultUncertain: String(recoveryRequired) },
+    Boolean(titleAr || novelBody || number !== suggestedNumber || readingDirection !== (selected?.defaultReadingDirection ?? "rtl") || recoveryRequired),
   );
 
   const isManga = selected?.format === "manga";
@@ -440,7 +465,7 @@ export function ChapterForm({
     setNovelBody("");
     setNumber(String(seriesOptions.find(series => series.id === nextSeriesId)?.nextNumber ?? 1));
     setWorkflow("draft");
-    setReadingDirection("rtl");
+    setReadingDirection(seriesOptions.find(series => series.id === nextSeriesId)?.defaultReadingDirection ?? "rtl");
     setError(null);
   }
 
@@ -499,6 +524,7 @@ export function ChapterForm({
             const recovered = formRecovery.recovered;
             if (!recovered) return;
             setTitleAr(recovered.titleAr); setNovelBody(recovered.novelBody); setNumber(recovered.number);
+            if (recovered.readingDirection === "rtl" || recovered.readingDirection === "ltr") setReadingDirection(recovered.readingDirection);
             if (recovered.resultUncertain === "true") { setRecoveryRequired(true); setError("تعذّر تأكيد الإنشاء السابق. تحقق من قائمة الفصول قبل إنشاء فصل آخر."); }
             formRecovery.dismiss();
           }}>استعادة النص</Button>
@@ -546,14 +572,15 @@ export function ChapterForm({
         </div>
         {isManga && (
           <div className="space-y-1.5">
-            <label htmlFor={`${formId}-direction`} className="text-sm font-medium">اتجاه القراءة</label>
+            <label htmlFor={`${formId}-direction`} className="text-sm font-medium">اتجاه تقليب الصفحات</label>
             <Select value={readingDirection} onValueChange={(v) => setReadingDirection(v as "rtl" | "ltr")}>
               <SelectTrigger id={`${formId}-direction`} className="min-h-[44px] bg-card"><SelectValue /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="rtl">يمين ← يسار (يابانية)</SelectItem>
-                <SelectItem value="ltr">يسار → يمين</SelectItem>
+                <SelectItem value="rtl">من اليمين إلى اليسار</SelectItem>
+                <SelectItem value="ltr">من اليسار إلى اليمين</SelectItem>
               </SelectContent>
             </Select>
+            <p className="text-xs leading-6 text-muted-foreground">عرض العمل الافتراضي: {selected?.defaultPresentation === "continuous" ? "تمرير رأسي بين الصفحات" : "صفحة واحدة"}. الاتجاه يُستخدم عند التقليب صفحة بصفحة.</p>
           </div>
         )}
       </div>

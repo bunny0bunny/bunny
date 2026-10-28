@@ -1,0 +1,18 @@
+# Reader presentation design — 2026-10-28
+
+Status: approved by the user in chat after two Claude debate rounds. Execution and configured fleet delegation explicitly authorized.
+
+## Goal and scope
+Separate image presentation from page-turn direction. Keep manga/webtoon/novel formats, stable URLs, stored translations, English-first work titles, Arabic UI, adult/premium guards, editorial approval and media pipeline intact. MVP adds manga paged/continuous layouts, series defaults, local per-series reader layout preference/reset, fit width/page in paged mode, and accurate image-relative progress. Webtoon remains gapless continuous; continuous manga has a small fixed gap. Two-page spreads and auto-scroll are later work, not this release.
+
+## Authored defaults
+Add Series.defaultPresentation (paged|continuous, default paged) and defaultReadingDirection (rtl|ltr, default rtl). These apply to manga only; webtoon/novel ignore them. Existing Chapter/ChapterRevision direction stays authoritative. A new manga chapter copies the series direction if an explicit direction is absent. Series direction edits never rewrite chapters/revisions. Layout default is comfort metadata: applies on next reader load when no local reader override. No chapter layout/revision fields. Series format lock and slugs remain unchanged.
+
+## Reader behavior
+Manga layout precedence: saved valid local series preference > series default > paged. Direction: temporary chapter toggle > published chapter direction, no persisted direction override. Native scroll/pinch remain available; horizontal tap/swipe handlers only in paged mode. Continuous controls do not hijack scrolling or interactive targets. Layout switch retains current image/page anchor, within-image offset where available. Fit width/page applies to paged manga only, not tall webtoon strips. Reuse images and rendering components; never duplicate, flip, crop, compress or upload media due to presentation changes. Avoid loading all decoded images; bounded near-viewport loading with reserved aspect-ratio placeholders for long chapters where needed.
+
+## Progress contract
+Add nullable ReadingProgress.pageOffset, bounded 0..1; extend ReaderProgress/LocalProgress with optional nullable pageOffset. Non-null offset identifies new image-anchor semantics (pageIndex+fractional offset). Old local/server entries remain readable and use conservative legacy percent fallback for webtoon; exact historical position cannot be reconstructed. Manga keeps format=manga and its canonical route regardless of layout. Continuous progress denominator is images only, excluding comments/chrome/end cards. Percent stays below99 until final CONTENT image bottom is observed; then100. Handle one-image chapter, tall last image, resize, width changes, unloaded images, empty content, locks and storage denial. No synthetic percent||1 write on restoration. Throttle writes, cancel stale async restoration on layout/chapter changes; prefer newest valid local/server progress. Completed server records do not become incomplete when rereading. Existing novel behavior is not redesigned.
+
+## Acceptance
+Unit tests for progress geometry/legacy validation/preference precedence; isolated PostgreSQL tests for new defaults and progress persistence/auth/access; existing trash/editorial/media/publication suites; reader interaction checks where browser available; typecheck/lint/Cloudflare build and artifact checks. Mobile long chapter memory gate must be addressed with bounded rendering if real-device measurement unavailable. Production QA read-only; private backup before additive migration, existing content IDs preserved, no seed/reset or media writes. Existing user authorization covers publishing verified changes. No new dependency/service.

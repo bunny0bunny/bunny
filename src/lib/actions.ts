@@ -5,7 +5,7 @@ import { z } from "zod";
 import { getWorkTitle, workTitleIssue } from '@/lib/work-title';
 import { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
-import { currentProfileOrNull } from "@/lib/queries";
+import { currentProfileOrNull, liveChapterWhere } from "@/lib/queries";
 import { notifyCommentLike } from "@/lib/notifications";
 import { revalidatePath } from "next/cache";
 import { isWorkflow, isRole, type Workflow, type Role } from "@/lib/constants";
@@ -21,6 +21,7 @@ const progressSchema = z.object({
   seriesSlug: z.string().min(1),
   chapterNumber: z.number().int().min(1),
   pageIndex: z.number().int().min(0),
+  pageOffset: z.number().finite().min(0).max(1).nullable().optional(),
   percent: z.number().min(0).max(100),
   completed: z.boolean(),
 });
@@ -32,12 +33,12 @@ export async function saveReadingProgress(input: unknown): Promise<ActionResult>
   if (!profile) return { ok: false, error: "unauthenticated" };
   const parsed = progressSchema.safeParse(input);
   if (!parsed.success) return { ok: false, error: "invalid" };
-  const { seriesSlug, chapterNumber, pageIndex, percent, completed } = parsed.data;
+  const { seriesSlug, chapterNumber, pageIndex, percent, completed, pageOffset } = parsed.data;
 
   const series = await db.series.findUnique({ where: { slug: seriesSlug, deletedAt: null } });
   if (!series) return { ok: false, error: "not_found" };
   const chapter = await db.chapter.findFirst({
-    where: { deletedAt: null, series: { deletedAt: null }, seriesId: series.id, number: chapterNumber, workflow: "published" },
+    where: { ...liveChapterWhere(), seriesId: series.id, number: chapterNumber, isPremiumDemo: false },
   });
   if (!chapter) return { ok: false, error: "not_found" };
 
@@ -47,12 +48,14 @@ export async function saveReadingProgress(input: unknown): Promise<ActionResult>
 
   await db.readingProgress.upsert({
     where: { profileId_chapterId: { profileId: profile.id, chapterId: chapter.id } },
-    update: { pageIndex, percent, completed, seriesId: series.id },
+    // Never write false on update: concurrent rereads cannot undo completion.
+    update: { pageIndex, pageOffset: pageOffset ?? null, percent, ...(completed ? { completed: true } : {}), seriesId: series.id },
     create: {
       profileId: profile.id,
       seriesId: series.id,
       chapterId: chapter.id,
       pageIndex,
+      pageOffset: pageOffset ?? null,
       percent,
       completed,
     },
@@ -98,6 +101,8 @@ const seriesSchema = z
     synopsisAr: z.string().min(20, "الملخص قصير جدًا (٢٠ حرفًا على الأقل)"),
     category: z.enum(["manga", "manhwa", "novel", "comic"]).nullable().optional(),
     format: z.enum(["manga", "webtoon", "novel"]),
+    defaultPresentation: z.enum(["paged", "continuous"]).optional(),
+    defaultReadingDirection: z.enum(["rtl", "ltr"]).optional(),
     status: z.enum(["ongoing", "completed", "hiatus"]),
     author: z.string().min(2, "المؤلف مطلوب"),
     translator: z.string().optional(),
@@ -135,6 +140,8 @@ export async function upsertSeries(input: unknown): Promise<ActionResult & { slu
     slug: d.slug,
     synopsisAr: d.synopsisAr,
     format: d.format,
+    ...(d.format === "manga" && d.defaultPresentation !== undefined ? { defaultPresentation: d.defaultPresentation } : {}),
+    ...(d.format === "manga" && d.defaultReadingDirection !== undefined ? { defaultReadingDirection: d.defaultReadingDirection } : {}),
     status: d.status,
     author: d.author,
     translator: d.translator || null,
@@ -297,7 +304,7 @@ const createChapterSchema = z.object({
   titleAr: z.string().min(2, "عنوان الفصل مطلوب"),
   workflow: z.enum(["draft", "review", "published"]),
   isPremiumDemo: z.boolean(),
-  readingDirection: z.enum(["rtl", "ltr"]),
+  readingDirection: z.enum(["rtl", "ltr"]).optional(),
   pageCount: z.number().int().min(1).max(30).optional().default(1),
   scheduledFor: z.string().datetime({ offset: true }).nullable().optional(),
   novelBody: z.string().max(60000).optional(),
@@ -341,7 +348,8 @@ export async function createChapter(input: unknown): Promise<ActionResult & { id
   let chapter;
   try {
     chapter = await db.$transaction(async tx => {
-      if (!await tx.series.findFirst({ where: { id: series.id, deletedAt: null }, select: { id: true } })) throw new Error("content_unavailable");
+      const currentSeries = await tx.series.findFirst({ where: { id: series.id, deletedAt: null }, select: { format: true, defaultReadingDirection: true } });
+      if (!currentSeries) throw new Error("content_unavailable");
       return tx.chapter.create({
       data: {
         seriesId: series.id,
@@ -351,7 +359,7 @@ export async function createChapter(input: unknown): Promise<ActionResult & { id
         publishedAt: null,
         scheduledFor: null,
         isPremiumDemo: d.isPremiumDemo,
-        readingDirection: d.readingDirection,
+        readingDirection: d.readingDirection ?? (currentSeries.format === "manga" ? currentSeries.defaultReadingDirection : "rtl"),
         novelBody: d.novelBody ?? null,
       },
       });

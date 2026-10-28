@@ -30,6 +30,8 @@ export default async function NewChapterPage({
     id: s.id,
     titleAr: getWorkTitle(s),
     format: s.format as Format,
+    defaultReadingDirection: s.defaultReadingDirection,
+    defaultPresentation: s.defaultPresentation,
     nextNumber: nextNumbers.get(s.id) ?? 1,
   }));
   // preselect via ?series=

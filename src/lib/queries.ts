@@ -384,8 +384,8 @@ export async function getChapterForReading(seriesSlug: string, chapterNumber: nu
 export async function getReaderProgress(profileId: string | null, chapterId: string) {
   if (!profileId) return null;
   const row = await db.readingProgress.findUnique({
-    where: { profileId_chapterId: { profileId, chapterId }, chapter: liveChapterWhere() },
-    select: { pageIndex: true, percent: true, updatedAt: true },
+    where: { profileId_chapterId: { profileId, chapterId }, chapter: { ...liveChapterWhere(), isPremiumDemo: false } },
+    select: { pageIndex: true, pageOffset: true, percent: true, completed: true, updatedAt: true },
   });
   return row ? { ...row, updatedAt: row.updatedAt.getTime() } : null;
 }

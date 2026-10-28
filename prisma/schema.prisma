@@ -70,6 +70,13 @@ enum ReadingDirection {
   @@map("reading_direction")
 }
 
+enum ReadingPresentation {
+  paged
+  continuous
+
+  @@map("reading_presentation")
+}
+
 enum AnalyticsEventType {
   read_start
   read_page
@@ -200,6 +207,8 @@ model Series {
   synopsisAr    String
   category      SeriesCategory?
   format        SeriesFormat
+  defaultPresentation ReadingPresentation @default(paged)
+  defaultReadingDirection ReadingDirection @default(rtl)
   status        SeriesStatus       @default(ongoing)
   genresJson    String             @default("[]")
   tagsJson      String             @default("[]")
@@ -374,6 +383,7 @@ model ReadingProgress {
   seriesId  String
   chapterId String
   pageIndex Int      @default(0)
+  pageOffset Float?
   percent   Float    @default(0)
   completed Boolean  @default(false)
   updatedAt DateTime @updatedAt

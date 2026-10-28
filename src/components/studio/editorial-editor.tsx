@@ -743,7 +743,7 @@ export function EditorialEditor({
 
               {chapter.format === "manga" && (
                 <div className="space-y-1.5">
-                  <label htmlFor={`${editorId}-direction`} className="text-sm font-medium">اتجاه القراءة</label>
+                  <label htmlFor={`${editorId}-direction`} className="text-sm font-medium">اتجاه تقليب الصفحات</label>
                   <select
                     id={`${editorId}-direction`}
                     value={readingDirection}
@@ -751,8 +751,8 @@ export function EditorialEditor({
                     disabled={isReadOnlyStatus || actionsBlocked}
                     className="min-h-[44px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
                   >
-                    <option value="rtl">من اليمين إلى اليسار (يابانية / RTL)</option>
-                    <option value="ltr">من اليسار إلى اليمين (LTR)</option>
+                    <option value="rtl">من اليمين إلى اليسار</option>
+                    <option value="ltr">من اليسار إلى اليمين</option>
                   </select>
                 </div>
               )}
@@ -1055,7 +1055,7 @@ export function EditorialEditor({
               الفصل {chapter.number}: {titleAr}
             </h2>
             <p className="mt-1 text-xs text-muted-foreground">
-              العمل: {chapter.seriesTitleAr} · التنسيق: {chapter.format === 'manga' ? 'صفحات مصوّرة' : chapter.format === 'webtoon' ? 'تمرير رأسي' : 'نص روائي'}{isVisual ? ` · اتجاه القراءة: ${readingDirection === 'rtl' ? 'من اليمين لليسار' : 'من اليسار لليمين'}` : ''}
+              العمل: {chapter.seriesTitleAr} · التنسيق: {chapter.format === 'manga' ? 'صفحات مصوّرة' : chapter.format === 'webtoon' ? 'تمرير رأسي بدون فواصل' : 'نص روائي'}{chapter.format === 'manga' ? ` · اتجاه التقليب: ${readingDirection === 'rtl' ? 'من اليمين لليسار' : 'من اليسار لليمين'}` : ''}
             </p>
           </header>
 

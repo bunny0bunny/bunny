@@ -58,6 +58,7 @@ export default async function MangaReaderPage({
         width: p.width,
         height: p.height,
       }))}
+      defaultPresentation={data.series.defaultPresentation === "continuous" ? "continuous" : "paged"}
       defaultDirection={isReadingDirection(data.chapter.readingDirection) ? data.chapter.readingDirection : "rtl"}
       next={data.next ? { number: data.next.number, isPremiumDemo: data.next.isPremiumDemo } : null}
       prev={data.prev ? { number: data.prev.number, isPremiumDemo: data.prev.isPremiumDemo } : null}

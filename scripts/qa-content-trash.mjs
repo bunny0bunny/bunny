@@ -31,6 +31,8 @@ try{
  const cols=await client.query(`SELECT column_name FROM information_schema.columns WHERE table_name='ContentTrash'`);if(!cols.rows.some(c=>c.column_name==='activeKey'))throw Error('Trash migration missing');await client.end();report.checks.push('all migrations replayed on isolated PostgreSQL');
  const testsDir=path.join(root,'tests/team-access');
  let files=process.argv.includes('--all')?(await readdir(testsDir)).filter(f=>f.endsWith('.test.ts')):['content-trash.test.ts','content-trash-boundaries.test.ts'];
+ const only=process.argv.find(arg=>arg.startsWith('--only='))?.slice(7);
+ if(only){files=files.filter(f=>f===only+'.test.ts');if(!files.length)throw Error('Unknown isolated test suite');}
  if(process.argv.includes('--all')){
   await run('bun',['--tsconfig-override='+path.join(root,'tsconfig.json'),path.join(root,'prisma/seed.ts')],'isolated-seed');
   await run(process.execPath,[path.join(root,'tests/reader/seed.mjs')],'isolated-reader-seed');

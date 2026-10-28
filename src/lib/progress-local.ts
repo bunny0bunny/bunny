@@ -15,6 +15,8 @@ export type LocalProgress = {
   chapterNumber: number;
   chapterTitle: string;
   pageIndex: number;
+  pageOffset?: number | null;
+  completed?: boolean;
   percent: number;
   total: number;
   format: "manga" | "webtoon" | "novel";
@@ -71,5 +73,5 @@ export function writeLocal(p: Omit<LocalProgress, "updatedAt">) {
 export function hasReadLocal(seriesSlug: string, chapterNumber: number): boolean {
   const p = readLocal(seriesSlug);
   if (!p) return false;
-  return p.chapterNumber > chapterNumber || (p.chapterNumber === chapterNumber && p.percent >= 99);
+  return p.chapterNumber > chapterNumber || (p.chapterNumber === chapterNumber && (p.completed === true || p.percent >= 99));
 }

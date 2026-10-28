@@ -81,6 +81,7 @@ export function ReaderChrome({
     <>
       {/* Top Header Chrome */}
       <header
+        data-reader-header
         inert={immersive}
         className={`fixed inset-x-0 top-0 z-40 border-b border-border bg-background transition-transform duration-300 motion-reduce:transition-none ${
           immersive ? "-translate-y-full" : "translate-y-0"
@@ -206,6 +207,7 @@ export function ReaderFloatingBar({
 
   return (
     <footer
+      data-reader-bottom
       role="region"
       aria-label="شريط أدوات القارئ السريع"
       inert={immersive}
