@@ -1,0 +1,10 @@
+import {beforeEach,expect,mock,test}from'bun:test';
+let scopes=0,runs=0;
+const summary={examined:1,delivered:1,completed:1,suppressed:0,failed:0,skipped:0};
+mock.module('../../src/lib/db',()=>({withDatabaseScope:async(run:()=>Promise<unknown>)=>{scopes++;return run();}}));
+mock.module('../../src/lib/publications/service',()=>({drainPublications:async({limit,recipientLimit}:{limit:number;recipientLimit:number})=>{expect(limit).toBe(3);expect(recipientLimit).toBe(200);runs++;return summary;}}));
+const route=await import('../../src/app/api/notifications/deliver/route');
+beforeEach(()=>{scopes=0;runs=0;process.env.EDITORIAL_CRON_SECRET='synthetic';delete process.env.PUBLICATION_DELIVERY_ENABLED;});
+test('missing or incorrect authorization never enters delivery scope',async()=>{for(const authorization of['','Bearer wrong','synthetic'])expect((await route.POST(new Request('https://test.invalid/api/notifications/deliver',{method:'POST',headers:{authorization}}))).status).toBe(401);expect(scopes).toBe(0);expect(runs).toBe(0);});
+test('correctly authenticated disabled rollout never queries the database',async()=>{const response=await route.POST(new Request('https://test.invalid/api/notifications/deliver',{method:'POST',headers:{authorization:'Bearer synthetic'}}));expect(await response.json()).toEqual({ok:true,enabled:false});expect(scopes).toBe(0);expect(runs).toBe(0);});
+test('enabled rollout performs only the bounded batch',async()=>{process.env.PUBLICATION_DELIVERY_ENABLED='1';const response=await route.POST(new Request('https://test.invalid/api/notifications/deliver',{method:'POST',headers:{authorization:'Bearer synthetic'}}));expect(response.status).toBe(200);expect(await response.json()).toEqual({ok:true,enabled:true,summary});expect(scopes).toBe(1);expect(runs).toBe(1);expect('GET'in route).toBe(false);});

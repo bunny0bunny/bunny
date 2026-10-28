@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useSession, signOut } from "next-auth/react";
-import { BookOpenText, BookMarked, Compass, Library, Search, LogOut, ShieldCheck, UserRound, PenTool, MessageSquarePlus } from "lucide-react";
+import { BookOpenText, BookMarked, Compass, Library, Search, LogOut, ShieldCheck, UserRound, PenTool, MessageSquarePlus, UsersRound } from "lucide-react";
 import { BrandMark } from "@/components/library/brand-mark";
 import { NotificationBell } from "@/components/library/notification-bell";
 import { Button } from "@/components/ui/button";
@@ -77,7 +77,7 @@ export function SiteHeader() {
       <div className="mx-auto flex h-16 max-w-6xl items-center gap-3 px-4 sm:px-6">
         <Logo />
 
-        <nav className="mx-4 hidden items-center gap-1 md:flex" aria-label="التنقل الرئيسي">
+        <nav className="mx-2 hidden items-center gap-1 lg:flex" aria-label="التنقل الرئيسي">
           <Button
             asChild
             variant="ghost"
@@ -122,6 +122,7 @@ export function SiteHeader() {
               <span>التحديثات</span>
             </Link>
           </Button>
+          <Button asChild variant="ghost" size="sm" className={pathname.startsWith('/translators') ? 'h-11 rounded-none border-b-2 border-primary text-primary' : 'h-11 rounded-none border-b-2 border-transparent text-muted-foreground hover:text-foreground'}><Link href="/translators">فرق الترجمة</Link></Button>
         </nav>
 
         <div className="ms-auto flex items-center gap-2">
@@ -129,7 +130,7 @@ export function SiteHeader() {
           <form
             action="/explore"
             method="GET"
-            className="relative hidden md:block w-52 lg:w-64"
+            className="relative hidden md:block w-52 xl:w-64"
             role="search"
           >
             <Search className="absolute start-3 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground pointer-events-none" aria-hidden />
@@ -142,12 +143,8 @@ export function SiteHeader() {
             />
           </form>
 
-          {/* Mobile search icon */}
-          <Button asChild variant="ghost" size="icon" className="size-11 text-muted-foreground hover:text-foreground md:hidden">
-            <Link href="/explore" aria-label="ابحث في المكتبة">
-              <Search className="size-4" aria-hidden />
-            </Link>
-          </Button>
+          {/* Compact navigation keeps translation profiles discoverable without another header row. */}
+          <DropdownMenu><DropdownMenuTrigger asChild><Button variant="ghost" size="icon" className="size-11 text-muted-foreground lg:hidden" aria-label="البحث وقائمة المكتبة"><Search className="size-4" aria-hidden /></Button></DropdownMenuTrigger><DropdownMenuContent align="end"><DropdownMenuItem asChild><Link href="/explore" className="min-h-11 cursor-pointer"><Search className="me-2 size-4" aria-hidden />البحث والاستكشاف</Link></DropdownMenuItem><DropdownMenuItem asChild><Link href="/translators" className="min-h-11 cursor-pointer"><UsersRound className="me-2 size-4" aria-hidden />فرق الترجمة</Link></DropdownMenuItem>{session && <DropdownMenuItem asChild><Link href="/following" className="min-h-11 cursor-pointer">أتابعهم</Link></DropdownMenuItem>}</DropdownMenuContent></DropdownMenu>
 
           <Button asChild variant="ghost" size="sm" className="hidden min-h-11 text-muted-foreground xl:inline-flex">
             <Link href="/requests/new"><MessageSquarePlus className="me-1.5 size-4" aria-hidden />اطلب عملًا</Link>

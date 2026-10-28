@@ -1,3 +1,5 @@
+import { getSeriesCredits } from "@/lib/public-identities/service";
+import { creditLabels } from "@/components/public-identities/shared";
 import { AdultBadge } from "@/components/library/adult-badge";
 import { normalizeGenres } from "@/lib/genres";
 import { getWorkTitle, getWorkTitles } from '@/lib/work-title';
@@ -66,6 +68,7 @@ export default async function SeriesDetailPage({
   const s = await getSeriesBySlug(slug);
   if (!s) notFound();
   const titles = getWorkTitles(s);
+  const publicCredits = await getSeriesCredits(s.id);
 
   const profile = await currentProfileOrNull();
   const progressMap = await getProgressMap(profile?.id ?? null, s.id);
@@ -167,7 +170,7 @@ export default async function SeriesDetailPage({
                   <dt className="flex items-center gap-2 text-muted-foreground"><UserRound className="size-4" aria-hidden /> المؤلف</dt>
                   <dd className="max-w-full break-words font-medium">{s.author}</dd>
                 </div>
-                {s.translator && <div className="flex flex-wrap justify-between gap-2">
+                {publicCredits.length === 0 && s.translator && <div className="flex flex-wrap justify-between gap-2">
                   <dt className="flex items-center gap-2 text-muted-foreground"><Languages className="size-4" aria-hidden /> المترجم</dt>
                   <dd className="max-w-full break-words font-medium">{s.translator}</dd>
                 </div>}
@@ -210,12 +213,13 @@ export default async function SeriesDetailPage({
                   </div>
                 </div>
               </section>
+              {publicCredits.length > 0 && <section aria-label="ترجمة وإعداد" className="mt-4 rounded-xl border border-border px-4 py-3"><h2 className="mb-1 text-sm font-bold">ترجمة وإعداد</h2><ul className="flex flex-wrap gap-x-5">{publicCredits.map(credit => <li key={`${credit.identityId}:${credit.role}`}><Link href={`/translators/${credit.slug}`} className="inline-flex min-h-11 items-center gap-2 text-sm hover:text-primary"><span className="text-muted-foreground">{creditLabels[credit.role]}</span><span>{credit.displayName}</span></Link></li>)}</ul></section>}
               <div className="px-1 pt-5 lg:hidden"><WorkSynopsis synopsis={s.synopsisAr} /></div>
               <div className="mt-5 lg:mt-4">
                 <WorkTabs slug={s.slug} format={s.format as Format} coverPath={s.coverPath}
                   publishedChapters={publishedView} scheduledChapters={scheduledView} serverProgress={serverProgress}
                   progressMapEntries={progressEntries} aboutData={{ titleAr: getWorkTitle(s), synopsisAr: s.synopsisAr,
-                    author: s.author, translator: s.translator, categoryLabel, formatLabel, statusLabel, genres, tags }}>
+                    author: s.author, translator: publicCredits.length ? null : s.translator, categoryLabel, formatLabel, statusLabel, genres, tags }}>
                   <div className="grid items-start gap-5 xl:grid-cols-[240px_minmax(0,1fr)]">
                     <RatingWidget slug={s.slug} ratingAvg={s.ratingAvg} ratingCount={s.ratingCount} userValue={userRating?.value ?? null} />
                     <div className="min-w-0"><CommentsSection seriesSlug={s.slug} seriesTitle={getWorkTitle(s)} comments={comments} /></div>

@@ -29,7 +29,8 @@
     "BUNNY_RUNTIME": "cloudflare",
     "ACCOUNT_MAIL_MODE": "smtp",
     "MEDIA_STORAGE_PREFIX": "prod",
-    "MEDIA_UPLOADS_ENABLED": "1"
+    "MEDIA_UPLOADS_ENABLED": "1",
+    "PUBLICATION_DELIVERY_ENABLED": "1"
   },
   "r2_buckets": [
     {

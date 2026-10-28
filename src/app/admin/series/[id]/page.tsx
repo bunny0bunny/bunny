@@ -1,3 +1,5 @@
+import { SeriesCreditsPanel } from "@/components/public-identities/series-credits-panel";
+import { listManagedIdentities, getSeriesCredits } from "@/lib/public-identities/service";
 import { normalizeGenres } from "@/lib/genres";
 import { MoveToTrashButton } from "@/components/admin/content-trash-controls";
 import { getWorkTitle } from '@/lib/work-title';
@@ -27,6 +29,7 @@ export default async function AdminSeriesDetailPage({
   if (!s) notFound();
   const genres = normalizeGenres(parseJsonArray(s.genresJson));
 
+  const [identities, publicCredits] = isAdmin ? await Promise.all([listManagedIdentities(), getSeriesCredits(s.id, true)]) : [[], []];
   const staff = isAdmin ? await getAssignableStaff() : [];
   const assignedProfileIds = (s as any).assignments?.map((a: any) => a.profileId) ?? [];
 
@@ -148,6 +151,8 @@ export default async function AdminSeriesDetailPage({
           />
         </section>
       )}
+
+      {isAdmin && <div className="mb-8"><SeriesCreditsPanel key={s.updatedAt.toISOString()} seriesId={s.id} expectedUpdatedAt={s.updatedAt.toISOString()} initialCredits={publicCredits} identities={identities} /></div>}
 
       {/* Metadata editing (admin only) */}
       {isAdmin && (

@@ -50,6 +50,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
     ...(isAdmin ? [{ href: "/admin/collections", label: "المجموعات", icon: GalleryVerticalEnd }] : []),
     ...(isAdmin ? [{ href: "/admin/requests", label: `طلبات القراء${newRequestCount ? ` (${newRequestCount})` : ""}`, icon: MessageSquarePlus }] : []),
     ...(isAdmin ? [{ href: "/admin/trash", label: "سلة المحتوى", icon: Trash2 }] : []),
+    ...(isAdmin ? [{ href: "/admin/translators", label: "المترجمون والفرق", icon: UsersRound }] : []),
     ...(isAdmin ? [{ href: "/admin/users", label: "المستخدمون", icon: UsersRound }] : []),
   ];
 

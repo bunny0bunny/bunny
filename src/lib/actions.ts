@@ -6,7 +6,7 @@ import { getWorkTitle, workTitleIssue } from '@/lib/work-title';
 import { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 import { currentProfileOrNull } from "@/lib/queries";
-import { notifyNewChapter, notifyCommentLike } from "@/lib/notifications";
+import { notifyCommentLike } from "@/lib/notifications";
 import { revalidatePath } from "next/cache";
 import { isWorkflow, isRole, type Workflow, type Role } from "@/lib/constants";
 import { isStaffRole, isAssignableRole, isAssignedToSeries } from "@/lib/team-access";

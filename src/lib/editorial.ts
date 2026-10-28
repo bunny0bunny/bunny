@@ -1,4 +1,4 @@
-import { getWorkTitle } from '@/lib/work-title';
+import { recordChapterPublication } from '@/lib/publications/service';
 import "server-only";
 import { Prisma, type ChapterRevision, type ReadingDirection } from "@prisma/client";
 import { db } from "@/lib/db";
@@ -213,6 +213,7 @@ async function publishProjection(tx: Tx, actor: Actor, revision: ChapterRevision
   if (!valid.valid) return { ok: false, error: valid.error };
   const pages = validatePagesSnapshot(revision.pagesJson);
   if (chapter.series.format !== "novel" && (!pages || !await pagesBelongToChapter(tx, chapter.id, pages))) return { ok: false, error: "صفحات النسخة غير صالحة" };
+  await recordChapterPublication(tx, chapter.id, revision.id);
   await tx.chapter.update({ where: { id: chapter.id }, data: {
     titleAr: revision.titleAr, novelBody: revision.novelBody, readingDirection: revision.readingDirection, isPremiumDemo: revision.isPremiumDemo,
     workflow: "published", publishedAt: chapter.publishedAt ?? new Date(), scheduledFor: null,
@@ -224,12 +225,6 @@ async function publishProjection(tx: Tx, actor: Actor, revision: ChapterRevision
   const updated = await tx.chapterRevision.update({ where: { id: revision.id }, data: { status: "published", scheduledFor: null, version: { increment: 1 } } });
   await audit(tx, actor, updated, scheduled ? "publish_due_scheduled" : "publish_now", undefined, { publishedAt: new Date().toISOString() });
   await tx.analyticsEvent.create({ data: { type: "publish", seriesId: chapter.seriesId, chapterId: chapter.id, profileId: actor.id, metaJson: JSON.stringify({ revisionNumber: revision.revisionNumber, version: revision.version }) } });
-  // Notifications share the publication transaction, so retries/rollbacks cannot duplicate them.
-  const followers = await tx.libraryItem.findMany({ where: { seriesId: chapter.seriesId }, select: { profileId: true } });
-  const ids = [...new Set(followers.map(follower => follower.profileId))];
-  for (let start = 0; start < ids.length; start += 500) await tx.notification.createMany({ data: ids.slice(start, start + 500).map(profileId => ({
-    profileId, type: "new_chapter" as const, titleAr: `تحديث في «${getWorkTitle(chapter.series)}»`, bodyAr: `الفصل ${chapter.number} — ${revision.titleAr} متاح الآن.`, href: `/read/${chapter.series.format}/${chapter.series.slug}/${chapter.number}`,
-  })) });
   return { ok: true, revision: updated, data: { processed: true } };
 }
 

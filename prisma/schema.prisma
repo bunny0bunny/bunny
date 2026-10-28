@@ -135,6 +135,7 @@ model Profile {
   comments              Comment[]
   commentReports        CommentReport[]
   ratings               Rating[]
+  identityFollows       IdentityFollow[]
   notifications         Notification[]
   commentLikes          CommentLike[]
   assignments           SeriesAssignment[]
@@ -214,6 +215,7 @@ model Series {
   reads         Int                @default(0)
   createdAt     DateTime           @default(now())
   updatedAt     DateTime           @updatedAt
+  publicCredits SeriesCredit[]
   chapters      Chapter[]
   progress      ReadingProgress[]
   events        AnalyticsEvent[]
@@ -455,6 +457,8 @@ model CommentLike {
 
 // Release E — in-app notification center (bell + /notifications)
 model Notification {
+  publicationId String?
+  publication ChapterPublication? @relation(fields: [publicationId], references: [id], onDelete: SetNull)
   id        String           @id @default(cuid())
   profileId String
   type      NotificationType
@@ -465,6 +469,7 @@ model Notification {
   createdAt DateTime         @default(now())
   profile   Profile          @relation(fields: [profileId], references: [id], onDelete: Cascade)
 
+  @@unique([profileId, publicationId])
   @@index([profileId, readAt, createdAt])
 }
 
@@ -589,4 +594,72 @@ model ContentRequest {
   @@index([profileId,createdAt])
   @@index([mergedIntoId,status,createdAt])
   @@index([fulfilledSeriesId])
+}
+
+model PublicIdentity {
+  id String @id @default(cuid())
+  slug String @unique
+  displayName String
+  bio String @default("")
+  avatarSeed String @default("bunny")
+  kind String @default("individual")
+  status String @default("active")
+  version Int @default(1)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  credits SeriesCredit[]
+  follows IdentityFollow[]
+  @@index([status, displayName])
+}
+model SeriesCredit {
+  id String @id @default(cuid())
+  seriesId String
+  identityId String
+  role String
+  position Int @default(0)
+  createdAt DateTime @default(now())
+  series Series @relation(fields: [seriesId], references: [id], onDelete: Cascade)
+  identity PublicIdentity @relation(fields: [identityId], references: [id], onDelete: Cascade)
+  @@unique([seriesId, identityId, role])
+  @@index([identityId, seriesId])
+}
+model IdentityFollow {
+  id String @id @default(cuid())
+  profileId String
+  identityId String
+  followedAt DateTime @default(now())
+  alertsEnabledAt DateTime?
+  profile Profile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  identity PublicIdentity @relation(fields: [identityId], references: [id], onDelete: Cascade)
+  @@unique([profileId, identityId])
+  @@index([identityId, alertsEnabledAt, profileId])
+}
+model ChapterPublication {
+  id String @id @default(cuid())
+  // Scalar immutable IDs intentionally survive hard purge. Resolve live targets explicitly.
+  chapterId String @unique
+  seriesId String
+  eventAt DateTime @default(now())
+  firstPublishedAt DateTime?
+  seriesDebut Boolean @default(false)
+  creditsSnapshot Json @default("[]")
+  isAdult Boolean @default(false)
+  isPremium Boolean @default(false)
+  seriesTitle String
+  chapterTitle String
+  chapterNumber Int
+  seriesSlug String
+  format String
+  state String @default("pending")
+  evidenceJson Json @default("[]")
+  cursorProfileId String?
+  leaseToken String?
+  leaseUntil DateTime?
+  attempts Int @default(0)
+  errorCode String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  notifications Notification[]
+  @@index([state, eventAt])
+  @@index([seriesId])
 }

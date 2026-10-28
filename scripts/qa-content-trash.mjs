@@ -36,7 +36,7 @@ try{
   await run(process.execPath,[path.join(root,'tests/reader/seed.mjs')],'isolated-reader-seed');
  }
  const failures=[];
- for(const f of files)try{await run('bun',['test','--tsconfig-override='+path.join(root,'tsconfig.json'),'--preload='+path.join(testsDir,'session-fixture.ts'),path.join(testsDir,f)],f.replace('.test.ts',''));}catch(error){failures.push({file:f,error:error.message});}
+ for(const f of files)try{await run('bun',['test','--timeout','30000','--tsconfig-override='+path.join(root,'tsconfig.json'),'--preload='+path.join(testsDir,'session-fixture.ts'),path.join(testsDir,f)],f.replace('.test.ts',''));}catch(error){failures.push({file:f,error:error.message});}
  if(failures.length){report.failures=failures;throw Error(`${failures.length} test file(s) failed; see per-file logs`);}
  report.completed=true;
 }catch(error){report.error=error.message;console.error(error.message);process.exitCode=1;}

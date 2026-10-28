@@ -83,7 +83,9 @@ test("publication replaces exactly approved text once and preserves progress ide
   expect(projection.titleAr).toBe("النسخة المعتمدة");
   expect(projection.novelBody).toBe("النص الجديد الذي اعتمده الأدمن.");
   expect(await db.readingProgress.count({ where: { chapterId: current.id, profileId: readerId, percent: 35 } })).toBe(1);
-  expect(await db.notification.count({ where: { profileId: readerId } })).toBe(before + 1);
+  // These fixtures were already public. A correction/replacement must not announce a new release.
+  expect(await db.notification.count({ where: { profileId: readerId } })).toBe(before);
+  expect((await db.chapterPublication.findUniqueOrThrow({where:{chapterId:current.id}})).state).toBe('baseline');
   expect((await approveRevision({ revisionId: published.revision!.id, expectedVersion: published.revision!.version })).ok).toBe(false);
   const next = await openOrCreateDraft(current.id);
   const pending = await updateDraftSnapshot({ revisionId: next.revision!.id, expectedVersion: next.revision!.version, novelBody: "مسودة لاحقة لا يجوز عرضها." });
@@ -121,7 +123,9 @@ test("a scheduled replacement keeps old content until due and publishes once und
   const results = await Promise.all([1, 2].map(() => withActor(adminId, () => executeDuePublications())));
   expect(results.reduce((sum, result) => sum + result.publishedCount, 0)).toBe(1);
   expect((await db.chapter.findUniqueOrThrow({ where: { id: current.id } })).novelBody).toBe("النسخة التي تنتظر موعدها.");
-  expect(await db.notification.count({ where: { profileId: readerId } })).toBe(before + 1);
+  // These fixtures were already public. A correction/replacement must not announce a new release.
+  expect(await db.notification.count({ where: { profileId: readerId } })).toBe(before);
+  expect((await db.chapterPublication.findUniqueOrThrow({where:{chapterId:current.id}})).state).toBe('baseline');
   expect((await executeDuePublications()).publishedCount).toBe(0);
 });
 

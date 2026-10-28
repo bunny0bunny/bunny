@@ -1,3 +1,4 @@
+import { runPublicationDelivery } from './src/lib/publications/scheduler.ts';
 import nextWorker from './.open-next/worker.js';
 import { runScheduledPublication } from './src/lib/editorial-scheduler.ts';
 import { runMediaMaintenance } from './src/lib/media/maintenance-scheduler.ts';
@@ -11,7 +12,7 @@ const worker = {
     return await serveRouteChunk(request, env, routeChunkAliases) ?? nextWorker.fetch(request, env, ctx);
   },
   async scheduled(_controller, env) {
-    const results = await Promise.allSettled([runScheduledPublication(env), runMediaMaintenance(env)]);
+    const results = await Promise.allSettled([runScheduledPublication(env), runMediaMaintenance(env), runPublicationDelivery(env)]);
     for (const result of results) if (result.status === 'rejected') throw result.reason;
   },
 };

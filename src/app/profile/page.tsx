@@ -86,6 +86,8 @@ export default async function ProfilePage() {
             </div>
           </header>
 
+          <Link href="/following" className="mt-5 inline-flex min-h-11 items-center rounded-lg border border-border px-4 text-sm hover:text-primary">أتابعهم</Link>
+
           {/* stats */}
           <section aria-label="إحصاءات القراءة" className="mt-7 grid grid-cols-2 gap-3 sm:grid-cols-4">
             {statCards.map((s) => (
