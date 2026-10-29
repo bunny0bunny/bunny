@@ -9,6 +9,7 @@ import { ReaderImage } from "@/components/readers/reader-image";
 import { MangaTouchSurface } from "@/components/readers/manga-touch-surface";
 import { ReaderChrome, ChapterEndCard, LockedChapterPanel } from "@/components/readers/reader-chrome";
 import { ChapterCommentsDialog } from "@/components/community/chapter-comments-dialog";
+import { ChapterDownloadButton } from "@/components/downloads/chapter-download-button";
 import { type ReaderProgress } from "@/lib/reader-progress";
 import { readerHref } from "@/lib/reader-route";
 import type { CommentView } from "@/lib/queries";
@@ -22,6 +23,8 @@ export function MangaReader({
   seriesSlug,
   seriesTitle,
   isAdult = false,
+  chapterId,
+  downloadsEnabled = false,
   chapterNumber,
   chapterTitle,
   chapters,
@@ -37,6 +40,8 @@ export function MangaReader({
   seriesSlug: string;
   seriesTitle: string;
   isAdult?: boolean;
+  chapterId?: string;
+  downloadsEnabled?: boolean;
   chapterNumber: number;
   chapterTitle: string;
   chapters: ReaderChapter[];
@@ -135,14 +140,15 @@ export function MangaReader({
         percent={percent}
         immersive={immersive}
         onToggleImmersive={() => { capture(); setImmersive((v) => !v); }}
-        headerExtra={
+        headerExtra={<>
+          {downloadsEnabled && chapterId && <ChapterDownloadButton chapterId={chapterId} />}
           <ChapterCommentsDialog
             seriesSlug={seriesSlug}
             seriesTitle={seriesTitle}
             chapterNumber={chapterNumber}
             comments={comments}
           />
-        }
+        </>}
       >
         <fieldset className="mb-5 space-y-3"><legend className="text-sm font-semibold">طريقة العرض</legend><div className="flex flex-wrap gap-2">{(['paged', 'continuous'] as const).map(value => <button type="button" key={value} aria-pressed={layout === value} onClick={() => chooseLayout(value)} className="min-h-11 rounded-lg border border-border px-4 text-sm hover:bg-accent focus-visible:outline-2 focus-visible:outline-ring">{value === 'paged' ? 'صفحات' : 'تمرير متصل'}</button>)}<button type="button" onClick={() => chooseLayout(null)} className="min-h-11 rounded-lg border border-border px-4 text-sm hover:bg-accent focus-visible:outline-2 focus-visible:outline-ring">استعادة إعداد الناشر</button></div></fieldset>
         {layout === 'continuous' ? <ReaderWidthControl width={width} onChange={value => { capture(); applyWidth(value); }} /> : <fieldset className="mb-5"><legend className="mb-3 text-sm font-semibold">ملاءمة الصفحة</legend><div className="flex flex-wrap gap-2">{(['width', 'page'] as const).map(value => <button type="button" key={value} aria-pressed={fit === value} onClick={() => { capture(); setFit(value); }} className="min-h-11 rounded-lg border border-border px-4 text-sm hover:bg-accent focus-visible:outline-2 focus-visible:outline-ring">{value === 'width' ? 'ملاءمة العرض' : 'الصفحة كاملة'}</button>)}</div></fieldset>}

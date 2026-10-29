@@ -216,7 +216,7 @@ export default async function SeriesDetailPage({
               {publicCredits.length > 0 && <section aria-label="ترجمة وإعداد" className="mt-4 rounded-xl border border-border px-4 py-3"><h2 className="mb-1 text-sm font-bold">ترجمة وإعداد</h2><ul className="flex flex-wrap gap-x-5">{publicCredits.map(credit => <li key={`${credit.identityId}:${credit.role}`}><Link href={`/translators/${credit.slug}`} className="inline-flex min-h-11 items-center gap-2 text-sm hover:text-primary"><span className="text-muted-foreground">{creditLabels[credit.role]}</span><span>{credit.displayName}</span></Link></li>)}</ul></section>}
               <div className="px-1 pt-5 lg:hidden"><WorkSynopsis synopsis={s.synopsisAr} /></div>
               <div className="mt-5 lg:mt-4">
-                <WorkTabs slug={s.slug} format={s.format as Format} coverPath={s.coverPath}
+                <WorkTabs downloadsEnabled={s.downloadsEnabled || profile?.role === "admin"} slug={s.slug} format={s.format as Format} coverPath={s.coverPath}
                   publishedChapters={publishedView} scheduledChapters={scheduledView} serverProgress={serverProgress}
                   progressMapEntries={progressEntries} aboutData={{ titleAr: getWorkTitle(s), synopsisAr: s.synopsisAr,
                     author: s.author, translator: publicCredits.length ? null : s.translator, categoryLabel, formatLabel, statusLabel, genres, tags }}>

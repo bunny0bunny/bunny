@@ -103,6 +103,7 @@ type SeriesFormValues = {
   genres: string[];
   isFeatured: boolean;
   isAdult: boolean;
+  downloadsEnabled?: boolean;
 };
 
 function recoverGenres(value: string | undefined, fallback: string[]) {
@@ -110,7 +111,7 @@ function recoverGenres(value: string | undefined, fallback: string[]) {
 }
 
 function seriesText(values: SeriesFormValues) {
-  return { titleAr: values.titleAr, titleOriginal: values.titleOriginal, slug: values.slug, synopsisAr: values.synopsisAr, author: values.author, translator: values.translator, isAdult: String(values.isAdult), genres: JSON.stringify(values.genres), defaultPresentation: values.defaultPresentation ?? "paged", defaultReadingDirection: values.defaultReadingDirection ?? "rtl" };
+  return { titleAr: values.titleAr, titleOriginal: values.titleOriginal, slug: values.slug, synopsisAr: values.synopsisAr, author: values.author, translator: values.translator, isAdult: String(values.isAdult), downloadsEnabled: String(values.downloadsEnabled ?? false), genres: JSON.stringify(values.genres), defaultPresentation: values.defaultPresentation ?? "paged", defaultReadingDirection: values.defaultReadingDirection ?? "rtl" };
 }
 
 export function SeriesForm({ initial, readingFormatLocked = false, currentActorId }: { initial?: SeriesFormValues; readingFormatLocked?: boolean; currentActorId: string }) {
@@ -133,6 +134,7 @@ export function SeriesForm({ initial, readingFormatLocked = false, currentActorI
       genres: [],
       isFeatured: false,
       isAdult: false,
+      downloadsEnabled: false,
     }
   );
   const [loading, setLoading] = useState(false);
@@ -207,7 +209,7 @@ export function SeriesForm({ initial, readingFormatLocked = false, currentActorI
             if (textDirty && !window.confirm("استبدال النص الحالي بالنص المستعاد؟")) return;
             const recovered = formRecovery.recovered;
             if (!recovered) return;
-            setValues(previous => ({ ...previous, titleAr: recovered.titleAr, titleOriginal: recovered.titleOriginal, slug: previous.id ? previous.slug : recovered.slug, synopsisAr: recovered.synopsisAr, author: recovered.author, translator: recovered.translator, isAdult: recovered.isAdult === "true" ? true : recovered.isAdult === "false" ? false : previous.isAdult, genres: recoverGenres(recovered.genres, previous.genres), defaultPresentation: recovered.defaultPresentation === "continuous" ? "continuous" : recovered.defaultPresentation === "paged" ? "paged" : previous.defaultPresentation, defaultReadingDirection: recovered.defaultReadingDirection === "ltr" ? "ltr" : recovered.defaultReadingDirection === "rtl" ? "rtl" : previous.defaultReadingDirection }));
+            setValues(previous => ({ ...previous, titleAr: recovered.titleAr, titleOriginal: recovered.titleOriginal, slug: previous.id ? previous.slug : recovered.slug, synopsisAr: recovered.synopsisAr, author: recovered.author, translator: recovered.translator, isAdult: recovered.isAdult === "true" ? true : recovered.isAdult === "false" ? false : previous.isAdult, downloadsEnabled: recovered.downloadsEnabled === "true", genres: recoverGenres(recovered.genres, previous.genres), defaultPresentation: recovered.defaultPresentation === "continuous" ? "continuous" : recovered.defaultPresentation === "paged" ? "paged" : previous.defaultPresentation, defaultReadingDirection: recovered.defaultReadingDirection === "ltr" ? "ltr" : recovered.defaultReadingDirection === "rtl" ? "rtl" : previous.defaultReadingDirection }));
             if (recovered.resultUncertain === "true") { setRecoveryRequired(true); setErrors("تعذّر تأكيد الحفظ السابق. تحقق من قائمة الأعمال قبل إنشاء عمل آخر."); }
             formRecovery.dismiss();
           }}>استعادة النص</Button>
@@ -332,6 +334,10 @@ export function SeriesForm({ initial, readingFormatLocked = false, currentActorI
         </div>
       </div>
 
+      {values.format !== "novel" ? <label className="flex min-h-11 cursor-pointer items-start gap-3 rounded-xl border border-border p-4 text-sm">
+        <input type="checkbox" checked={values.downloadsEnabled ?? false} onChange={e => set("downloadsEnabled", e.target.checked)} className="mt-1 size-4 shrink-0 accent-[var(--primary)]" />
+        <span><span className="font-bold">السماح بتنزيل الفصول</span><span className="mt-1 block text-xs leading-6 text-muted-foreground">يُجهّز ملف PDF محسّن على جهاز القارئ، ولا تُشارك الملفات الأصلية. تنزيل الروايات غير متاح.</span></span>
+      </label> : <p className="text-xs text-muted-foreground">تنزيل الروايات غير متاح.</p>}
       <label className="flex min-h-11 cursor-pointer items-start gap-3 rounded-xl border border-red-500/40 bg-red-500/10 p-4 text-sm">
         <input type="checkbox" checked={values.isAdult} onChange={e => set("isAdult", e.target.checked)} className="mt-1 size-4 shrink-0 accent-red-600" />
         <span><span className="font-bold text-red-700 dark:text-red-300">محتوى للبالغين <bdi dir="ltr">+18</bdi></span><span className="mt-1 block text-xs leading-6 text-muted-foreground">فعّله إذا كان العمل مخصصًا للبالغين. يظهر تحذير أحمر للقارئ قبل بدء القراءة، ويمكنه المتابعة أو الرجوع.</span></span>
@@ -549,7 +555,8 @@ export function ChapterForm({
       <div className="grid gap-4 sm:grid-cols-2">
         <div className="space-y-1.5">
           <label htmlFor={`${formId}-number`} className="text-sm font-medium">رقم الفصل *</label>
-          <Input id={`${formId}-number`} type="number" min={1} required value={number} onChange={(e) => setNumber(e.target.value)} className="min-h-[44px] bg-card" />
+          <Input id={`${formId}-number`} type="number" inputMode="decimal" min={1} step="any" required value={number} onChange={(e) => setNumber(e.target.value)} className="min-h-[44px] bg-card" />
+          <p className="text-xs leading-6 text-muted-foreground">يمكنك استخدام رقم عشري للفصول الإضافية، مثل 7.5 أو 7.6.</p>
           <p className="text-xs leading-6 text-muted-foreground">الرقم التالي المقترح: {Number(suggestedNumber).toLocaleString("ar-EG")}. يمكنك تغييره؛ يتحقق الموقع من عدم تكراره عند الحفظ.</p>
         </div>
 

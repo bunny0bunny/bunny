@@ -1,3 +1,4 @@
+import { isChapterNumber } from '@/lib/chapter-number';
 import { AdultContentGate } from "@/components/readers/adult-content-gate";
 import { cache } from 'react';
 import { getWorkTitle } from '@/lib/work-title';
@@ -16,7 +17,7 @@ export async function generateMetadata({
 }): Promise<Metadata> {
   const { series, chapter } = await params;
   const num = Number(chapter);
-  const data = Number.isInteger(num) && num > 0 ? await getReaderData(series, num) : null;
+  const data = isChapterNumber(num) ? await getReaderData(series, num) : null;
   return { title: `${data?.series.format === 'novel' ? getWorkTitle(data.series) : series} — الفصل ${chapter}` };
 }
 
@@ -27,7 +28,7 @@ export default async function NovelReaderPage({
 }) {
   const { series: seriesSlug, chapter } = await params;
   const num = Number(chapter);
-  if (!Number.isInteger(num) || num < 1) notFound();
+  if (!isChapterNumber(num)) notFound();
   const data = await getReaderData(seriesSlug, num);
   if (!data || data.series.format !== "novel") notFound();
   const profile = await currentProfileOrNull();

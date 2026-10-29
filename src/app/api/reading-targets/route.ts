@@ -1,13 +1,14 @@
 import { getWorkTitle } from '@/lib/work-title';
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import { isChapterNumber } from '@/lib/chapter-number';
 import { db } from "@/lib/db";
 import { liveChapterWhere } from "@/lib/queries";
 import { displayCover } from "@/lib/demo-cover-art";
 
 const requestSchema = z.object({ targets: z.array(z.object({
   seriesSlug: z.string().min(1).max(200),
-  chapterNumber: z.number().int().positive(),
+  chapterNumber: z.number().refine(isChapterNumber),
   format: z.enum(["manga", "webtoon", "novel"]),
 })).max(20) });
 

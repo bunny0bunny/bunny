@@ -5,6 +5,7 @@ import { ReaderChapterSelect, EmptyReaderContent, type ReaderChapter, ReaderWidt
 import { ContinuousImages, useImageReaderPosition } from "./reader-position";
 import { ReaderChrome, ChapterEndCard, LockedChapterPanel, ReaderFloatingBar } from "@/components/readers/reader-chrome";
 import { CommentsSection } from "@/components/community/comments-section";
+import { ChapterDownloadButton } from "@/components/downloads/chapter-download-button";
 import { type ReaderProgress } from "@/lib/reader-progress";
 import type { CommentView } from "@/lib/queries";
 
@@ -14,6 +15,8 @@ export function WebtoonReader({
   seriesSlug,
   seriesTitle,
   isAdult = false,
+  chapterId,
+  downloadsEnabled = false,
   chapterNumber,
   chapterTitle,
   chapters,
@@ -27,6 +30,8 @@ export function WebtoonReader({
   seriesSlug: string;
   seriesTitle: string;
   isAdult?: boolean;
+  chapterId?: string;
+  downloadsEnabled?: boolean;
   chapterNumber: number;
   chapterTitle: string;
   chapters: ReaderChapter[];
@@ -56,6 +61,7 @@ export function WebtoonReader({
         chapterNumber={chapterNumber}
         chapterTitle={chapterTitle}
         format="webtoon"
+        headerExtra={downloadsEnabled && chapterId ? <ChapterDownloadButton chapterId={chapterId} /> : undefined}
         chapterControl={<ReaderChapterSelect seriesSlug={seriesSlug} format="webtoon" chapterNumber={chapterNumber} chapters={chapters} />}
         percent={percent}
         immersive={immersive}

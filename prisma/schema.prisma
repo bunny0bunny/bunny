@@ -216,6 +216,7 @@ model Series {
   translator    String?
   coverPath     String
   accent        String             @default("#9B7BFF")
+  downloadsEnabled Boolean         @default(false)
   isAdult       Boolean            @default(false)
   isFeatured    Boolean            @default(false)
   ratingAvg     Float              @default(0)
@@ -256,7 +257,7 @@ model Chapter {
   deletedAt        DateTime?
   trashBatchId     String?
   seriesId         String
-  number           Int
+  number           Float
   titleAr          String
   workflow         ChapterWorkflow  @default(draft)
   publishedAt      DateTime?
@@ -657,7 +658,7 @@ model ChapterPublication {
   isPremium Boolean @default(false)
   seriesTitle String
   chapterTitle String
-  chapterNumber Int
+  chapterNumber Float
   seriesSlug String
   format String
   state String @default("pending")

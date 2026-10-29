@@ -179,6 +179,7 @@ export default async function AdminSeriesDetailPage({
                 genres,
                 isFeatured: s.isFeatured,
                 isAdult: s.isAdult,
+                downloadsEnabled: s.downloadsEnabled,
               }}
             />
           </div>

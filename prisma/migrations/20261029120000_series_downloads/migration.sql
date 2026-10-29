@@ -1,0 +1,1 @@
+ALTER TABLE "Series" ADD COLUMN "downloadsEnabled" BOOLEAN NOT NULL DEFAULT false;

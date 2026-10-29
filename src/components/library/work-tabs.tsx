@@ -1,6 +1,7 @@
 "use client";
 
 import Image from "next/image";
+import { ChapterDownloadButton } from "@/components/downloads/chapter-download-button";
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import {
@@ -58,6 +59,7 @@ function formatScheduledDate(dateInput: Date | string | null): string {
 
 export function WorkTabs({
   slug,
+  downloadsEnabled = false,
   format,
   coverPath,
   publishedChapters,
@@ -68,6 +70,7 @@ export function WorkTabs({
   children,
 }: {
   slug: string;
+  downloadsEnabled?: boolean;
   format: Format;
   coverPath: string;
   publishedChapters: ChapterItemView[];
@@ -296,10 +299,10 @@ export function WorkTabs({
               const isNew = !isRead && !inProg && age !== null && age >= 0 && age < 14 * 86400000;
 
               return (
-                <li key={c.id}>
+                <li key={c.id} className="flex items-center gap-2">
                   <Link
                     href={readerHref(format, slug, c.number)}
-                    className={"group flex items-center gap-3 rounded-xl border p-3 transition hover:border-primary/40 focus-visible:outline-2 focus-visible:outline-ring sm:gap-4 " + (isCurrentResume ? "border-primary/40 bg-primary/10" : "border-border/70 bg-card/50 hover:bg-card")}
+                    className={"group flex min-w-0 flex-1 items-center gap-3 rounded-xl border p-3 transition hover:border-primary/40 focus-visible:outline-2 focus-visible:outline-ring sm:gap-4 " + (isCurrentResume ? "border-primary/40 bg-primary/10" : "border-border/70 bg-card/50 hover:bg-card")}
                   >
                     {/* Chapter thumbnail / badge */}
                     <div className="relative h-16 w-[72px] shrink-0 overflow-hidden rounded-lg border border-border/70 bg-secondary/40 sm:h-[72px] sm:w-[88px]">
@@ -377,6 +380,7 @@ export function WorkTabs({
                       </div>}
                     </div>
                   </Link>
+                  {downloadsEnabled && format !== "novel" && !locked && <ChapterDownloadButton chapterId={c.id} />}
                 </li>
               );
             })}

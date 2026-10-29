@@ -2,6 +2,7 @@
 import { normalizeGenres } from "@/lib/genres";
 
 import { z } from "zod";
+import { isChapterNumber } from '@/lib/chapter-number';
 import { getWorkTitle, workTitleIssue } from '@/lib/work-title';
 import { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
@@ -19,7 +20,7 @@ import { withSerializableTx } from "@/lib/editorial";
 
 const progressSchema = z.object({
   seriesSlug: z.string().min(1),
-  chapterNumber: z.number().int().min(1),
+  chapterNumber: z.number().refine(isChapterNumber, 'رقم الفصل غير صالح'),
   pageIndex: z.number().int().min(0),
   pageOffset: z.number().finite().min(0).max(1).nullable().optional(),
   percent: z.number().min(0).max(100),
@@ -109,6 +110,7 @@ const seriesSchema = z
     genres: z.array(z.string()).min(1, "اختر نوعًا واحدًا على الأقل"),
     isFeatured: z.boolean(),
     isAdult: z.boolean().optional(),
+    downloadsEnabled: z.boolean().optional(),
   })
   .superRefine((data, ctx) => {
     const issue = workTitleIssue(data);
@@ -147,6 +149,7 @@ export async function upsertSeries(input: unknown): Promise<ActionResult & { slu
     translator: d.translator || null,
     genresJson: JSON.stringify(normalizeGenres(d.genres)),
     ...(d.isAdult !== undefined ? { isAdult: d.isAdult } : {}),
+    ...(d.downloadsEnabled !== undefined ? { downloadsEnabled: d.downloadsEnabled } : {}),
     isFeatured: d.isFeatured,
     ...(d.category !== undefined ? { category: d.category } : {}),
   };
@@ -300,7 +303,7 @@ export async function updateChapterMeta(input: unknown): Promise<ActionResult> {
 
 const createChapterSchema = z.object({
   seriesId: z.string(),
-  number: z.number().int().min(1),
+  number: z.number().refine(isChapterNumber, 'رقم الفصل غير صالح'),
   titleAr: z.string().min(2, "عنوان الفصل مطلوب"),
   workflow: z.enum(["draft", "review", "published"]),
   isPremiumDemo: z.boolean(),
@@ -443,7 +446,7 @@ export async function markSeriesRead(seriesSlug: string): Promise<ActionResult> 
 
 const commentSchema = z.object({
   seriesSlug: z.string().min(1),
-  chapterNumber: z.number().int().min(1).nullable().optional(),
+  chapterNumber: z.number().refine(isChapterNumber, 'رقم الفصل غير صالح').nullable().optional(),
   body: z.string().trim().min(2, "التعليق قصير جدًا").max(2000, "التعليق طويل جدًا"),
 });
 

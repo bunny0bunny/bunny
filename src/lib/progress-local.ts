@@ -1,6 +1,7 @@
 "use client";
 
 import { isReaderProgress } from "@/lib/reader-progress";
+import { isChapterNumber } from '@/lib/chapter-number';
 import type { Format } from "@/lib/constants";
 
 /**
@@ -31,7 +32,7 @@ function isLocalProgress(value: unknown): value is LocalProgress {
   if (!isReaderProgress(value)) return false;
   const p = value as LocalProgress;
   return typeof p.seriesSlug === "string" && p.seriesSlug.length > 0 &&
-    Number.isSafeInteger(p.chapterNumber) && p.chapterNumber > 0 &&
+    isChapterNumber(p.chapterNumber) &&
     Number.isSafeInteger(p.total) && p.total > 0 &&
     ["manga", "webtoon", "novel"].includes(p.format) &&
     [p.seriesTitle, p.chapterTitle, p.coverPath, p.accent].every(v => typeof v === "string");

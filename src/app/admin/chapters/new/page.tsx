@@ -1,4 +1,5 @@
 import { getWorkTitle } from '@/lib/work-title';
+import { nextChapterNumber } from '@/lib/chapter-number';
 import Link from "next/link";
 import { ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -25,7 +26,7 @@ export default async function NewChapterPage({
     where: { seriesId: { in: seriesList.map(series => series.id) } },
     _max: { number: true },
   }) : [];
-  const nextNumbers = new Map(highestNumbers.map(row => [row.seriesId, (row._max.number ?? 0) + 1]));
+  const nextNumbers = new Map(highestNumbers.map(row => [row.seriesId, nextChapterNumber(row._max.number)]));
   const options = seriesList.map((s) => ({
     id: s.id,
     titleAr: getWorkTitle(s),
