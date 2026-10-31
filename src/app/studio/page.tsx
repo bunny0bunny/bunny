@@ -1,4 +1,5 @@
 import { getWorkTitle } from '@/lib/work-title';
+import { TeamWorkflowGuide } from '@/components/studio/team-workflow-guide';
 import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
@@ -67,12 +68,14 @@ export default async function StudioWorkspacePage({
 
   // 2. Scoped Series IDs for staff
   let seriesWhere: any = {};
+  let canStartChapter = isAdmin;
   if (!isAdmin) {
     const assignments = await db.seriesAssignment.findMany({
-      where: { profileId: actor.id },
+      where: { profileId: actor.id, series: { deletedAt: null } },
       select: { seriesId: true },
     });
     const assignedIds = assignments.map((a) => a.seriesId);
+    canStartChapter = assignedIds.length > 0;
     seriesWhere = { seriesId: { in: assignedIds } };
   }
 
@@ -150,13 +153,15 @@ export default async function StudioWorkspacePage({
 
             <div className="flex flex-wrap items-center gap-2.5">
               {isAdmin && <PublishDueAdminButton />}
-              <Button asChild size="sm" className="min-h-[44px] gap-2 bg-primary text-primary-foreground hover:bg-primary/90">
+              {canStartChapter && <Button asChild size="sm" className="min-h-[44px] gap-2 bg-primary text-primary-foreground hover:bg-primary/90">
                 <Link href="/admin/chapters/new">
                   إنشاء مسودة فصل جديد
                 </Link>
-              </Button>
+              </Button>}
             </div>
           </header>
+
+          {!isAdmin && <TeamWorkflowGuide role={actor.role === 'editor' ? 'editor' : 'contributor'} />}
 
           {/* Useful Count Cards */}
           <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-6">

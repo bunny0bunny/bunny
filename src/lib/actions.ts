@@ -351,6 +351,23 @@ export async function createChapter(input: unknown): Promise<ActionResult & { id
   let chapter;
   try {
     chapter = await db.$transaction(async tx => {
+      // The preliminary check is only an early rejection. Authorize the write
+      // against fresh account and assignment records in this transaction.
+      const currentActor = await tx.profile.findUnique({ where: { id: actor.id }, select: {
+        role: true, disabledAt: true, emailVerifiedAt: true, authVersion: true,
+      } });
+      if (!currentActor || currentActor.disabledAt || !currentActor.emailVerifiedAt ||
+        currentActor.authVersion !== actor.authVersion || !isStaffRole(currentActor.role)) {
+        throw new Error("chapter_creation_forbidden");
+      }
+      if (currentActor.role !== "admin") {
+        const assigned = await tx.seriesAssignment.findUnique({ where: {
+          profileId_seriesId: { profileId: actor.id, seriesId: series.id },
+        }, select: { id: true } });
+        if (!assigned || d.workflow === "published" || d.isPremiumDemo || d.scheduledFor) {
+          throw new Error("chapter_creation_forbidden");
+        }
+      }
       const currentSeries = await tx.series.findFirst({ where: { id: series.id, deletedAt: null }, select: { format: true, defaultReadingDirection: true } });
       if (!currentSeries) throw new Error("content_unavailable");
       return tx.chapter.create({
@@ -368,6 +385,7 @@ export async function createChapter(input: unknown): Promise<ActionResult & { id
       });
     }, { isolationLevel: "Serializable" });
   } catch (err: any) {
+    if (err?.message === "chapter_creation_forbidden") return { ok: false, error: "forbidden" };
     if (err?.message === "content_unavailable" || err?.code === "P2034") return { ok: false, error: "not_found" };
     if (err?.code === "P2002") {
       return { ok: false, error: "رقم الفصل مستخدم في هذا العمل" };

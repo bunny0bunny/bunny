@@ -1,4 +1,5 @@
 import { getWorkTitle } from '@/lib/work-title';
+import { TeamWorkflowGuide } from '@/components/studio/team-workflow-guide';
 import Link from "next/link";
 import { AlertTriangle, ArrowUpLeft, BookOpen, CheckCircle2, FileEdit, LibraryBig, ListOrdered, Eye, Users } from "lucide-react";
 import { getAdminOverview, getDashboardActivity, getCommunityCounts, getStaffOverview, currentProfileOrNull } from "@/lib/queries";
@@ -41,10 +42,12 @@ export default async function AdminDashboard({
               الأعمال المسندة إليك للمساهمة وإعداد ومراجعة الفصول.
             </p>
           </div>
-          <Button asChild size="sm" className="gap-1.5 bg-primary text-primary-foreground hover:bg-primary/90">
+          {seriesList.length > 0 && <Button asChild size="sm" className="gap-1.5 bg-primary text-primary-foreground hover:bg-primary/90">
             <Link href="/admin/chapters/new"><ListOrdered className="size-4" /> فصل جديد</Link>
-          </Button>
+          </Button>}
         </header>
+
+        <TeamWorkflowGuide role={profile.role === 'editor' ? 'editor' : 'contributor'} />
 
         {denied && (
           <p role="alert" className="flex items-center gap-2 rounded-xl border border-danger/40 bg-danger/10 px-4 py-3 text-sm text-danger">

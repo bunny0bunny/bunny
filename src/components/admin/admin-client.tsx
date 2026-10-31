@@ -494,7 +494,7 @@ export function ChapterForm({
         novelBody: isNovel ? novelBody : undefined,
       });
       if (!res.ok) {
-        setError(res.error ?? "حدث خطأ");
+        setError(res.error === "forbidden" ? "لا تملك صلاحية إضافة فصل لهذا العمل. حدّث الصفحة أو راجع الإدارة." : res.error ?? "حدث خطأ");
         return;
       }
       uncertain = true; // A confirmed creation cannot be replayed during navigation.

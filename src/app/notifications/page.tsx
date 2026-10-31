@@ -47,7 +47,7 @@ export default async function NotificationsPage() {
               الإشعارات
             </h1>
             <p className="mt-1.5 text-sm text-muted-foreground">
-              تحديثات الأعمال التي تتابعها، وتفاعلات القرّاء مع تعليقاتك — في مكان واحد.
+              تحديثات الأعمال التي تتابعها وتفاعلات القرّاء مع تعليقاتك{profile.role !== 'reader' ? ' ومهام المراجعة المسندة إليك' : ''} — في مكان واحد.
             </p>
           </header>
           <NotificationsList items={withTime} unread={unread} />

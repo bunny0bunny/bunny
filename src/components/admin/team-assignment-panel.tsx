@@ -67,6 +67,7 @@ export function TeamAssignmentPanel({
           <h3 className="text-sm font-semibold text-foreground">إسناد العمل للفريق</h3>
           <p className="text-xs text-muted-foreground mt-0.5">
             حدد المساهمين والمحررين المصرح لهم بإعداد ومراجعة فصول هذا العمل.
+            إسناد الحساب يتيح العمل على الفصول؛ إضافة اسم في ملفات المترجمين لا تمنح صلاحيات. الاعتماد والنشر للإدارة فقط.
           </p>
         </div>
         {isPending && <span className="text-xs text-primary animate-pulse">جاري الحفظ…</span>}

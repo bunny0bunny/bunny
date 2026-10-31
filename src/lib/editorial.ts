@@ -1,4 +1,5 @@
 import { recordChapterPublication } from '@/lib/publications/service';
+import { notifyEditorialTransition } from "@/lib/editorial-notifications";
 import "server-only";
 import { Prisma, type ChapterRevision, type ReadingDirection } from "@prisma/client";
 import { db } from "@/lib/db";
@@ -194,6 +195,9 @@ async function transition(input: VersionInput & { reason?: string; note?: string
     } });
     const names = { submit: "submit_for_review", return: "return_for_changes", recommend: "recommend_approval", approve: "approve_revision", schedule: "schedule_revision", cancel: "cancel_schedule" };
     await audit(tx, actor, updated, names[action], input.reason?.trim() || input.note?.trim(), { scheduledFor: updated.scheduledFor?.toISOString() ?? null });
+    if (action === "submit" || action === "recommend" || action === "return") {
+      await notifyEditorialTransition(tx, { action, actorId: actor.id, seriesId: revision.chapter.seriesId, chapterId: revision.chapterId });
+    }
     return { ok: true, revision: updated };
   });
 }
