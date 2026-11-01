@@ -131,6 +131,7 @@ export async function editableRevision(tx: Tx, actor: Actor, input: VersionInput
   const revision = await tx.chapterRevision.findUnique({ where: { id: input.revisionId }, include: { chapter: { include: { series: true } } } });
   if (!revision || revision.chapter.deletedAt || revision.chapter.series.deletedAt) return { error: "not_found" } as const;
   if (!await checkStaffSeriesAccess(tx, actor, revision.chapter.seriesId)) return { error: "forbidden" } as const;
+  if (actor.role !== "admin" && revision.status === "scheduled") return { error: "scheduled_locked" } as const;
   if (!Number.isInteger(input.expectedVersion) || input.expectedVersion !== revision.version) return { error: "conflict" } as const;
   const latest = await tx.chapterRevision.findFirst({ where: { chapterId: revision.chapterId }, orderBy: { revisionNumber: "desc" }, select: { id: true } });
   if (latest?.id !== revision.id) return { error: "conflict" } as const;
@@ -160,6 +161,7 @@ export async function updateDraftSnapshot(input: VersionInput & { titleAr?: stri
       ...(pages ? { pagesJson: pages } : {}), status: "draft", approvedAt: null, approvedById: null, scheduledFor: null, version: { increment: 1 },
     } });
     await audit(tx, actor, updated, revoked ? "edit_revoked_approval" : "update_draft", revoked ? "تعديل النسخة ألغى اعتمادها وجدولتها" : undefined);
+    if (revoked) await notifyEditorialTransition(tx, { action: "approval_invalidated", actorId: actor.id, seriesId: revision.chapter.seriesId, chapterId: revision.chapterId });
     return { ok: true, revision: updated };
   });
 }
@@ -174,6 +176,7 @@ async function transition(input: VersionInput & { reason?: string; note?: string
     const revision = found.revision!;
     if (revision.pendingUploadId) return { ok: false, error: "upload_pending" };
     const allowed: Record<Transition, string[]> = { submit: ["draft", "changes_requested"], return: ["review", "approved", "scheduled"], recommend: ["review"], approve: ["draft", "review", "changes_requested"], schedule: ["approved", "scheduled"], cancel: ["scheduled"] };
+    if (action === "return" && actor.role !== "admin" && revision.status !== "review") return { ok: false, error: "forbidden" };
     if (!allowed[action].includes(revision.status)) return { ok: false, error: "الإجراء غير متاح لحالة النسخة الحالية" };
     if (action === "return" && (!input.reason?.trim() || input.reason.length > 2000)) return { ok: false, error: "reason_required" };
     if (input.note && input.note.length > 2000) return { ok: false, error: "ملاحظة المراجعة طويلة جدًا" };
@@ -198,6 +201,7 @@ async function transition(input: VersionInput & { reason?: string; note?: string
     if (action === "submit" || action === "recommend" || action === "return") {
       await notifyEditorialTransition(tx, { action, actorId: actor.id, seriesId: revision.chapter.seriesId, chapterId: revision.chapterId });
     }
+    if (action === "schedule" || action === "cancel") await notifyEditorialTransition(tx, { action: action === "schedule" ? "scheduled" : "cancelled", actorId: actor.id, seriesId: revision.chapter.seriesId, chapterId: revision.chapterId });
     return { ok: true, revision: updated };
   });
 }
@@ -228,6 +232,7 @@ async function publishProjection(tx: Tx, actor: Actor, revision: ChapterRevision
   }
   const updated = await tx.chapterRevision.update({ where: { id: revision.id }, data: { status: "published", scheduledFor: null, version: { increment: 1 } } });
   await audit(tx, actor, updated, scheduled ? "publish_due_scheduled" : "publish_now", undefined, { publishedAt: new Date().toISOString() });
+  await notifyEditorialTransition(tx, { action: "published", actorId: actor.id, seriesId: chapter.seriesId, chapterId: chapter.id });
   await tx.analyticsEvent.create({ data: { type: "publish", seriesId: chapter.seriesId, chapterId: chapter.id, profileId: actor.id, metaJson: JSON.stringify({ revisionNumber: revision.revisionNumber, version: revision.version }) } });
   return { ok: true, revision: updated, data: { processed: true } };
 }
@@ -237,6 +242,30 @@ export async function publishRevisionNow(input: VersionInput): Promise<Editorial
     if (actor.role !== "admin") return { ok: false, error: "forbidden" };
     const found = await editableRevision(tx, actor, input);
     return found.error ? { ok: false, error: found.error } : publishProjection(tx, actor, found.revision!, false);
+  });
+}
+
+/** Delegation permits approval only as part of this immediate atomic publication. */
+export async function approveAndPublishRevision(input: VersionInput): Promise<EditorialResult> {
+  return withSerializableTx(async (tx, actor) => {
+    if (!["admin", "editor"].includes(actor.role)) return { ok: false, error: "forbidden" };
+    const found = await editableRevision(tx, actor, input);
+    if (found.error) return { ok: false, error: found.error };
+    const revision = found.revision!;
+    if (actor.role !== "admin") {
+      const assignment = await tx.seriesAssignment.findUnique({ where: { profileId_seriesId: { profileId: actor.id!, seriesId: revision.chapter.seriesId } }, select: { canPublish: true } });
+      if (!assignment?.canPublish) return { ok: false, error: "forbidden" };
+    }
+    const allowed = actor.role === "admin" ? ["draft", "review", "changes_requested", "approved"] : ["review", "approved"];
+    if (!allowed.includes(revision.status)) return { ok: false, error: "forbidden" };
+    if (revision.pendingUploadId) return { ok: false, error: "upload_pending" };
+    const valid = validateRevisionContent(revision.chapter.series.format, revision);
+    if (!valid.valid) return { ok: false, error: valid.error };
+    const pages = validatePagesSnapshot(revision.pagesJson);
+    if (revision.chapter.series.format !== "novel" && (!pages || !await pagesBelongToChapter(tx, revision.chapterId, pages))) return { ok: false, error: "invalid_media" };
+    const approved = await tx.chapterRevision.update({ where: { id: revision.id }, data: { status: "approved", approvedAt: new Date(), approvedById: actor.id, scheduledFor: null, version: { increment: 1 } } });
+    await audit(tx, actor, approved, "approve_revision");
+    return publishProjection(tx, actor, approved, false);
   });
 }
 
@@ -254,6 +283,7 @@ export async function withdrawPublishedChapter(input: { chapterId: string; expec
     await tx.chapterUpload.updateMany({ where: { chapterId: chapter.id, state: { in: ["uploading", "failed"] } }, data: { state: "cancelled", errorCode: "chapter_withdrawn" } });
     await tx.chapterRevision.updateMany({ where: { chapterId: chapter.id, status: { in: [...pendingStates] } }, data: { pendingUploadId: null, status: "draft", approvedAt: null, approvedById: null, scheduledFor: null, version: { increment: 1 } } });
     await audit(tx, actor, withdrawn, "withdraw_chapter", input.reason.trim());
+    await notifyEditorialTransition(tx, { action: "withdrawn", actorId: actor.id, seriesId: chapter.seriesId, chapterId: chapter.id });
     return { ok: true, revision: withdrawn };
   });
 }

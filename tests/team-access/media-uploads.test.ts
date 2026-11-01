@@ -22,8 +22,8 @@ beforeAll(async () => {
 afterAll(async () => { setActor(null); await db.series.delete({ where: { id: series } }); await db.profile.delete({ where: { id: actor } }); }, 30000);
 async function start() { const r = await db.chapterRevision.findUniqueOrThrow({ where: { id: revision } }); return uploads.startUpload({ revisionId: revision, expectedVersion: r.version, sourceName: "test.pdf", sourceBytes: 8, pageCount: 1 }); }
 test("rejects unauthenticated starts before creating reservations", async () => { setActor(null); expect((await start()).error).toBe("unauthenticated"); setActor(actor); });
-test("partial import blocks review and stale completion; cancel preserves snapshot", async () => {
-  await db.chapterRevision.update({ where: { id: revision }, data: { status: "scheduled", approvedAt: new Date(), scheduledFor: new Date(Date.now() + 3600000) } });
+test("replacement of approved unscheduled content blocks review and stale completion; cancel preserves snapshot", async () => {
+  await db.chapterRevision.update({ where: { id: revision }, data: { status: "approved", approvedAt: new Date(), scheduledFor: null } });
   const initial = await db.chapterRevision.findUniqueOrThrow({ where: { id: revision } });
   const begun = await start(); expect(begun.ok).toBe(true);
   const data = begun.data as { uploadId: string; revisionVersion: number };

@@ -758,21 +758,24 @@ export async function setSeriesAssignment(input: unknown): Promise<ActionResult>
             tx.profile.findUnique({ where: { id: profileId }, select: { id: true, role: true } }),
           ]);
           if (!series || !target) return { ok: false, error: "not_found" };
-          if (!isAssignableRole(target.role)) {
+          if (assigned && !isAssignableRole(target.role)) {
             return { ok: false, error: "invalid_target" };
           }
 
+          const previous = await tx.seriesAssignment.findUnique({ where: { profileId_seriesId: { profileId, seriesId } } });
           if (assigned) {
             await tx.seriesAssignment.upsert({
               where: { profileId_seriesId: { profileId, seriesId } },
               update: {},
-              create: { profileId, seriesId },
+              create: { profileId, seriesId, canPublish: false },
             });
           } else {
             await tx.seriesAssignment.deleteMany({
               where: { profileId, seriesId },
             });
           }
+          if (!assigned && previous?.canPublish) await tx.accountAudit.create({ data: { actorId: actor.id, targetId: profileId, action: "series_publishing_permission_changed", metadata: { seriesId, oldCanPublish: true, newCanPublish: false, reason: "unassigned" } } });
+          if (Boolean(previous) !== assigned) await tx.accountAudit.create({ data: { actorId: actor.id, targetId: profileId, action: assigned ? "series_assigned" : "series_unassigned", metadata: { seriesId } } });
           return { ok: true };
         },
         { isolationLevel: Prisma.TransactionIsolationLevel.Serializable }
@@ -796,6 +799,30 @@ export async function setSeriesAssignment(input: unknown): Promise<ActionResult>
   return { ok: false, error: "conflict" };
 }
 
+const publishingPermissionSchema = z.object({
+  seriesId: z.string().min(1), profileId: z.string().min(1), canPublish: z.boolean(),
+});
+
+export async function setSeriesPublishingPermission(input: unknown): Promise<ActionResult> {
+  const parsed = publishingPermissionSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: "invalid" };
+  const { seriesId, profileId, canPublish } = parsed.data;
+  const result = await withSerializableTx(async (tx, actor) => {
+    if (actor.role !== "admin") return { ok: false, error: "forbidden" };
+    const assignment = await tx.seriesAssignment.findUnique({
+      where: { profileId_seriesId: { profileId, seriesId } }, include: { profile: true, series: true },
+    });
+    if (!assignment) return { ok: false, error: "not_found" };
+    if (canPublish && (assignment.series.deletedAt || assignment.profile.role !== "editor" || assignment.profile.disabledAt || !assignment.profile.emailVerifiedAt)) return { ok: false, error: "invalid_target" };
+    if (assignment.canPublish === canPublish) return { ok: true };
+    await tx.seriesAssignment.update({ where: { id: assignment.id }, data: { canPublish } });
+    await tx.accountAudit.create({ data: { actorId: actor.id, targetId: profileId, action: "series_publishing_permission_changed", metadata: { seriesId, oldCanPublish: assignment.canPublish, newCanPublish: canPublish } } });
+    return { ok: true };
+  });
+  if (result.ok) { revalidatePath("/admin/series"); revalidatePath(`/admin/series/${seriesId}`); }
+  return { ok: result.ok, ...(result.error ? { error: result.error } : {}) };
+}
+
 /* --- users & roles (admin only) --- */
 
 export async function setUserRole(profileId: string, role: Role): Promise<ActionResult> {
@@ -809,7 +836,7 @@ export async function setUserRole(profileId: string, role: Role): Promise<Action
       const res = await db.$transaction(
         async (tx) => {
           const actor = await tx.profile.findUnique({ where: { id: me.id } });
-          if (!actor || actor.role !== "admin" || actor.disabledAt || !actor.emailVerifiedAt) {
+          if (!actor || actor.role !== "admin" || actor.disabledAt || !actor.emailVerifiedAt || actor.authVersion !== me.authVersion) {
             return { ok: false, error: "forbidden" };
           }
           if (profileId === actor.id && role !== "admin") {
@@ -838,7 +865,14 @@ export async function setUserRole(profileId: string, role: Role): Promise<Action
               authVersion: { increment: 1 },
             },
           });
+          if (role !== "editor") {
+            const grants = await tx.seriesAssignment.findMany({ where: { profileId, canPublish: true }, select: { seriesId: true } });
+            await tx.seriesAssignment.updateMany({ where: { profileId, canPublish: true }, data: { canPublish: false } });
+            if (grants.length) await tx.accountAudit.createMany({ data: grants.map(({ seriesId }) => ({ actorId: actor.id, targetId: profileId, action: "series_publishing_permission_changed", metadata: { seriesId, oldCanPublish: true, newCanPublish: false, reason: "role_changed" } })) });
+          }
           if (role === "reader") {
+            const assignments = await tx.seriesAssignment.findMany({ where: { profileId }, select: { seriesId: true } });
+            if (assignments.length) await tx.accountAudit.createMany({ data: assignments.map(({ seriesId }) => ({ actorId: actor.id, targetId: profileId, action: "series_unassigned", metadata: { seriesId, reason: "role_changed" } })) });
             await tx.seriesAssignment.deleteMany({
               where: { profileId },
             });

@@ -1,0 +1,16 @@
+# Delegated editor publishing implementation plan
+
+**Goal:** Complete upload/review feedback and allow administrators to grant immediate publishing per assigned editor and series.
+**Approved design:** Chat design approved 2026-11-01. English work titles primary; Arabic UI unchanged. Translator identities are public credits, not permissions. No global editor publishing.
+**Execution:** Configured fleet: Codex implementation; Antigravity UI; coordinator final review. User requested reduced repeated verification: delegates write focused tests, coordinator runs one consolidated isolated regression/lint/build pass after integration. Repeat only for failures or subsequent meaningful fixes. No production fixtures, migrations, push or deployment during implementation.
+
+- [x] Backend: SeriesAssignment.canPublish boolean false migration; separate admin-only grant action with fresh transaction auth and account audit; clear grants when demoting editors, never restore on reassignment.
+- [x] Backend: atomic approveAndPublishRevision with exact version/latest revision, verified enabled editor+assignment+grant or admin, validated completed media, approval and publication audit entries and existing publication outbox; editors review/approved only, never scheduled. No editor standalone approve/schedule/withdraw or series settings.
+- [x] Backend: lock scheduled revision mutations for non-admins, including PDF upload entry; editor return only review-state. Notify admins when staff edits invalidate approval. Add private generic staff published/scheduled/withdrawn/cancelled-state alerts atomically; publication alerts include admins for delegated publishing.
+- [x] UI: independent editor publishing toggle per assigned editor; accurate permission explanations. New explicit confirmation for approve-and-publish; editor only when delegated, no unsaved/current-upload bypass. Scheduled chapters read-only for staff with explanation. Approved edits clearly explain approval reset.
+- [x] Tests: permission off/default and scope, forged calls, account/grant/assignment revocation, reassign/demote reset, expected-version conflict/replay, media checks, scheduled locks, rollback/outbox/audit, recipient privacy.
+- [x] Integration: Prisma generate; one isolated PostgreSQL run replays all migrations and tests; scoped ESLint and TypeScript validation; one final source review; production Cloudflare build required at release (the local attempt was stopped after prolonged compilation); record results and commit reviewed changes. No deployment until release step is requested.
+
+**Interfaces:** setSeriesPublishingPermission({seriesId, profileId, canPublish}) -> ActionResult in src/lib/actions.ts. approveAndPublishRevision({revisionId, expectedVersion}) -> EditorialResult in src/lib/editorial.ts; approveAndPublishRevisionAction(input:unknown) server wrapper. SeriesAssignment.canPublish exposes initial grants to admin panel; studio server computes canPublishNow = admin OR (editor AND assignment.canPublish).
+
+Local verification completed: 22 suites / 165 distinct tests (with focused fixture-fix reruns), scoped ESLint and full TypeScript validation passed. The production build was deliberately stopped after prolonged compilation and is not a passing check. It remains a release gate; artifacts are marked non-deployable.

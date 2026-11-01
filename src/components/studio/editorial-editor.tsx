@@ -34,6 +34,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import {
   updateDraftSnapshotAction,
@@ -41,6 +42,7 @@ import {
   returnForChangesAction,
   recommendApprovalAction,
   approveRevisionAction,
+  approveAndPublishRevisionAction,
   publishRevisionNowAction,
   scheduleRevisionAction,
   cancelScheduledRevisionAction,
@@ -143,7 +145,7 @@ const ACTION_LABELS: Record<string, string> = {
   submit_for_review: "إرسال للمراجعة التحريرية",
   return_for_changes: "إعادة لطلب تعديلات",
   recommend_approval: "توصية باعتماد النسخة",
-  approve_revision: "اعتماد رسمي من الإدارة",
+  approve_revision: "اعتماد النسخة للنشر",
   schedule_revision: "جدولة موعد النشر",
   cancel_schedule: "إلغاء الجدولة وإعادة الاعتماد",
   publish_now: "نشر فوري في المكتبة",
@@ -159,6 +161,7 @@ export function EditorialEditor({
   currentActorRole,
   currentActorId,
   uploadsEnabled,
+  canPublishNow,
 }: {
   chapter: ChapterMeta;
   initialRevision: WorkingRevision;
@@ -167,6 +170,7 @@ export function EditorialEditor({
   currentActorId: string;
   currentActorRole: "contributor" | "editor" | "admin";
   uploadsEnabled: boolean;
+  canPublishNow: boolean;
 }) {
   const editorId = useId();
   const router = useRouter();
@@ -198,6 +202,7 @@ export function EditorialEditor({
   });
 
   // Modal / inline input states
+  const [publishConfirmationOpen, setPublishConfirmationOpen] = useState(false);
   const [returnReason, setReturnReason] = useState("");
   const [recommendNote, setRecommendNote] = useState("");
   const [withdrawReason, setWithdrawReason] = useState("");
@@ -215,7 +220,12 @@ export function EditorialEditor({
   const isAdmin = currentActorRole === "admin";
   const isEditor = currentActorRole === "editor" || isAdmin;
   const isVisual = chapter.format !== "novel";
-  const isReadOnlyStatus = revision.status === "published" || revision.status === "withdrawn";
+  const isTerminalRevision = revision.status === "published" || revision.status === "withdrawn";
+  const scheduledLocked = !isAdmin && revision.status === "scheduled";
+  const isReadOnlyStatus = isTerminalRevision || scheduledLocked;
+  const canPublishRevision = canPublishNow && (isAdmin
+    ? ["draft", "review", "changes_requested", "approved"].includes(revision.status)
+    : ["review", "approved"].includes(revision.status));
   const uploadBlocked = uploadBusy || Boolean(revision.pendingUploadId);
   const actionsBlocked = isPending || uploadBlocked || actionUncertain;
   const importedPages = pages.some((page) => page.imagePath.startsWith("/api/media/"));
@@ -292,7 +302,7 @@ export function EditorialEditor({
 
   // Save draft
   async function handleSaveDraft() {
-    if (guardUpload()) return;
+    if (isReadOnlyStatus || guardUpload()) return;
     setErrorMessage(null);
     runAction(async () => {
       const res = await updateDraftSnapshotAction({
@@ -447,6 +457,27 @@ export function EditorialEditor({
     });
   }
 
+  // Approval and immediate publication share one server transaction.
+  function handleApproveAndPublish() {
+    if (!canPublishRevision || guardUpload()) return;
+    if (hasUnsavedChanges) { setErrorMessage("احفظ تغييرات المسودة أولًا."); return; }
+    setErrorMessage(null);
+    runAction(async () => {
+      const res = await approveAndPublishRevisionAction({ revisionId: revision.id, expectedVersion: revision.version });
+      if (!res.ok) {
+        if (res.error?.includes("غير متزامنة") || res.error?.includes("conflict")) setConflictOccurred(true);
+        setErrorMessage(res.error ?? "تعذّر اعتماد الفصل ونشره");
+        setPublishConfirmationOpen(false);
+        toast({ title: "تعذّر النشر", description: res.error, variant: "destructive" });
+        return;
+      }
+      if (res.revision) setRevision(toWorkingRevision(res.revision));
+      setPublishConfirmationOpen(false);
+      toast({ title: "تم اعتماد الفصل ونشره", description: "الفصل متاح الآن للقراء في المكتبة." });
+      router.refresh();
+    });
+  }
+
   // Publish now (Admin)
   async function handlePublishNow() {
     if (guardUpload()) return;
@@ -559,6 +590,25 @@ export function EditorialEditor({
 
   return (
     <div className="space-y-6">
+      <Dialog open={publishConfirmationOpen} onOpenChange={open => { if (!isPending) setPublishConfirmationOpen(open); }}>
+        <DialogContent className="max-w-lg" dir="rtl">
+          <DialogHeader>
+            <DialogTitle>اعتماد الفصل ونشره الآن؟</DialogTitle>
+            <DialogDescription>
+              سيتم إتاحة الفصل {chapter.number} من «{chapter.seriesTitleAr}» للقراء وإرسال تحديث النشر للمتابعين.
+            </DialogDescription>
+          </DialogHeader>
+          <p className="text-sm text-foreground">{revision.titleAr}</p>
+          <DialogFooter className="gap-2">
+            <Button type="button" variant="outline" disabled={isPending} onClick={() => setPublishConfirmationOpen(false)}>رجوع للمراجعة</Button>
+            <Button type="button" disabled={actionsBlocked || hasUnsavedChanges || !canPublishRevision} onClick={handleApproveAndPublish} className="min-h-11 bg-success text-white hover:bg-success/90">
+              {isPending ? "جارٍ النشر…" : "اعتماد ونشر الآن"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      {scheduledLocked && <p role="status" className="rounded-xl border border-primary/30 bg-primary/10 p-4 text-sm leading-7">الفصل مجدول بواسطة الإدارة. اطلب إلغاء الجدولة قبل التعديل. يمكنك معاينة الفصل والاطلاع على سجله.</p>}
+      {!isAdmin && revision.status === "approved" && <p role="status" className="rounded-xl border border-gold/30 bg-gold/10 p-4 text-sm leading-7">هذه النسخة معتمدة. حفظ أي تعديل يعيدها إلى مسودة ويلغي اعتمادها، مع إشعار الإدارة لإعادة مراجعتها.</p>}
       {draftRecovery.recovered && !isReadOnlyStatus && (
         <div role="status" className="space-y-3 rounded-xl border border-primary/30 bg-primary/10 p-4 text-sm">
           <p>وُجد نص غير محفوظ في هذا التبويب لنفس إصدار الفصل. استعده أو تجاهله؛ لم تُستبدل النسخة المحفوظة.</p>
@@ -633,7 +683,7 @@ export function EditorialEditor({
         <div className="flex flex-wrap items-center gap-2">
           {isAdmin && <MoveToTrashButton kind="chapter" id={chapter.id} returnTo={`/admin/series/${chapter.seriesId}`} disabled={uploadBusy || hasUnsavedChanges} />}
           {/* If published or withdrawn, allow opening new working draft */}
-          {isReadOnlyStatus && (
+          {isTerminalRevision && (
             <Button
               onClick={handleOpenNewDraft}
               disabled={actionsBlocked}
@@ -967,6 +1017,14 @@ export function EditorialEditor({
                 </div>
               )}
 
+              {canPublishRevision && <div className="space-y-2 rounded-xl border border-success/30 bg-success/5 p-3">
+                <Button type="button" onClick={() => setPublishConfirmationOpen(true)} disabled={actionsBlocked || hasUnsavedChanges || (isVisual ? pages.length === 0 : !novelBody.trim())} className="min-h-11 w-full gap-2 bg-success text-white hover:bg-success/90">
+                  <Sparkles className="size-4" aria-hidden />
+                  اعتماد ونشر الآن
+                </Button>
+                <p className="text-xs leading-6 text-muted-foreground">ينشر النسخة المحفوظة مباشرة للقراء. راجع المعاينة قبل التأكيد.</p>
+              </div>}
+
               {/* Admin Authority Actions */}
               {isAdmin && (
                 <div className="space-y-3 rounded-xl border border-border/60 bg-secondary/30 p-3">
@@ -1040,7 +1098,7 @@ export function EditorialEditor({
             <div className="rounded-xl border border-border/60 bg-card p-4 text-xs text-muted-foreground">
               <p className="font-semibold text-foreground">ملاحظة بشأن التعديلات المعتمدة:</p>
               <p className="mt-1">
-                أي تعديل على محتوى نسخة معتمدة أو مجدولة يلغي اعتمادها وجدولتها تلقائيًا ويعيدها لحالة «مسودة» لضمان نزاهة النشر.
+                {isAdmin ? "أي تعديل على نسخة معتمدة أو مجدولة يلغي اعتمادها وجدولتها ويعيدها إلى مسودة لإعادة مراجعتها." : "تعديل نسخة معتمدة يعيدها إلى مسودة ويُشعر الإدارة. النسخة المجدولة مقفلة للتعديل حتى تلغي الإدارة جدولتها."}
               </p>
             </div>
           </div>

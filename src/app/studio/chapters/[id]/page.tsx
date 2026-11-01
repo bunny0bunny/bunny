@@ -105,6 +105,11 @@ async function loadStudioChapterPage(params: Promise<{ id: string }>) {
     include: { series: true, revisions: { orderBy: { revisionNumber: "desc" } }, editorialEvents: { orderBy: { createdAt: "desc" }, include: { actor: { select: { nickname: true } } } } },
   });
 
+  const canPublishNow = actor.role === "admin" || (actor.role === "editor" && Boolean((await db.seriesAssignment.findUnique({
+    where: { profileId_seriesId: { profileId: actor.id, seriesId: chapter.seriesId } },
+    select: { canPublish: true },
+  }))?.canPublish));
+
   // 4. Derive active published snapshot (highest revisionNumber published)
   const publishedRev = chapter.workflow === "published" ? chapter.revisions.find((r) => r.status === "published") ?? null : null;
 
@@ -216,6 +221,7 @@ async function loadStudioChapterPage(params: Promise<{ id: string }>) {
             events={formattedEvents}
             currentActorRole={actor.role as any}
             currentActorId={actor.id}
+            canPublishNow={canPublishNow}
           />
         </div>
       </main>

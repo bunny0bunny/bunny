@@ -8,6 +8,7 @@ import {
   returnForChanges as returnForChangesService,
   recommendApproval as recommendApprovalService,
   approveRevision as approveRevisionService,
+  approveAndPublishRevision as approveAndPublishRevisionService,
   publishRevisionNow as publishRevisionNowService,
   scheduleRevision as scheduleRevisionService,
   cancelScheduledRevision as cancelScheduledRevisionService,
@@ -18,6 +19,7 @@ import { currentProfileOrNull } from "@/lib/queries";
 import { isAdminRole } from "@/lib/team-access";
 
 const errorTranslations: Record<string, string> = {
+  scheduled_locked: "النسخة مجدولة للنشر ولا يمكن تعديلها. اطلب من مدير النظام إلغاء الجدولة أولاً.",
   unauthenticated: "يجب تسجيل الدخول أولاً للمتابعة.",
   forbidden: "لا تملك الصلاحية الكافية لتنفيذ هذا الإجراء.",
   not_found: "لم يتم العثور على العنصر المطلوب.",
@@ -255,4 +257,11 @@ export async function executeDuePublicationsAdminAction() {
     publishedCount: res.publishedCount,
     errors: res.errors.map(translateError),
   };
+}
+
+export async function approveAndPublishRevisionAction(input: unknown) {
+  const parsed = publishRevisionNowSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: "بيانات الاعتماد والنشر الفوري غير صالحة" };
+  const res = await approveAndPublishRevisionService(parsed.data);
+  return { ok: res.ok, error: res.error ? translateError(res.error) : undefined, revision: res.revision };
 }

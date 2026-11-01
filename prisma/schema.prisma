@@ -244,6 +244,7 @@ model SeriesAssignment {
   id        String   @id @default(cuid())
   profileId String
   seriesId  String
+  canPublish Boolean @default(false)
   createdAt DateTime @default(now())
   profile   Profile  @relation(fields: [profileId], references: [id], onDelete: Cascade)
   series    Series   @relation(fields: [seriesId], references: [id], onDelete: Cascade)

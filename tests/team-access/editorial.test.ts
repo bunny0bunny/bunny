@@ -183,7 +183,7 @@ test("editor can return for changes with required reason", async () => {
   expect(validReturn.revision?.status).toBe("changes_requested");
 });
 
-test("editing an approved or scheduled revision revokes approval and schedule", async () => {
+test("staff cannot edit scheduled work, but an approved unscheduled edit revokes approval", async () => {
   setActor(adminId);
   const draftRes = await openOrCreateDraft(testChapterId);
   const rev1 = draftRes.revision!;
@@ -209,10 +209,15 @@ test("editing an approved or scheduled revision revokes approval and schedule", 
   expect(fresh4.status).toBe("scheduled");
   expect(fresh4.scheduledFor).not.toBeNull();
 
-  // Now an edit occurs
+  setActor(editorId);
+  expect((await updateDraftSnapshot({ revisionId: fresh4.id, expectedVersion: fresh4.version, titleAr: "تعديل مقفل" })).error).toBe("scheduled_locked");
+  setActor(adminId);
+  const cancelled = await cancelScheduledRevision({ revisionId: fresh4.id, expectedVersion: fresh4.version });
+  expect(cancelled.ok).toBe(true);
+  setActor(editorId);
   const editRes = await updateDraftSnapshot({
     revisionId: fresh4.id,
-    expectedVersion: fresh4.version,
+    expectedVersion: cancelled.revision!.version,
     titleAr: "فصل جرى تعديله بعد الجدولة",
   });
   expect(editRes.ok).toBe(true);

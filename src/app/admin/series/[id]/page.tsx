@@ -33,6 +33,8 @@ export default async function AdminSeriesDetailPage({
   const staff = isAdmin ? await getAssignableStaff() : [];
   const assignedProfileIds = (s as any).assignments?.map((a: any) => a.profileId) ?? [];
 
+  const publishingProfileIds = (s as { assignments?: { profileId: string; canPublish: boolean }[] }).assignments?.filter(assignment => assignment.canPublish).map(assignment => assignment.profileId) ?? [];
+
   const activeChapters = s.chapters.filter((c) => !c.deletedAt);
   const publishedCount = activeChapters.filter((c) => isPublicChapter(c)).length;
 
@@ -145,9 +147,11 @@ export default async function AdminSeriesDetailPage({
       {isAdmin && (
         <section className="mb-8" aria-label="إسناد العمل للفريق">
           <TeamAssignmentPanel
+            key={JSON.stringify([s.id, assignedProfileIds, publishingProfileIds])}
             seriesId={s.id}
             staff={staff}
             assignedProfileIds={assignedProfileIds}
+            publishingProfileIds={publishingProfileIds}
           />
         </section>
       )}

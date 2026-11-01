@@ -2,6 +2,7 @@ import "server-only";
 import { withDatabaseScope } from "@/lib/db";
 import { Prisma } from "@prisma/client";
 import { withSerializableTx, editableRevision, checkStaffSeriesAccess, type EditorialResult } from "@/lib/editorial";
+import { notifyEditorialTransition } from "@/lib/editorial-notifications";
 import { getTrustedAppOrigin } from "@/lib/account-mail";
 import { getMediaStorage } from "./storage";
 import { sniffPage, MAX_PAGE_BYTES, MAX_SOURCE_BYTES } from "./formats";
@@ -35,6 +36,7 @@ async function active(tx: Tx, actor: Actor, id: string, creator = true) {
   const upload = await tx.chapterUpload.findUnique({ where: { id }, include: { revision: { include: { chapter: true } } } });
   if (!upload || upload.revision.chapter.deletedAt) return { error: "not_found" } as const;
   if (!await checkStaffSeriesAccess(tx, actor, upload.revision.chapter.seriesId) || (creator && upload.createdById !== actor.id)) return { error: "forbidden" } as const;
+  if (actor.role !== "admin" && upload.revision.status === "scheduled") return { error: "scheduled_locked" } as const;
   if (upload.expiresAt.getTime() <= Date.now() && ["uploading", "failed"].includes(upload.state)) {
     await tx.chapterUpload.update({ where: { id }, data: { state: "cancelled", errorCode: "expired" } });
     await tx.chapterRevision.updateMany({ where: { id: upload.revisionId, pendingUploadId: id }, data: { pendingUploadId: null, version: { increment: 1 } } });
@@ -72,6 +74,10 @@ export async function startUpload(input: StartUploadInput): Promise<EditorialRes
     const upload = await tx.chapterUpload.create({ data: { revisionId: revision.id, chapterId: revision.chapterId, createdById: actor.id!, sourceName: input.sourceName.replace(/[\u0000-\u001f\u007f]/g, ""), sourceBytes: input.sourceBytes, expectedPages: input.pageCount, sourceSha256: input.sourceSha256 ?? null, processingProfile: input.processingProfile ?? null, keepSource: input.keepSource ?? true, revisionVersion: revision.version + 1, expiresAt: new Date(Date.now() + sessionMs) } });
     const updated = await tx.chapterRevision.update({ where: { id: revision.id }, data: { pendingUploadId: upload.id, version: { increment: 1 }, status: "draft", approvedAt: null, approvedById: null, scheduledFor: null } });
     await event(tx, actor, revision.id, revision.chapterId, "start_pdf_upload");
+    if (["approved", "scheduled"].includes(revision.status)) {
+      await event(tx, actor, revision.id, revision.chapterId, "edit_revoked_approval");
+      await notifyEditorialTransition(tx, { action: "approval_invalidated", actorId: actor.id, seriesId: revision.chapter.seriesId, chapterId: revision.chapterId });
+    }
     return { ok: true, data: { uploadId: upload.id, revisionVersion: updated.version } };
   });
 }
@@ -194,13 +200,13 @@ export async function uploadStatus(id: string): Promise<EditorialResult> {
   if (!enabled()) return fail("disabled");
   return withSerializableTx(async (tx, actor) => {
     // Resolve expiry here as well, so abandoned sessions can be explicitly cleared by polling.
-    const checked = await active(tx, actor, id, false); if (checked.error && !["expired", "conflict"].includes(checked.error)) return fail(checked.error);
+    const checked = await active(tx, actor, id, false); if (checked.error && !["expired", "conflict", "scheduled_locked"].includes(checked.error)) return fail(checked.error);
     const upload = await tx.chapterUpload.findUnique({ where: { id }, include: { revision: { include: { chapter: true } }, assets: { select: { pageIndex: true, readyAt: true, bytes: true } } } });
     if (!upload || upload.revision.chapter.deletedAt) return fail("not_found"); if (!await checkStaffSeriesAccess(tx, actor, upload.revision.chapter.seriesId)) return fail("forbidden");
     return { ok: true, data: { status: toUploadStatus(upload) } };
   }, { invalidate: false });
 }
-const safeErrors: Record<string, string> = { unauthenticated: "سجّل الدخول بحساب موثّق", forbidden: "غير مسموح بهذا الإجراء", conflict: "تغيّرت النسخة؛ حدّث الصفحة", disabled: "رفع ملفات PDF غير متاح حاليًا", incomplete: "لم يكتمل رفع صفحات الفصل", expired: "انتهت جلسة الرفع؛ ابدأ من جديد", quota: "تجاوز الرفع الحد المسموح", rate_limit: "محاولات كثيرة؛ حاول لاحقًا", in_progress: "يجري رفع هذه الصفحة؛ انتظر ثم أعد المحاولة" };
+const safeErrors: Record<string, string> = { scheduled_locked: "النسخة مجدولة للنشر؛ اطلب من مدير النظام إلغاء الجدولة أولاً", unauthenticated: "سجّل الدخول بحساب موثّق", forbidden: "غير مسموح بهذا الإجراء", conflict: "تغيّرت النسخة؛ حدّث الصفحة", disabled: "رفع ملفات PDF غير متاح حاليًا", incomplete: "لم يكتمل رفع صفحات الفصل", expired: "انتهت جلسة الرفع؛ ابدأ من جديد", quota: "تجاوز الرفع الحد المسموح", rate_limit: "محاولات كثيرة؛ حاول لاحقًا", in_progress: "يجري رفع هذه الصفحة؛ انتظر ثم أعد المحاولة" };
 export function uploadResponse(result: EditorialResult) {
   if (result.ok) return Response.json({ ok: true, ...(result.revision ? { revision: result.revision } : {}), ...(result.data as object ?? {}) }, { headers: { "Cache-Control": "private, no-store" } });
   const code = result.error ?? "unavailable";
