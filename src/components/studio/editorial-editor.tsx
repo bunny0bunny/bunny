@@ -1,4 +1,5 @@
 "use client";
+import { getChapterLabel } from '@/lib/chapter-title';
 
 import { MoveToTrashButton } from "@/components/admin/content-trash-controls";
 import { useUnsavedChanges } from "@/hooks/use-unsaved-changes";
@@ -598,7 +599,7 @@ export function EditorialEditor({
               سيتم إتاحة الفصل {chapter.number} من «{chapter.seriesTitleAr}» للقراء وإرسال تحديث النشر للمتابعين.
             </DialogDescription>
           </DialogHeader>
-          <p className="text-sm text-foreground">{revision.titleAr}</p>
+          <p className="text-sm text-foreground">{getChapterLabel({ number: chapter.number, titleAr: revision.titleAr })}</p>
           <DialogFooter className="gap-2">
             <Button type="button" variant="outline" disabled={isPending} onClick={() => setPublishConfirmationOpen(false)}>رجوع للمراجعة</Button>
             <Button type="button" disabled={actionsBlocked || hasUnsavedChanges || !canPublishRevision} onClick={handleApproveAndPublish} className="min-h-11 bg-success text-white hover:bg-success/90">
@@ -780,9 +781,10 @@ export function EditorialEditor({
               <h2 className="text-base font-bold text-foreground">بيانات النسخة التحريرية</h2>
 
               <div className="space-y-1.5">
-                <label htmlFor={`${editorId}-title`} className="text-sm font-medium">عنوان الفصل *</label>
+                <label htmlFor={`${editorId}-title`} className="text-sm font-medium">عنوان الفصل (اختياري)</label>
                 <Input
                   id={`${editorId}-title`}
+                  maxLength={300}
                   value={titleAr}
                   onChange={(e) => setTitleAr(e.target.value)}
                   disabled={isReadOnlyStatus || actionsBlocked}
@@ -1110,7 +1112,7 @@ export function EditorialEditor({
         <div className="rounded-2xl border border-border/60 bg-card p-6">
           <header className="mb-6 border-b border-border/60 pb-4">
             <h2 className="text-xl font-bold text-foreground">
-              الفصل {chapter.number}: {titleAr}
+              {getChapterLabel({ number: chapter.number, titleAr })}
             </h2>
             <p className="mt-1 text-xs text-muted-foreground">
               العمل: {chapter.seriesTitleAr} · التنسيق: {chapter.format === 'manga' ? 'صفحات مصوّرة' : chapter.format === 'webtoon' ? 'تمرير رأسي بدون فواصل' : 'نص روائي'}{chapter.format === 'manga' ? ` · اتجاه التقليب: ${readingDirection === 'rtl' ? 'من اليمين لليسار' : 'من اليسار لليمين'}` : ''}

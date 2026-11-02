@@ -1,4 +1,5 @@
 "use client";
+import { getChapterLabel } from '@/lib/chapter-title';
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -18,7 +19,7 @@ export function ReaderChapterSelect({ seriesSlug, format, chapterNumber, chapter
       if (chapters.some(chapter => chapter.number === number)) router.push(readerHref(format, seriesSlug, number));
     }}>
     {chapters.map(chapter => <option key={chapter.number} value={chapter.number}>
-      الفصل {chapter.number}{chapter.isPremiumDemo ? " — مقفل" : ""}: {chapter.titleAr}
+      {getChapterLabel(chapter)}{chapter.isPremiumDemo ? " — مقفل" : ""}
     </option>)}
   </select>;
 }

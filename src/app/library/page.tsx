@@ -205,7 +205,7 @@ export default async function LibraryPage({
                         </Link>
                         <p className="mt-0.5 truncate text-xs text-muted-foreground">
                           الفصل {item.chapterNumber}
-                          {item.chapterTitle ? ` · ${item.chapterTitle}` : ""}
+                          {item.chapterTitle && item.chapterTitle !== `الفصل ${item.chapterNumber}` ? ` · ${item.chapterTitle}` : ""}
                         </p>
                       </div>
 

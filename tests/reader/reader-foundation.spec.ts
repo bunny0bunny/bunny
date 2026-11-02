@@ -130,7 +130,7 @@ async function login(page: Page) {
 async function serverProgress(format: string, pageIndex = 3, percent = 65, updatedAt = new Date(Date.now() - 5000)) {
   const profile = await db.profile.findUniqueOrThrow({ where: { email: "reader@bunny.demo" } });
   const series = await db.series.findUniqueOrThrow({ where: { slug: `qa-reader-${format}` } });
-  const chapter = await db.chapter.findUniqueOrThrow({ where: { seriesId_number: { seriesId: series.id, number: 1 } } });
+  const chapter = await db.chapter.findFirstOrThrow({ where: { seriesId: series.id, number: 1, deletedAt: null } });
   await db.readingProgress.upsert({ where: { profileId_chapterId: { profileId: profile.id, chapterId: chapter.id } },
     create: { profileId: profile.id, seriesId: series.id, chapterId: chapter.id, pageIndex, percent, updatedAt },
     update: { pageIndex, percent, updatedAt } });
@@ -165,7 +165,7 @@ for (const format of ["manga", "webtoon", "novel"]) {
   });
   test(`${format}: locked content preserves local and server progress`, async ({ page }) => {
     const { profile, series } = await serverProgress(format);
-    const chapter = await db.chapter.findUniqueOrThrow({ where: { seriesId_number: { seriesId: series.id, number: 8 } } });
+    const chapter = await db.chapter.findFirstOrThrow({ where: { seriesId: series.id, number: 8, deletedAt: null } });
     await db.readingProgress.deleteMany({ where: { profileId: profile.id, chapterId: chapter.id } });
     await login(page);
     const raw = JSON.stringify([record(format, { chapterNumber: 8 })]);

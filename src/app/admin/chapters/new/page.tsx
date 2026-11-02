@@ -23,7 +23,7 @@ export default async function NewChapterPage({
   // Scope the aggregate to the works already authorized for this actor.
   const highestNumbers = seriesList.length ? await db.chapter.groupBy({
     by: ["seriesId"],
-    where: { seriesId: { in: seriesList.map(series => series.id) } },
+    where: { seriesId: { in: seriesList.map(series => series.id) }, deletedAt: null },
     _max: { number: true },
   }) : [];
   const nextNumbers = new Map(highestNumbers.map(row => [row.seriesId, nextChapterNumber(row._max.number)]));

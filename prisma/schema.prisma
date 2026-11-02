@@ -143,6 +143,8 @@ model Profile {
   commentReports        CommentReport[]
   ratings               Rating[]
   identityFollows       IdentityFollow[]
+  ownedIdentities       PublicIdentity[] @relation("IdentityOwner")
+  identityRatings       IdentityRating[]
   notifications         Notification[]
   commentLikes          CommentLike[]
   assignments           SeriesAssignment[]
@@ -259,7 +261,7 @@ model Chapter {
   trashBatchId     String?
   seriesId         String
   number           Float
-  titleAr          String
+  titleAr          String @default("")
   workflow         ChapterWorkflow  @default(draft)
   publishedAt      DateTime?
   scheduledFor     DateTime?
@@ -277,7 +279,8 @@ model Chapter {
   mediaAssets      MediaAsset[]
   editorialEvents  ChapterEditorialEvent[]
 
-  @@unique([seriesId, number])
+  // Active-only number uniqueness is enforced by the partial index migration.
+  @@index([seriesId, number])
   @@index([deletedAt])
   @@index([trashBatchId])
 }
@@ -326,7 +329,7 @@ model ChapterRevision {
   revisionNumber   Int
   version          Int                   @default(1)
   status           ChapterRevisionStatus @default(draft)
-  titleAr          String
+  titleAr          String @default("")
   readingDirection ReadingDirection      @default(rtl)
   isPremiumDemo    Boolean               @default(false)
   novelBody        String?
@@ -614,6 +617,10 @@ model PublicIdentity {
   displayName String
   bio String @default("")
   avatarSeed String @default("bunny")
+  avatarKey String?
+  ownerProfileId String?
+  owner Profile? @relation("IdentityOwner", fields: [ownerProfileId], references: [id], onDelete: SetNull)
+  ratings IdentityRating[]
   kind String @default("individual")
   status String @default("active")
   version Int @default(1)
@@ -622,6 +629,7 @@ model PublicIdentity {
   credits SeriesCredit[]
   follows IdentityFollow[]
   @@index([status, displayName])
+  @@index([ownerProfileId])
 }
 model SeriesCredit {
   id String @id @default(cuid())
@@ -674,4 +682,17 @@ model ChapterPublication {
   notifications Notification[]
   @@index([state, eventAt])
   @@index([seriesId])
+}
+
+model IdentityRating {
+  id String @id @default(cuid())
+  profileId String
+  identityId String
+  value Int
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  profile Profile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  identity PublicIdentity @relation(fields: [identityId], references: [id], onDelete: Cascade)
+  @@unique([profileId, identityId])
+  @@index([identityId])
 }

@@ -1,4 +1,5 @@
 "use client";
+import { getChapterLabel } from '@/lib/chapter-title';
 
 import Image from "next/image";
 import { ChapterDownloadButton } from "@/components/downloads/chapter-download-button";
@@ -417,7 +418,7 @@ export function WorkTabs({
                     </span>
                     <div className="min-w-0 flex-1">
                       <span className="block truncate text-sm font-medium text-foreground/80">
-                        الفصل {c.number}: {c.titleAr}
+                        {getChapterLabel(c)}
                       </span>
                       <span className="text-[11px] text-gold">
                         ينشر {formatScheduledDate(c.scheduledFor ?? null)}

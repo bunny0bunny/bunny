@@ -1,4 +1,5 @@
 "use client";
+import { getChapterLabel } from '@/lib/chapter-title';
 
 import { useEffect, useRef, useState } from "react";
 import { useSession } from "next-auth/react";
@@ -230,7 +231,7 @@ export function NovelReader({
         {paragraphs.length > 0 && <article className="mx-auto max-w-[42rem] px-5 pb-16">
           <header className={`mb-8 border-b pb-5 text-center ${t.line}`}>
             <p className="text-xs text-muted-foreground">{seriesTitle}</p>
-            <h1 className={`mt-1.5 text-2xl font-bold ${t.title}`}>الفصل {chapterNumber}: {chapterTitle}</h1>
+            <h1 className={`mt-1.5 text-2xl font-bold ${t.title}`}>{getChapterLabel({ number: chapterNumber, titleAr: chapterTitle })}</h1>
           </header>
           <div
             className="space-y-6 leading-[2.2]"

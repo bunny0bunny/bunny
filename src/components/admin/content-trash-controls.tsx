@@ -22,6 +22,7 @@ export function trashErrorMessage(code?: string | null) {
     case "invalid_input": return "تعذر التحقق من بيانات الطلب. حدّث الصفحة وافتح معاينة جديدة.";
     case "invalid_confirmation": case "confirmation_mismatch": return "نص التأكيد لا يطابق النص المطلوب.";
     case "not_found": return "المحتوى غير متاح بهذه الحالة. حدّث الصفحة للتحقق.";
+    case "chapter_number_conflict": return "يوجد فصل نشط بنفس الرقم في هذا العمل. انقله إلى السلة أو غيّر رقمه قبل الاستعادة.";
     case "parent_unavailable": return "استعد العمل الأب أولًا ثم أعد محاولة استعادة الفصل.";
     case "purging": case "already_purging": return "بدأ الحذف النهائي ولا يمكن استعادة المحتوى. حدّث الحالة لمتابعة التقدم.";
     default: return "تعذر تنفيذ العملية. حدّث الصفحة للتحقق من الحالة قبل المحاولة مجددًا.";

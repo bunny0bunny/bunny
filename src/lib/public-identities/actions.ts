@@ -18,3 +18,10 @@ export async function setIdentityAlerts(input: {
 }) {
     return service.setIdentityAlerts(input);
 }
+
+export async function updateOwnedIdentity(input: unknown) {
+    return service.updateOwnedIdentity(input);
+}
+export async function setIdentityRating(input: unknown) {
+    return service.setIdentityRating(input);
+}

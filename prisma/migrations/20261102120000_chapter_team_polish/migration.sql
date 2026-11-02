@@ -1,0 +1,15 @@
+BEGIN;
+DROP INDEX "Chapter_seriesId_number_key";
+CREATE UNIQUE INDEX "Chapter_active_series_number_key" ON "Chapter"("seriesId", "number") WHERE "deletedAt" IS NULL;
+CREATE INDEX "Chapter_seriesId_number_idx" ON "Chapter"("seriesId", "number");
+ALTER TABLE "Chapter" ALTER COLUMN "titleAr" SET DEFAULT '';
+ALTER TABLE "ChapterRevision" ALTER COLUMN "titleAr" SET DEFAULT '';
+ALTER TABLE "PublicIdentity" ADD COLUMN "avatarKey" TEXT, ADD COLUMN "ownerProfileId" TEXT;
+ALTER TABLE "PublicIdentity" ADD CONSTRAINT "PublicIdentity_ownerProfileId_fkey" FOREIGN KEY ("ownerProfileId") REFERENCES "Profile"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+CREATE INDEX "PublicIdentity_ownerProfileId_idx" ON "PublicIdentity"("ownerProfileId");
+CREATE TABLE "IdentityRating" ("id" TEXT NOT NULL, "profileId" TEXT NOT NULL, "identityId" TEXT NOT NULL, "value" INTEGER NOT NULL CHECK ("value" BETWEEN 1 AND 5), "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP, "updatedAt" TIMESTAMP(3) NOT NULL, CONSTRAINT "IdentityRating_pkey" PRIMARY KEY ("id"));
+CREATE UNIQUE INDEX "IdentityRating_profileId_identityId_key" ON "IdentityRating"("profileId", "identityId");
+CREATE INDEX "IdentityRating_identityId_idx" ON "IdentityRating"("identityId");
+ALTER TABLE "IdentityRating" ADD CONSTRAINT "IdentityRating_profileId_fkey" FOREIGN KEY ("profileId") REFERENCES "Profile"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "IdentityRating" ADD CONSTRAINT "IdentityRating_identityId_fkey" FOREIGN KEY ("identityId") REFERENCES "PublicIdentity"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+COMMIT;

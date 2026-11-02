@@ -1,3 +1,4 @@
+import { getChapterLabel } from '@/lib/chapter-title';
 import { getWorkTitle } from '@/lib/work-title';
 import { EDITORIAL_LABELS, isPublicChapter } from "@/lib/editorial-state";
 import Link from "next/link";
@@ -84,7 +85,7 @@ export default async function AdminChaptersPage({
                   <div className="flex items-center gap-2">
                     <FileEdit className="size-4 shrink-0 text-muted-foreground" aria-hidden />
                     <div>
-                      <p className="font-medium text-foreground">الفصل {c.number}: {c.workingTitleAr}</p>
+                      <p className="font-medium text-foreground">{getChapterLabel({ number: c.number, titleAr: c.workingTitleAr })}</p>
                       <div className="mt-1 flex items-center gap-1.5">
                         <Badge
                           variant="secondary"

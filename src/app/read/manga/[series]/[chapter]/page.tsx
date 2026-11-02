@@ -1,3 +1,4 @@
+import { getChapterTitle } from '@/lib/chapter-title';
 import { isChapterNumber } from '@/lib/chapter-number';
 import { AdultContentGate } from "@/components/readers/adult-content-gate";
 import { cache } from 'react';
@@ -50,7 +51,7 @@ export default async function MangaReaderPage({
       seriesSlug={data.series.slug}
       seriesTitle={getWorkTitle(data.series)}
       chapterNumber={data.chapter.number}
-      chapterTitle={data.chapter.titleAr}
+      chapterTitle={getChapterTitle(data.chapter)}
       isPremiumDemo={data.chapter.isPremiumDemo}
       comments={comments}
       pages={data.chapter.pages.map((p) => ({

@@ -17,7 +17,7 @@ test.beforeAll(async () => {
       author: 'فريق الاختبار', coverPath: '/art/covers/warden-of-the-twilight-gate.webp',
       category: item.category, format: item.format,
     } });
-    await db.chapter.upsert({ where: { seriesId_number: { seriesId: row.id, number: 1 } }, update: {}, create: {
+    if (!await db.chapter.findFirst({ where: { seriesId: row.id, number: 1, deletedAt: null } })) await db.chapter.create({ data: {
       seriesId: row.id, number: 1, titleAr: 'الفصل الأول', workflow: item.published ? 'published' : 'draft',
       publishedAt: item.published ? new Date() : null,
     } });

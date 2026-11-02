@@ -1,3 +1,4 @@
+import { getChapterTitle } from '@/lib/chapter-title';
 import 'server-only';
 import { randomUUID } from 'node:crypto';
 import { Prisma, type ChapterPublication } from '@prisma/client';
@@ -19,7 +20,7 @@ export async function recordChapterPublication(tx: Tx, chapterId: string, revisi
     const previous = await tx.chapterPublication.count({ where: { seriesId: ch.seriesId } });
     const seriesHistorical = discovered.historical.some(h => h.seriesId === ch.seriesId && h.chapterId !== chapterId);
     await tx.chapterPublication.create({ data: {
-            chapterId, seriesId: ch.seriesId, state: historical || ambiguous ? 'baseline' : 'pending', firstPublishedAt: historical?.firstPublishedAt ? new Date(historical.firstPublishedAt) : historical || ambiguous ? null : new Date(), evidenceJson: historical ? [...historical.evidence, 'baseline_recorded_at_eventAt'] : ambiguous ? ['ambiguous_prior_trash', 'baseline_recorded_at_eventAt'] : [], seriesDebut: !historical && !ambiguous && !previous && !seriesHistorical, creditsSnapshot: ch.series.publicCredits, seriesTitle: getWorkTitle(ch.series), chapterTitle: revision.titleAr, chapterNumber: ch.number, seriesSlug: ch.series.slug, format: ch.series.format, isAdult: ch.series.isAdult, isPremium: revision.isPremiumDemo
+            chapterId, seriesId: ch.seriesId, state: historical || ambiguous ? 'baseline' : 'pending', firstPublishedAt: historical?.firstPublishedAt ? new Date(historical.firstPublishedAt) : historical || ambiguous ? null : new Date(), evidenceJson: historical ? [...historical.evidence, 'baseline_recorded_at_eventAt'] : ambiguous ? ['ambiguous_prior_trash', 'baseline_recorded_at_eventAt'] : [], seriesDebut: !historical && !ambiguous && !previous && !seriesHistorical, creditsSnapshot: ch.series.publicCredits, seriesTitle: getWorkTitle(ch.series), chapterTitle: getChapterTitle({ number: ch.number, titleAr: revision.titleAr }), chapterNumber: ch.number, seriesSlug: ch.series.slug, format: ch.series.format, isAdult: ch.series.isAdult, isPremium: revision.isPremiumDemo
         } });
 }
 function bounded(value: number | undefined, fallback: number, max: number) {
@@ -97,7 +98,7 @@ export async function drainPublications(options: {
                     const premium = event.isPremium || target.isPremiumDemo;
                     const title = `${event.seriesTitle}${adult ? ' +18' : ''}`;
                     delivered = (await tx.notification.createMany({ skipDuplicates: true, data: recipients.map(({ profileId }) => ({
-                            profileId, publicationId: event.id, type: 'new_chapter', titleAr: `${event.seriesDebut ? 'عمل جديد' : 'تحديث'} في «${title}»`, bodyAr: `الفصل ${event.chapterNumber}${adult ? '' : ` — ${target.titleAr}`} ${premium ? 'مقفل' : 'متاح الآن'}.`, href: `/read/${target.series.format}/${target.series.slug}/${target.number}`
+                            profileId, publicationId: event.id, type: 'new_chapter', titleAr: `${event.seriesDebut ? 'عمل جديد' : 'تحديث'} في «${title}»`, bodyAr: `الفصل ${event.chapterNumber}${adult || !target.titleAr.trim() ? '' : ` — ${target.titleAr}`} ${premium ? 'مقفل' : 'متاح الآن'}.`, href: `/read/${target.series.format}/${target.series.slug}/${target.number}`
                         })) })).count;
                 }
                 const changed = await tx.chapterPublication.updateMany({ where: {

@@ -197,7 +197,7 @@ export async function upsertSeries(input: unknown): Promise<ActionResult & { slu
 
 const chapterMetaSchema = z.object({
   id: z.string(),
-  titleAr: z.string().min(2).optional(),
+  titleAr: z.string().trim().max(300).optional(),
   workflow: z.enum(["draft", "review", "published"]).optional(),
   isPremiumDemo: z.boolean().optional(),
   readingDirection: z.enum(["rtl", "ltr"]).optional(),
@@ -304,7 +304,7 @@ export async function updateChapterMeta(input: unknown): Promise<ActionResult> {
 const createChapterSchema = z.object({
   seriesId: z.string(),
   number: z.number().refine(isChapterNumber, 'رقم الفصل غير صالح'),
-  titleAr: z.string().min(2, "عنوان الفصل مطلوب"),
+  titleAr: z.string().trim().max(300).default(''),
   workflow: z.enum(["draft", "review", "published"]),
   isPremiumDemo: z.boolean(),
   readingDirection: z.enum(["rtl", "ltr"]).optional(),
@@ -343,8 +343,8 @@ export async function createChapter(input: unknown): Promise<ActionResult & { id
   const series = await db.series.findUnique({ where: { id: d.seriesId, deletedAt: null } });
   if (!series) return { ok: false, error: "not_found" };
 
-  const exists = await db.chapter.findUnique({
-    where: { seriesId_number: { seriesId: series.id, number: d.number } },
+  const exists = await db.chapter.findFirst({
+    where: { seriesId: series.id, number: d.number, deletedAt: null },
   });
   if (exists) return { ok: false, error: "رقم الفصل مستخدم في هذا العمل" };
 
@@ -386,8 +386,8 @@ export async function createChapter(input: unknown): Promise<ActionResult & { id
     }, { isolationLevel: "Serializable" });
   } catch (err: any) {
     if (err?.message === "chapter_creation_forbidden") return { ok: false, error: "forbidden" };
-    if (err?.message === "content_unavailable" || err?.code === "P2034") return { ok: false, error: "not_found" };
-    if (err?.code === "P2002") {
+    if (err?.message === "content_unavailable") return { ok: false, error: "not_found" };
+    if (err?.code === "P2002" || err?.code === "P2034") {
       return { ok: false, error: "رقم الفصل مستخدم في هذا العمل" };
     }
     throw err;

@@ -18,9 +18,9 @@ async function createAfter(revoke: () => Promise<unknown>, premium = false) {
   let intercepted = false;
   // Prisma's dynamic $transaction property cannot reliably be spied on. Use
   // its supported query extension at the final preliminary uniqueness read.
-  holder.prisma = client.$extends({ query: { chapter: { async findUnique({ args, query }) {
+  holder.prisma = client.$extends({ query: { chapter: { async findFirst({ args, query }) {
     const result = await query(args);
-    if (args.where.seriesId_number && !intercepted) { intercepted = true; await revoke(); }
+    if (args.where?.seriesId === series && args.where.deletedAt === null && !intercepted) { intercepted = true; await revoke(); }
     return result;
   } } } }) as unknown as typeof db;
   try {

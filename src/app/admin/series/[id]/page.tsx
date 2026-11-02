@@ -1,3 +1,4 @@
+import { getChapterLabel } from '@/lib/chapter-title';
 import { SeriesCreditsPanel } from "@/components/public-identities/series-credits-panel";
 import { listManagedIdentities, getSeriesCredits } from "@/lib/public-identities/service";
 import { normalizeGenres } from "@/lib/genres";
@@ -95,7 +96,7 @@ export default async function AdminSeriesDetailPage({
               {activeChapters.map((c) => (
                 <tr key={c.id} className="border-b border-border/40 last:border-0">
                   <td className="p-3">
-                    <p className="font-medium text-foreground">الفصل {c.number}: {c.workingTitleAr}</p>
+                    <p className="font-medium text-foreground">{getChapterLabel({ number: c.number, titleAr: c.workingTitleAr })}</p>
                     <p className="mt-0.5 flex items-center gap-2 text-[11px] text-muted-foreground">
                       {c.isPremiumDemo && (
                         <Badge variant="secondary" className="border-gold/40 bg-gold/10 text-gold">مقفل</Badge>

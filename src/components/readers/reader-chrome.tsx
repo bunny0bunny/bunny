@@ -1,4 +1,5 @@
 "use client";
+import { getChapterLabel } from '@/lib/chapter-title';
 import { AdultBadge } from "@/components/library/adult-badge";
 
 import Link from "next/link";
@@ -108,7 +109,7 @@ export function ReaderChrome({
               </div>
             ) : (
               <p className="truncate text-[11px] text-muted-foreground">
-                الفصل {chapterNumber} · {chapterTitle}
+                {getChapterLabel({ number: chapterNumber, titleAr: chapterTitle })}
               </p>
             )}
           </div>

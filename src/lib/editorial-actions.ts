@@ -47,7 +47,7 @@ const openOrCreateDraftSchema = z.object({
 const updateDraftSnapshotSchema = z.object({
   revisionId: z.string().min(1),
   expectedVersion: z.number().int(),
-  titleAr: z.string().min(2).max(300).optional(),
+  titleAr: z.string().trim().max(300).optional(),
   readingDirection: z.enum(["rtl", "ltr"]).optional(),
   isPremiumDemo: z.boolean().optional(),
   novelBody: z.string().max(60000).optional(),

@@ -38,7 +38,7 @@ export async function getNotifications(profileId: string, limit = PAGE_ITEMS): P
             id: n.id,
             type: n.type,
             titleAr: unavailable ? 'غير متاح' : adult ? `${publication!.publication.seriesDebut ? 'عمل جديد' : 'تحديث'} في «${publication!.publication.seriesTitle} +18»` : n.titleAr,
-            bodyAr: unavailable ? null : publication?.target ? `الفصل ${publication.publication.chapterNumber}${adult ? '' : ` — ${publication.target.titleAr}`} ${premium ? 'مقفل' : 'متاح الآن'}.` : n.bodyAr,
+            bodyAr: unavailable ? null : publication?.target ? `الفصل ${publication.publication.chapterNumber}${adult || !publication.target.titleAr.trim() ? '' : ` — ${publication.target.titleAr}`} ${premium ? 'مقفل' : 'متاح الآن'}.` : n.bodyAr,
             href: unavailable ? null : publication?.target ? `/read/${publication.target.series.format}/${publication.target.series.slug}/${publication.target.number}` : n.href,
             readAt: n.readAt,
             createdAt: n.createdAt

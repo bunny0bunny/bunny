@@ -114,8 +114,8 @@ test("1. assigned contributor can create draft chapter in assigned work", async 
     novelBody: "نص مسودة تجريبي للمساهم",
   });
   expect(result.ok).toBe(true);
-  const ch = await db.chapter.findUnique({
-    where: { seriesId_number: { seriesId: assignedSeries.id, number: 101 } },
+  const ch = await db.chapter.findFirst({
+    where: { seriesId: assignedSeries.id, number: 101, deletedAt: null },
   });
   expect(ch).not.toBeNull();
   expect(ch?.workflow).toBe("draft");
@@ -134,8 +134,8 @@ test("2. assigned contributor can create review chapter in assigned work", async
     novelBody: "نص مراجعة تجريبي للمساهم",
   });
   expect(result.ok).toBe(true);
-  const ch = await db.chapter.findUnique({
-    where: { seriesId_number: { seriesId: assignedSeries.id, number: 102 } },
+  const ch = await db.chapter.findFirst({
+    where: { seriesId: assignedSeries.id, number: 102, deletedAt: null },
   });
   expect(ch).not.toBeNull();
   expect(ch?.workflow).toBe("review");
@@ -241,8 +241,8 @@ test("5. reader cannot create chapter (forbidden, DB unchanged)", async () => {
 });
 
 test("6. contributor/editor can update draft metadata in assigned work", async () => {
-  const ch = await db.chapter.findUniqueOrThrow({
-    where: { seriesId_number: { seriesId: assignedSeries.id, number: 101 } },
+  const ch = await db.chapter.findFirstOrThrow({
+    where: { seriesId: assignedSeries.id, number: 101, deletedAt: null },
   });
 
   setActor(contribUser.id);
@@ -283,8 +283,8 @@ test("7. contributor/editor cannot mutate published chapter or set published wor
   expect(res1).toEqual({ ok: false, error: "forbidden" });
 
   // Contributor tries to set a draft chapter to published
-  const draftCh = await db.chapter.findUniqueOrThrow({
-    where: { seriesId_number: { seriesId: assignedSeries.id, number: 101 } },
+  const draftCh = await db.chapter.findFirstOrThrow({
+    where: { seriesId: assignedSeries.id, number: 101, deletedAt: null },
   });
   const res2 = await actions.updateChapterMeta({
     id: draftCh.id,

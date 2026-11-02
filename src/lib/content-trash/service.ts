@@ -81,7 +81,14 @@ export async function restoreTrash(input: RestoreTrashInput): Promise<TrashResul
     const row = await tx.contentTrash.findUnique({ where: { id: input.id } });
     if (!row) return fail('not_found'); if (row.state !== 'trashed' || row.version !== input.expectedVersion) return fail('conflict');
     if (row.entityType === 'chapter') { const parent = await tx.series.findUnique({ where: { id: row.seriesId! } }); if (!parent || parent.deletedAt) return fail('parent_unavailable'); }
-    const ids = (await tx.chapter.findMany({ where: { trashBatchId: row.id }, select: { id: true } })).map(c => c.id);
+    const restoring = await tx.chapter.findMany({ where: { trashBatchId: row.id }, select: { id: true, seriesId: true, number: true } });
+    // Preflight the entire batch before changing revisions, uploads or any row.
+    // Serializable retries and the active-only unique index guard concurrent creates.
+    const ids = restoring.map(c => c.id);
+    if (restoring.length && await tx.chapter.findFirst({ where: {
+      deletedAt: null, id: { notIn: ids },
+      OR: restoring.map(c => ({ seriesId: c.seriesId, number: c.number })),
+    }, select: { id: true } })) return fail('chapter_number_conflict');
     await invalidate(tx, ids);
     for (const chapterId of ids) {
       const latest = await tx.chapterRevision.findFirst({ where: { chapterId }, orderBy: { revisionNumber: 'desc' } });
@@ -95,7 +102,7 @@ export async function restoreTrash(input: RestoreTrashInput): Promise<TrashResul
     if (row.entityType === 'series') await tx.series.updateMany({ where: { id: row.entityId, trashBatchId: row.id }, data: { deletedAt: null, trashBatchId: null } });
     await tx.contentTrash.update({ where: { id: row.id }, data: { activeKey: null, state: 'restored', restoredAt: new Date(), detailsJson: json({...details(row), restoredByName: actor.nickname}), version: { increment: 1 } } });
     return { ok: true };
-  });
+  }, { uniqueConflictError: 'chapter_number_conflict' });
 }
 export async function requestPermanentDelete(input: PermanentDeleteInput): Promise<TrashResult> {
   if (!input || typeof input.id !== 'string' || !Number.isInteger(input.expectedVersion)) return fail('invalid_input');

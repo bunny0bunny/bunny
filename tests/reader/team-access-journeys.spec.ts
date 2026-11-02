@@ -59,10 +59,11 @@ test("Journey (a): admin grants and revokes series assignment via TeamAssignment
     },
   });
 
-  await db.chapter.upsert({
-    where: { seriesId_number: { seriesId: series.id, number: 1 } },
-    update: { workflow: "draft", isPremiumDemo: false, scheduledFor: null },
-    create: {
+  const existingChapter = await db.chapter.findFirst({ where: { seriesId: series.id, number: 1, deletedAt: null }, select: { id: true } });
+  if (existingChapter) {
+    await db.chapter.update({ where: { id: existingChapter.id }, data: { workflow: "draft", isPremiumDemo: false, scheduledFor: null } });
+  } else {
+    await db.chapter.create({ data: {
       seriesId: series.id,
       number: 1,
       titleAr: "الفصل الأول التجريبي",
@@ -70,8 +71,8 @@ test("Journey (a): admin grants and revokes series assignment via TeamAssignment
       isPremiumDemo: false,
       scheduledFor: null,
       readingDirection: "rtl",
-    },
-  });
+    } });
+  }
 
   const contributor = await db.profile.upsert({
     where: { email: CONTRIBUTOR_EMAIL },
@@ -133,8 +134,8 @@ test("Journey (a): admin grants and revokes series assignment via TeamAssignment
     await staffPage.getByRole("option", { name: "مراجعة" }).click();
     await expect
       .poll(async () => {
-        const ch = await db.chapter.findUnique({
-          where: { seriesId_number: { seriesId: series.id, number: 1 } },
+        const ch = await db.chapter.findFirst({
+          where: { seriesId: series.id, number: 1, deletedAt: null },
         });
         return ch?.workflow;
       })

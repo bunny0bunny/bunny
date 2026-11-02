@@ -7,7 +7,7 @@ import { setIdentityFollow, setIdentityAlerts } from '@/lib/public-identities/ac
 import type { FollowView, IdentityResult } from '@/lib/public-identities/contracts';
 
 export function identityError(error?: string) {
-  return ({ forbidden: 'لا تملك صلاحية هذا الإجراء.', unauthenticated: 'سجّل الدخول بحساب مفعّل ثم حاول مجددًا.', conflict: 'تغيرت البيانات. تم تحديث الصفحة؛ راجع النسخة الأخيرة قبل الحفظ.', slug_taken: 'هذا الرابط مستخدم بالفعل. اختر رابطًا آخر.', invalid_input: 'راجع الحقول المدخلة وحاول مجددًا.', not_found: 'لم يعد هذا الملف متاحًا.' } as Record<string, string>)[error ?? ''] ?? 'تعذر إتمام العملية. حدّث الصفحة وراجع الحالة قبل المحاولة مجددًا.';
+  return ({ identity_suspended: 'الفريق موقوف حاليًا. حمّل النسخة الأخيرة لمراجعة حالته.', rate_limited: 'محاولات كثيرة. انتظر قليلًا ثم حاول مجددًا.', forbidden: 'لا تملك صلاحية هذا الإجراء.', unauthenticated: 'سجّل الدخول بحساب مفعّل ثم حاول مجددًا.', conflict: 'تغيرت البيانات. حمّل النسخة الأخيرة وراجعها قبل الحفظ.', slug_taken: 'هذا الرابط مستخدم بالفعل. اختر رابطًا آخر.', invalid_input: 'راجع الحقول المدخلة وحاول مجددًا.', not_found: 'لم يعد هذا الملف متاحًا.' } as Record<string, string>)[error ?? ''] ?? 'تعذر إتمام العملية. حدّث الصفحة وراجع الحالة قبل المحاولة مجددًا.';
 }
 export function FollowControls({ identityId, initialFollow, canFollow, returnTo, suspended = false }: { identityId: string; initialFollow: FollowView; canFollow: boolean; returnTo: string; suspended?: boolean }) {
   const router = useRouter();

@@ -562,8 +562,8 @@ export function ChapterForm({
 
       </div>
       <div className="space-y-1.5">
-        <label htmlFor={`${formId}-title`} className="text-sm font-medium">عنوان الفصل *</label>
-        <Input id={`${formId}-title`} required value={titleAr} onChange={(e) => setTitleAr(e.target.value)} className="min-h-[44px] bg-card" placeholder="مثال: أضواء على الحدود" />
+        <label htmlFor={`${formId}-title`} className="text-sm font-medium">عنوان الفصل (اختياري)</label>
+        <Input id={`${formId}-title`} maxLength={300} value={titleAr} onChange={(e) => setTitleAr(e.target.value)} className="min-h-[44px] bg-card" placeholder="مثال: أضواء على الحدود" />
       </div>
       <div className="grid gap-4 sm:grid-cols-2">
         <div className="space-y-1.5">

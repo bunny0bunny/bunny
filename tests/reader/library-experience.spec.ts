@@ -67,7 +67,7 @@ test("library experience: updates distinguish old unread chapters and marking a 
 test("library experience: resume selects saved public incomplete progress and excludes draft and locked targets", async ({ page }) => {
   const { profile, series } = await prepare(page, "qa-reader-novel");
   for (const [number, percent] of [[1, 42], [2, 99.5], [4, 75], [8, 80]]) {
-    const chapter = await db.chapter.findUniqueOrThrow({ where: { seriesId_number: { seriesId: series.id, number } } });
+    const chapter = await db.chapter.findFirstOrThrow({ where: { seriesId: series.id, number, deletedAt: null } });
     await db.readingProgress.create({ data: { profileId: profile.id, seriesId: series.id, chapterId: chapter.id, percent, pageIndex: 0, completed: false } });
   }
   await page.goto("/library");

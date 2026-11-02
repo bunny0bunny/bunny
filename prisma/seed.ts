@@ -89,11 +89,10 @@ async function seedSeries() {
             ? (() => { const d = new Date(); d.setDate(d.getDate() + 7); d.setHours(18, 30, 0, 0); return d; })()
             : null,
       };
-      const chapter = await db.chapter.upsert({
-        where: { seriesId_number: { seriesId: series.id, number: ch.number } },
-        update: chData,
-        create: chData,
-      });
+      const existingChapter = await db.chapter.findFirst({ where: { seriesId: series.id, number: ch.number, deletedAt: null }, select: { id: true } });
+      const chapter = existingChapter
+        ? await db.chapter.update({ where: { id: existingChapter.id }, data: chData })
+        : await db.chapter.create({ data: chData });
       if (isPublished) publishedAt -= 4;
 
       const count = ch.pages ?? ch.panels ?? 0;
@@ -149,8 +148,8 @@ async function seedProgress() {
   for (const p of DEMO_PROGRESS) {
     const series = await db.series.findUnique({ where: { slug: p.seriesSlug } });
     if (!series) continue;
-    const chapter = await db.chapter.findUnique({
-      where: { seriesId_number: { seriesId: series.id, number: p.chapterNumber } },
+    const chapter = await db.chapter.findFirst({
+      where: { seriesId: series.id, number: p.chapterNumber, deletedAt: null },
     });
     if (!chapter) continue;
     const pages = await db.chapterPage.count({ where: { chapterId: chapter.id } });
@@ -180,8 +179,8 @@ async function seedProgress() {
     const series = await db.series.findUnique({ where: { slug: entry.seriesSlug } });
     if (!series) continue;
     for (const number of entry.chapterNumbers) {
-      const chapter = await db.chapter.findUnique({
-        where: { seriesId_number: { seriesId: series.id, number } },
+      const chapter = await db.chapter.findFirst({
+        where: { seriesId: series.id, number, deletedAt: null },
       });
       if (!chapter) continue;
       const pages = await db.chapterPage.count({ where: { chapterId: chapter.id } });

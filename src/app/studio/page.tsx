@@ -1,3 +1,4 @@
+import { getChapterLabel } from '@/lib/chapter-title';
 import { getWorkTitle } from '@/lib/work-title';
 import { TeamWorkflowGuide } from '@/components/studio/team-workflow-guide';
 import type { Metadata } from "next";
@@ -277,7 +278,7 @@ export default async function StudioWorkspacePage({
                               href={`/studio/chapters/${ch.id}`}
                               className="font-bold text-foreground transition hover:text-primary"
                             >
-                              الفصل {ch.number}: {ch.titleAr}
+                              {getChapterLabel(ch)}
                             </Link>
                             <p className="mt-0.5 text-xs text-muted-foreground">
                               {getWorkTitle(ch.series)} · {FORMAT_LABELS[ch.series.format as Format]}

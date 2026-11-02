@@ -111,12 +111,14 @@ async function main() {
   check("Series.createdAt has CURRENT_TIMESTAMP default", String(col("Series", "createdAt")?.column_default ?? "").includes("CURRENT_TIMESTAMP"));
 
   /* 4 — unique indexes */
-  const expectedUniques = ["Profile_email_key", "Series_slug_key", "Chapter_seriesId_number_key", "ChapterPage_chapterId_pageIndex_key", "ReadingProgress_profileId_chapterId_key", "EditorialCollection_slug_key", "LibraryItem_profileId_seriesId_key", "CommentReport_commentId_profileId_key", "Rating_profileId_seriesId_key"];
+  const expectedUniques = ["Profile_email_key", "Series_slug_key", "Chapter_active_series_number_key", "ChapterPage_chapterId_pageIndex_key", "ReadingProgress_profileId_chapterId_key", "EditorialCollection_slug_key", "LibraryItem_profileId_seriesId_key", "CommentReport_commentId_profileId_key", "Rating_profileId_seriesId_key"];
   const idx = await prisma.$queryRawUnsafe(`
-    select indexname from pg_indexes
+    select indexname, indexdef from pg_indexes
     where schemaname='public' and indexdef like 'CREATE UNIQUE INDEX%'`);
   const indexNames = idx.map((x) => x.indexname);
   check(`unique constraints/indexes (${expectedUniques.length})`, expectedUniques.every((n) => indexNames.includes(n)), indexNames.sort().join(", "));
+
+  check("Chapter numbers unique for active rows only", /WHERE.*"deletedAt" IS NULL/.test(idx.find(x => x.indexname === "Chapter_active_series_number_key")?.indexdef ?? ""));
 
   /* 5 — foreign keys + rules (c=Cascade, n=SetNull, a=NO ACTION) */
   const fks = await prisma.$queryRawUnsafe(`

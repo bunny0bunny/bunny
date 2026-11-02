@@ -60,7 +60,7 @@ test("concurrent duplicate creates return one successful action and one clean fa
 });
 
 test("revoked assignment denies the next real write with the same session identity", async () => {
-  const chapter = await db.chapter.findUniqueOrThrow({ where: { seriesId_number: { seriesId: novelId, number: 802 } } });
+  const chapter = await db.chapter.findFirstOrThrow({ where: { seriesId: novelId, number: 802, deletedAt: null } });
   expect(await withActor(adminId, () => actions.setSeriesAssignment({ profileId: staffId, seriesId: novelId, assigned: false }))).toEqual({ ok: true });
   try {
     expect(await withActor(staffId, () => actions.updateChapterMeta({ id: chapter.id, titleAr: "تعديل بعد سحب الإسناد" }))).toEqual({ ok: false, error: "forbidden" });

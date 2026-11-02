@@ -1,3 +1,4 @@
+import { getChapterLabel } from '@/lib/chapter-title';
 import { getWorkTitle } from '@/lib/work-title';
 import type { Metadata } from "next";
 import Link from "next/link";
@@ -151,7 +152,7 @@ async function loadStudioChapterPage(params: Promise<{ id: string }>) {
                 إدارة نسخة الفصل {chapter.number}
               </h1>
               <p className="mt-1 text-sm text-muted-foreground">
-                {getWorkTitle(chapter.series)} — {chapter.titleAr}
+                {getWorkTitle(chapter.series)} — {getChapterLabel(chapter)}
               </p>
             </div>
 

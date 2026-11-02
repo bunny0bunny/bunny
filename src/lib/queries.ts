@@ -1,3 +1,4 @@
+import { getChapterTitle } from '@/lib/chapter-title';
 import { normalizeGenre, normalizeGenres } from "@/lib/genres";
 import "server-only";
 import type { Prisma } from "@prisma/client";
@@ -430,7 +431,7 @@ export async function getContinueReading(profileId: string, limit = 3): Promise<
     accent: r.series.accent,
     format: r.series.format as Format,
     chapterNumber: r.chapter.number,
-    chapterTitle: r.chapter.titleAr,
+    chapterTitle: getChapterTitle(r.chapter),
     percent: r.percent,
     updatedAt: r.updatedAt,
   }));

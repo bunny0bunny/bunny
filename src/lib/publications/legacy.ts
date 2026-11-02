@@ -1,3 +1,4 @@
+import { getChapterTitle } from '@/lib/chapter-title';
 import 'server-only';
 import { db } from '@/lib/db';
 import type { Prisma } from '@prisma/client';
@@ -73,7 +74,7 @@ export async function baselineLegacyPublications(options: {
             if (!ch)
                 continue;
             created += (await tx.chapterPublication.createMany({ skipDuplicates: true, data: [{
-                        chapterId: ch.id, seriesId: ch.seriesId, state: 'baseline', evidenceJson: [...item.evidence, 'baseline_recorded_at_eventAt'], firstPublishedAt: item.firstPublishedAt ? new Date(item.firstPublishedAt) : null, seriesTitle: getWorkTitle(ch.series), chapterTitle: ch.titleAr, chapterNumber: ch.number, seriesSlug: ch.series.slug, format: ch.series.format, isAdult: ch.series.isAdult, isPremium: ch.isPremiumDemo
+                        chapterId: ch.id, seriesId: ch.seriesId, state: 'baseline', evidenceJson: [...item.evidence, 'baseline_recorded_at_eventAt'], firstPublishedAt: item.firstPublishedAt ? new Date(item.firstPublishedAt) : null, seriesTitle: getWorkTitle(ch.series), chapterTitle: getChapterTitle(ch), chapterNumber: ch.number, seriesSlug: ch.series.slug, format: ch.series.format, isAdult: ch.series.isAdult, isPremium: ch.isPremiumDemo
                     }] })).count;
         }
         return { created, ambiguous: found.ambiguous.length };

@@ -1,4 +1,5 @@
 "use client";
+import { getChapterLabel } from '@/lib/chapter-title';
 
 import { useEffect, useId, useRef, useState } from 'react';
 import { ImagePlus, BookImage } from 'lucide-react';
@@ -112,7 +113,7 @@ export function SeriesCoverEditor({ seriesId, currentCover, disabled, onPrepared
     </div>}
     {seriesId && !bitmap && <div className="space-y-2 border-t border-border pt-4">
       <Button type="button" variant="ghost" disabled={locked} onClick={loadOptions} className="min-h-11 w-full whitespace-normal">اختيار الصفحة الأولى من فصل مرفوع</Button>
-      {options && (options.length ? <><label htmlFor={`${id}-revision`} className="block text-sm">الفصل والنسخة</label><select id={`${id}-revision`} value={selected} disabled={locked} onChange={event => setSelected(event.target.value)} className="min-h-11 w-full rounded-lg border border-input bg-card p-2 text-sm"><option value="">اختر نسخة للمعاينة</option>{options.map(option => <option key={option.revisionId} value={option.revisionId}>الفصل {option.chapterNumber} — {option.chapterTitle} — نسخة {option.revisionNumber}</option>)}</select><Button type="button" variant="outline" disabled={locked || !selected} onClick={chooseFirstPage} className="min-h-11 w-full">معاينة الصفحة وقصها</Button></> : <p className="text-sm leading-7 text-muted-foreground">مفيش صفحات PDF جاهزة للاختيار. ارفع فصلًا وافتح المعاينة الخاصة الأول.</p>)}
+      {options && (options.length ? <><label htmlFor={`${id}-revision`} className="block text-sm">الفصل والنسخة</label><select id={`${id}-revision`} value={selected} disabled={locked} onChange={event => setSelected(event.target.value)} className="min-h-11 w-full rounded-lg border border-input bg-card p-2 text-sm"><option value="">اختر نسخة للمعاينة</option>{options.map(option => <option key={option.revisionId} value={option.revisionId}>{getChapterLabel({ number: option.chapterNumber, titleAr: option.chapterTitle })} — نسخة {option.revisionNumber}</option>)}</select><Button type="button" variant="outline" disabled={locked || !selected} onClick={chooseFirstPage} className="min-h-11 w-full">معاينة الصفحة وقصها</Button></> : <p className="text-sm leading-7 text-muted-foreground">مفيش صفحات PDF جاهزة للاختيار. ارفع فصلًا وافتح المعاينة الخاصة الأول.</p>)}
     </div>}
     {processing && <p role="status" className="text-sm text-muted-foreground">جارٍ تجهيز المعاينة…</p>}
     {error && <p role="alert" className="text-sm leading-7 text-danger">{error}</p>}

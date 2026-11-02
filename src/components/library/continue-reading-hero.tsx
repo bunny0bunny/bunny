@@ -98,7 +98,7 @@ export function ContinueReadingHero({
 
                 <p className="mt-1 text-xs sm:text-sm text-muted-foreground">
                   الفصل {hero.chapterNumber}
-                  {hero.chapterTitle ? ` · ${hero.chapterTitle}` : ""}
+                  {hero.chapterTitle && hero.chapterTitle !== `الفصل ${hero.chapterNumber}` ? ` · ${hero.chapterTitle}` : ""}
                 </p>
 
                 {/* Actual Progress Bar */}

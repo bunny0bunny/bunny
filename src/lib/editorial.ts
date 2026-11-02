@@ -14,7 +14,7 @@ type VersionInput = { revisionId: string; expectedVersion: number };
 const pendingStates = ["draft", "review", "changes_requested", "approved", "scheduled"] as const;
 
 export async function withSerializableTx(
-  work: (tx: Tx, actor: Actor) => Promise<EditorialResult>, options: { system?: boolean; invalidate?: boolean } = {},
+  work: (tx: Tx, actor: Actor) => Promise<EditorialResult>, options: { system?: boolean; invalidate?: boolean; uniqueConflictError?: string } = {},
 ): Promise<EditorialResult> {
   const sessionProfile = options.system ? null : await currentProfileOrNull();
   if (!options.system && !sessionProfile) return { ok: false, error: "unauthenticated" };
@@ -38,7 +38,7 @@ export async function withSerializableTx(
       // Retry only the two known transaction/unique-conflict codes, regardless of realm.
       if (error && typeof error === "object" && "code" in error && ["P2034", "P2002"].includes(String(error.code))) {
         if (attempt < 3) { await new Promise(resolve => setTimeout(resolve, 20 * (attempt + 1))); continue; }
-        return { ok: false, error: "conflict" };
+        return { ok: false, error: String(error.code) === "P2002" ? options.uniqueConflictError ?? "conflict" : "conflict" };
       }
       throw error;
     }
@@ -88,7 +88,7 @@ async function pagesBelongToChapter(tx: Tx, chapterId: string, pages: PageSnapsh
 }
 
 export function validateRevisionContent(format: string, revision: { titleAr?: string; novelBody?: string | null; pagesJson?: unknown }) {
-  if (revision.titleAr !== undefined && (revision.titleAr.trim().length < 2 || revision.titleAr.length > 300)) return { valid: false, error: "عنوان الفصل غير صالح" };
+  if (revision.titleAr !== undefined && (typeof revision.titleAr !== "string" || revision.titleAr.trim().length > 300)) return { valid: false, error: "عنوان الفصل غير صالح" };
   if (format === "novel") return revision.novelBody?.trim() && revision.novelBody.length <= 60000 ? { valid: true } : { valid: false, error: "أدخل نص الفصل قبل إرساله أو اعتماده" };
   const pages = validatePagesSnapshot(revision.pagesJson);
   return pages?.length ? { valid: true } : { valid: false, error: "الفصل يحتاج صفحات صالحة قبل إرساله أو اعتماده" };
@@ -146,7 +146,7 @@ export async function updateDraftSnapshot(input: VersionInput & { titleAr?: stri
     const revision = found.revision!;
     if (revision.pendingUploadId) return { ok: false, error: "upload_pending" };
     if (input.isPremiumDemo !== undefined && actor.role !== "admin") return { ok: false, error: "forbidden" };
-    if (input.titleAr !== undefined && (typeof input.titleAr !== "string" || input.titleAr.trim().length < 2 || input.titleAr.length > 300)) return { ok: false, error: "عنوان الفصل غير صالح" };
+    if (input.titleAr !== undefined && (typeof input.titleAr !== "string" || input.titleAr.trim().length > 300)) return { ok: false, error: "عنوان الفصل غير صالح" };
     if (input.novelBody !== undefined && (typeof input.novelBody !== "string" || input.novelBody.length > 60000)) return { ok: false, error: "نص الفصل يتجاوز الحد المسموح" };
     if (input.readingDirection !== undefined && !["rtl", "ltr"].includes(input.readingDirection)) return { ok: false, error: "اتجاه القراءة غير صالح" };
     const pages = input.pages === undefined ? null : validatePagesSnapshot(input.pages);
