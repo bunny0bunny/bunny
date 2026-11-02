@@ -2,7 +2,7 @@
 
 **Goal:** Complete upload/review feedback and allow administrators to grant immediate publishing per assigned editor and series.
 **Approved design:** Chat design approved 2026-11-01. English work titles primary; Arabic UI unchanged. Translator identities are public credits, not permissions. No global editor publishing.
-**Execution:** Configured fleet: Codex implementation; Antigravity UI; coordinator final review. User requested reduced repeated verification: delegates write focused tests, coordinator runs one consolidated isolated regression/lint/build pass after integration. Repeat only for failures or subsequent meaningful fixes. No production fixtures, migrations, push or deployment during implementation.
+**Execution:** Configured fleet: Codex implementation; Antigravity UI; coordinator final review. User requested reduced repeated verification: delegates write focused tests, coordinator runs one consolidated isolated regression/lint/build pass after integration. Repeat only for failures or subsequent meaningful fixes. The initial implementation turn made no production fixtures, migration application, push or deployment; release was separately authorized on 2026-11-02.
 
 - [x] Backend: SeriesAssignment.canPublish boolean false migration; separate admin-only grant action with fresh transaction auth and account audit; clear grants when demoting editors, never restore on reassignment.
 - [x] Backend: atomic approveAndPublishRevision with exact version/latest revision, verified enabled editor+assignment+grant or admin, validated completed media, approval and publication audit entries and existing publication outbox; editors review/approved only, never scheduled. No editor standalone approve/schedule/withdraw or series settings.
@@ -14,3 +14,5 @@
 **Interfaces:** setSeriesPublishingPermission({seriesId, profileId, canPublish}) -> ActionResult in src/lib/actions.ts. approveAndPublishRevision({revisionId, expectedVersion}) -> EditorialResult in src/lib/editorial.ts; approveAndPublishRevisionAction(input:unknown) server wrapper. SeriesAssignment.canPublish exposes initial grants to admin panel; studio server computes canPublishNow = admin OR (editor AND assignment.canPublish).
 
 Local verification completed: 22 suites / 165 distinct tests (with focused fixture-fix reruns), scoped ESLint and full TypeScript validation passed. The production build was deliberately stopped after prolonged compilation and is not a passing check. It remains a release gate; artifacts are marked non-deployable.
+
+Release completed on 2026-11-02: fresh Cloudflare build passed with the optional low-memory profile; the additive migration and preserved data/default-off grants were verified; Worker version `4747cb44-d324-441c-9c7f-fa829642666f` was deployed; both hosted domains passed the read-only smoke and asset checks. See the handoff for current release status; the earlier interrupted-build note is historical.

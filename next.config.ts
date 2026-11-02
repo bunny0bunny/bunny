@@ -24,6 +24,10 @@ const securityHeaders = [
 
 const nextConfig: NextConfig = {
   output: "standalone",
+  // Opt-in build profile for machines with limited available memory.
+  ...(process.env.BUNNY_BUILD_LOW_MEMORY === "1" ? {
+    experimental: { cpus: 1, webpackMemoryOptimizations: true, webpackBuildWorker: true },
+  } : {}),
   ...(process.env.BUNNY_QA_DIST_DIR === "1" ? { distDir: ".next-media-qa" } : {}),
   reactStrictMode: true,
   ...(isCloudflare ? { images: { unoptimized: true } } : {}),
