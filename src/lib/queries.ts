@@ -330,6 +330,20 @@ export async function getSeriesBySlug(slug: string) {
   };
 }
 
+/**
+ * Chapter IDs whose pages can be exported as PDF (every page is a managed media asset).
+ * Static or migrated pages (for example /series/...) are excluded, so the UI hides the button.
+ */
+export async function getDownloadableChapterIds(chapterIds: string[]): Promise<Set<string>> {
+  if (!chapterIds.length) return new Set();
+  const [all, legacy] = await Promise.all([
+    db.chapterPage.groupBy({ by: ["chapterId"], where: { chapterId: { in: chapterIds } }, _count: { _all: true } }),
+    db.chapterPage.groupBy({ by: ["chapterId"], where: { chapterId: { in: chapterIds }, NOT: { imagePath: { startsWith: "/api/media/" } } }, _count: { _all: true } }),
+  ]);
+  const blocked = new Set(legacy.map(row => row.chapterId));
+  return new Set(all.filter(row => row._count._all >= 1 && row._count._all <= 200 && !blocked.has(row.chapterId)).map(row => row.chapterId));
+}
+
 export async function getRelatedSeries(seriesId: string, genres: string[], limit = 6) {
   const rows = await db.series.findMany({
     where: { id: { not: seriesId }, chapters: { some: liveChapterWhere() } },

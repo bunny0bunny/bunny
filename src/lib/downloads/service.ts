@@ -3,7 +3,7 @@ import { db } from '@/lib/db';
 import { currentProfileOrNull } from '@/lib/queries';
 import { getMediaStorage } from '@/lib/media/storage';
 import { errorSummary, logOpsEvent } from '@/lib/ops-log';
-import { canDownloadChapter, contentFingerprint, downloadFilename, DOWNLOAD_URL_SECONDS, type DownloadManifestPage } from './policy';
+import { canDownloadChapter, contentFingerprint, mediaPageAssetId, downloadFilename, DOWNLOAD_URL_SECONDS, type DownloadManifestPage } from './policy';
 
 const PRIVATE_HEADERS = { 'Cache-Control': 'private, no-store', 'X-Content-Type-Options': 'nosniff' };
 type DownloadFailure = { ok: false; status: 403 | 404 | 409 | 503; error: string };
@@ -17,19 +17,27 @@ export function downloadError(status: number, error: string): Response {
   return Response.json({ ok: false, error }, { status, headers: PRIVATE_HEADERS });
 }
 
-/** Browser fetches must originate on this site; POST additionally requires Origin. */
+/**
+ * Browser fetches must originate on this site; POST additionally requires Origin.
+ * Fetch metadata is enforced when the browser sends it. Browsers and webviews that
+ * omit Sec-Fetch-* (older Safari, some in-app browsers) fall back to Origin (POST)
+ * or the custom X-Chapter-Download header (GET), which a cross-origin page cannot
+ * send without a CORS preflight that these routes never answer.
+ */
 export function isSameOriginDownload(request: Request, requireOrigin: boolean): boolean {
   const origin = request.headers.get('origin');
+  const site = request.headers.get('sec-fetch-site');
   const mode = request.headers.get('sec-fetch-mode');
   const destination = request.headers.get('sec-fetch-dest');
   const expectedOrigin = new URL(request.url).origin;
   const allowed = (!requireOrigin || origin === expectedOrigin) && (origin === null || origin === expectedOrigin) &&
-    request.headers.get('sec-fetch-site') === 'same-origin' &&
+    (site === null || site === 'same-origin') &&
     (!mode || mode === 'cors' || mode === 'same-origin') && (!destination || destination === 'empty') &&
     (requireOrigin || request.headers.get('x-chapter-download') === '1');
   if (!allowed) logOpsEvent('chapter-download', 'origin_rejected', {
     path: new URL(request.url).pathname, originMatches: origin === null ? null : origin === expectedOrigin,
-    secFetchSite: request.headers.get('sec-fetch-site'), secFetchMode: mode, secFetchDest: destination,
+    secFetchSite: site, secFetchMode: mode, secFetchDest: destination,
+    customHeader: request.headers.get('x-chapter-download') === '1',
   });
   return allowed;
 }
@@ -44,9 +52,9 @@ export async function getChapterDownload(chapterId: string): Promise<ChapterDown
       if (!chapter || !canDownloadChapter(chapter, true)) return failure(404, 'not_found');
       if (!canDownloadChapter(chapter, profile?.role === 'admin')) return failure(403, 'forbidden');
       if (chapter.pages.length > 200) return failure(409, 'too_many_pages');
-      const ids = chapter.pages.map(page => /^\/api\/media\/([A-Za-z0-9]{1,128})$/.exec(page.imagePath)?.[1]);
-      if (!ids.length) return failure(409, 'conflict', { chapterId, reason: 'no_pages' });
-      if (ids.some(id => !id)) return failure(409, 'conflict', { chapterId, reason: 'non_media_page_path', legacyPages: ids.filter(id => !id).length });
+      const ids = chapter.pages.map(page => mediaPageAssetId(page.imagePath));
+      if (!ids.length) return failure(409, 'legacy_pages', { chapterId, reason: 'no_pages' });
+      if (ids.some(id => !id)) return failure(409, 'legacy_pages', { chapterId, reason: 'non_media_page_path', legacyPages: ids.filter(id => !id).length });
       const assets = await tx.mediaAsset.findMany({ where: { id: { in: ids as string[] }, chapterId } });
       const byId = new Map(assets.map(asset => [asset.id, asset]));
       const pages: DownloadManifestPage[] = [];
@@ -75,19 +83,35 @@ export async function fetchChapterDownloadPage(chapterId: string, assetId: strin
   const page = download.pages.find(page => page.assetId === assetId);
   if (!page) return downloadError(404, 'not_found');
   try {
-    const url = await (await getMediaStorage()).signGet(page.objectKey, { expiresIn: DOWNLOAD_URL_SECONDS });
-    const timeout = AbortSignal.timeout(30_000);
-    const upstream = await fetch(url, { redirect: 'error', cache: 'no-store', signal: signal ? AbortSignal.any([signal, timeout]) : timeout });
-    const length = upstream.headers.get('content-length');
-    const mime = upstream.headers.get('content-type')?.split(';')[0].trim().toLowerCase();
-    if (!upstream.ok || !upstream.body || mime !== page.mime ||
-      (length !== null && (!/^\d+$/.test(length) || Number(length) > 6_291_456 || Number(length) !== page.bytes))) {
-      await upstream.body?.cancel();
-      logOpsEvent('chapter-download', 'unavailable', { chapterId, assetId, stage: 'storage_response', status: upstream.status,
-        mimeMatches: mime === page.mime, contentLength: length, expectedBytes: page.bytes });
-      return downloadError(503, 'unavailable');
+    const storage = await getMediaStorage();
+    let upstreamBody: ReadableStream<Uint8Array>;
+    if (storage.getObject) {
+      // Workers R2 binding: no presigned URL or extra network hop.
+      const object = await storage.getObject(page.objectKey);
+      const mime = object?.contentType?.split(';')[0].trim().toLowerCase();
+      if (!object || object.size !== page.bytes || object.size > 6_291_456 || (mime && mime !== page.mime)) {
+        await object?.body.cancel();
+        logOpsEvent('chapter-download', 'unavailable', { chapterId, assetId, stage: 'storage_object', found: Boolean(object),
+          sizeMatches: object ? object.size === page.bytes : null, mimeMatches: object ? !mime || mime === page.mime : null });
+        return downloadError(503, 'unavailable');
+      }
+      upstreamBody = object.body;
+    } else {
+      const url = await storage.signGet(page.objectKey, { expiresIn: DOWNLOAD_URL_SECONDS });
+      const timeout = AbortSignal.timeout(30_000);
+      const upstream = await fetch(url, { redirect: 'error', cache: 'no-store', signal: signal ? AbortSignal.any([signal, timeout]) : timeout });
+      const length = upstream.headers.get('content-length');
+      const mime = upstream.headers.get('content-type')?.split(';')[0].trim().toLowerCase();
+      if (!upstream.ok || !upstream.body || mime !== page.mime ||
+        (length !== null && (!/^\d+$/.test(length) || Number(length) > 6_291_456 || Number(length) !== page.bytes))) {
+        await upstream.body?.cancel();
+        logOpsEvent('chapter-download', 'unavailable', { chapterId, assetId, stage: 'storage_response', status: upstream.status,
+          mimeMatches: mime === page.mime, contentLength: length, expectedBytes: page.bytes });
+        return downloadError(503, 'unavailable');
+      }
+      upstreamBody = upstream.body;
     }
-    const reader = upstream.body.getReader();
+    const reader = upstreamBody.getReader();
     let received = 0;
     const body = new ReadableStream<Uint8Array>({
       async pull(controller) {

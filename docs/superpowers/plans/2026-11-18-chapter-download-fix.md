@@ -1,6 +1,6 @@
 # Chapter download fix — plan for Codex review
 
-Date: 2026-11-18. Status: draft for review. Depends on Phase 1 (`fix/phase1-stabilize`: CI, download logs, Workers observability).
+Date: 2026-11-18. Status: implemented on `fix/chapter-downloads` (steps 1–3); Codex diff review and device QA (step 4) pending. Depends on Phase 1 (`fix/phase1-stabilize`: CI, download logs, Workers observability).
 
 ## Problem
 

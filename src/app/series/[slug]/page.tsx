@@ -20,6 +20,7 @@ import {
   getProgressMap,
   getRelatedSeries,
   getSeriesBySlug,
+  getDownloadableChapterIds,
   getVisibleComments,
   getUserRating,
   liveChapterWhere,
@@ -122,6 +123,8 @@ export default async function SeriesDetailPage({
   const statusLabel = isSeriesStatus(s.status) ? STATUS_LABELS[s.status as SeriesStatus] : s.status;
   const primaryGenre = genres[0] ?? null;
 
+  const downloadsVisible = (s.downloadsEnabled || profile?.role === "admin") && s.format !== "novel";
+  const downloadable = downloadsVisible ? await getDownloadableChapterIds(published.map(c => c.id)) : new Set<string>();
   const publishedView: ChapterItemView[] = published.map((c) => ({
     id: c.id,
     number: c.number,
@@ -131,6 +134,7 @@ export default async function SeriesDetailPage({
     scheduledFor: c.scheduledFor,
     pageCount: c.pageCount,
     novelWords: c.novelWords,
+    downloadable: downloadable.has(c.id),
   }));
 
   const scheduledView: ChapterItemView[] = scheduled.map((c) => ({

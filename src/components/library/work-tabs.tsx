@@ -33,6 +33,8 @@ export type ChapterItemView = {
   scheduledFor?: Date | string | null;
   pageCount: number;
   novelWords: number;
+  /** Every page is a managed media asset, so the chapter can be exported as PDF. */
+  downloadable?: boolean;
 };
 
 type ProgressRecord = {
@@ -387,7 +389,7 @@ export function WorkTabs({
                       </div>}
                     </div>
                   </Link>
-                  {downloadsEnabled && format !== "novel" && !locked && <ChapterDownloadButton chapterId={c.id} />}
+                  {downloadsEnabled && format !== "novel" && !locked && c.downloadable && <ChapterDownloadButton chapterId={c.id} />}
                 </li>
               );
             })}
