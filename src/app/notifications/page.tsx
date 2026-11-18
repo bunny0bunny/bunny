@@ -12,7 +12,7 @@ export const metadata: Metadata = {
 };
 
 export default async function NotificationsPage() {
-  const profile = await requireProfile();
+  const profile = await requireProfile("/notifications");
   const [items, unread] = await Promise.all([
     getNotifications(profile.id, PAGE_ITEMS),
     getUnreadCount(profile.id),

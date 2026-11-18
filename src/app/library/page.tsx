@@ -24,14 +24,14 @@ import { normalizeArabic, tokenizeArabic, scoreDocument } from "@/lib/arabic-sea
 
 export const dynamic = "force-dynamic";
 
-export const metadata: Metadata = { title: "مكتبتي — مكتبة بانيورا" };
+export const metadata: Metadata = { title: "مكتبتي" };
 
 export default async function LibraryPage({
   searchParams,
 }: {
   searchParams: Promise<{ tab?: string; q?: string }>;
 }) {
-  const profile = await requireProfile();
+  const profile = await requireProfile("/library");
   const { tab, q } = await searchParams;
 
   const activeTab =

@@ -1,5 +1,6 @@
 "use client";
 
+import { arabicError } from "@/lib/error-messages-ar";
 import { useTransition, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useSession, signOut } from "next-auth/react";
@@ -67,7 +68,7 @@ export function ProfileSettings({
       } as unknown);
 
       if (!res.ok) {
-        setProfileError(res.error ?? "تعذّر حفظ التغييرات.");
+        setProfileError(arabicError(res.error, "تعذّر حفظ التغييرات."));
         return;
       }
 
@@ -101,7 +102,7 @@ export function ProfileSettings({
       });
 
       if (!res.ok) {
-        setPasswordError(res.error ?? "تعذّر تغيير كلمة المرور. تأكد من كلمة المرور الحالية.");
+        setPasswordError(arabicError(res.error, "تعذّر تغيير كلمة المرور. تأكد من كلمة المرور الحالية."));
         return;
       }
 

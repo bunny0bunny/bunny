@@ -24,13 +24,18 @@ export async function getSession() {
   return getServerSession(authOptions);
 }
 
-export async function requireProfile() {
+/**
+ * `next` is an internal path to return to after signing in. The login form
+ * validates it again before navigating, so only same-site paths are honoured.
+ */
+export async function requireProfile(next?: string) {
+  const loginHref = next && next.startsWith("/") && !next.startsWith("//") ? `/login?next=${encodeURIComponent(next)}` : "/login";
   const session = await getSession();
-  if (!session?.user?.id) redirect("/login");
+  if (!session?.user?.id) redirect(loginHref);
   const profile = await db.profile.findUnique({ where: { id: session.user.id } });
-  if (!profile || profile.disabledAt || !profile.emailVerifiedAt) redirect("/login");
+  if (!profile || profile.disabledAt || !profile.emailVerifiedAt) redirect(loginHref);
   if (profile.authVersion !== session.user.authVersion) {
-    redirect("/login");
+    redirect(loginHref);
   }
   return profile;
 }
@@ -754,15 +759,23 @@ export type CommentView = {
   likedByMe: boolean;
 };
 
+export const COMMENTS_PAGE_SIZE = 30;
+
+/**
+ * Public comments, newest first. "flagged" comments stay public while they
+ * wait for a moderator; only "hidden" ones are withheld.
+ */
 export async function getVisibleComments(
   seriesId: string,
   chapterId: string | null,
   viewerProfileId?: string | null,
-  limit = 30
+  limit = COMMENTS_PAGE_SIZE,
+  offset = 0
 ): Promise<CommentView[]> {
   const rows = await db.comment.findMany({
-    where: { seriesId, chapterId, series: { deletedAt: null }, OR: [{ chapterId: null }, { chapter: liveChapterWhere() }], status: "visible" },
-    orderBy: { createdAt: "desc" },
+    where: { seriesId, chapterId, series: { deletedAt: null }, OR: [{ chapterId: null }, { chapter: liveChapterWhere() }], status: { in: ["visible", "flagged"] } },
+    orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+    skip: offset,
     take: limit,
     include: {
       profile: { select: { id: true, nickname: true, avatarSeed: true, role: true } },
@@ -784,7 +797,7 @@ export async function getVisibleComments(
 }
 
 export async function getCommentCount(seriesId: string) {
-  return db.comment.count({ where: { seriesId, series: { deletedAt: null }, OR: [{ chapterId: null }, { chapter: liveChapterWhere() }], status: "visible" } });
+  return db.comment.count({ where: { seriesId, series: { deletedAt: null }, OR: [{ chapterId: null }, { chapter: liveChapterWhere() }], status: { in: ["visible", "flagged"] } } });
 }
 
 export async function getUserRating(profileId: string | null, seriesId: string) {
@@ -799,7 +812,7 @@ export async function getProfileStats(profileId: string) {
   const [libraryCount, chaptersRead, commentCount, ratingCount, recentProgress] = await Promise.all([
     db.libraryItem.count({ where: { profileId, series: { deletedAt: null } } }),
     db.readingProgress.count({ where: { profileId, completed: true, chapter: liveChapterWhere() } }),
-    db.comment.count({ where: { profileId, status: "visible", series: { deletedAt: null }, OR: [{ chapterId: null }, { chapter: { deletedAt: null } }] } }),
+    db.comment.count({ where: { profileId, status: { in: ["visible", "flagged"] }, series: { deletedAt: null }, OR: [{ chapterId: null }, { chapter: { deletedAt: null } }] } }),
     db.rating.count({ where: { profileId, series: { deletedAt: null } } }),
     db.readingProgress.findMany({
       where: { profileId, chapter: liveChapterWhere() },
@@ -866,7 +879,7 @@ export async function getAdminUsers() {
     select: {
       id: true, email: true, nickname: true, role: true, avatarSeed: true, createdAt: true,
       emailVerifiedAt: true, disabledAt: true,
-      _count: { select: { comments: true, libraryItems: true, readingProgress: true } },
+      _count: { select: { comments: true, libraryItems: true, readingProgress: true, assignments: true } },
     },
   });
 }
@@ -908,7 +921,7 @@ export async function getDashboardActivity(days = 14): Promise<DashboardPoint[]>
 
 export async function getCommunityCounts() {
   const [comments, ratings, libraryItems, avg] = await Promise.all([
-    db.comment.count({ where: { series: { deletedAt: null }, OR: [{ chapterId: null }, { chapter: { deletedAt: null } }], status: "visible" } }),
+    db.comment.count({ where: { series: { deletedAt: null }, OR: [{ chapterId: null }, { chapter: { deletedAt: null } }], status: { in: ["visible", "flagged"] } } }),
     db.rating.count({ where: { series: { deletedAt: null } } }),
     db.libraryItem.count({ where: { series: { deletedAt: null } } }),
     db.rating.aggregate({ where: { series: { deletedAt: null } }, _avg: { value: true } }),
@@ -958,7 +971,7 @@ export async function getStudioOverview(): Promise<StudioSeriesRow[]> {
   });
   if (rows.length === 0) return [];
   const [commentCounts, topEvents] = await Promise.all([
-    db.comment.groupBy({ by: ["seriesId"], where: { series: { deletedAt: null }, OR: [{ chapterId: null }, { chapter: { deletedAt: null } }], status: "visible" }, _count: { _all: true } }),
+    db.comment.groupBy({ by: ["seriesId"], where: { series: { deletedAt: null }, OR: [{ chapterId: null }, { chapter: { deletedAt: null } }], status: { in: ["visible", "flagged"] } }, _count: { _all: true } }),
     db.analyticsEvent.groupBy({
       by: ["seriesId", "chapterId"],
       where: { type: "read_start", chapterId: { not: null } },

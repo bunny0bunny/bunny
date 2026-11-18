@@ -28,7 +28,8 @@ import {
 } from "@/components/ui/select";
 import { RoleSelect } from "@/components/admin/role-select";
 import { AccountAvatar } from "@/components/accounts/account-avatar";
-import { ROLE_LABELS, type Role } from "@/lib/constants";
+import { ROLE_CAPABILITIES, ROLE_LABELS, type Role } from "@/lib/constants";
+import { arabicError } from "@/lib/error-messages-ar";
 import {
   createTeamInvitation,
   cancelTeamInvitation,
@@ -48,6 +49,7 @@ export type AdminUserItem = {
     libraryItems: number;
     comments: number;
     readingProgress: number;
+    assignments?: number;
   };
 };
 
@@ -109,7 +111,7 @@ export function AdminUsersView({
       if (!res.ok) {
         setInviteMsg({
           type: "error",
-          text: res.error ?? "تعذّر إرسال الدعوة. يرجى مراجعة البيانات والمحاولة لاحقًا.",
+          text: arabicError(res.error, "تعذّر إرسال الدعوة. يرجى مراجعة البيانات والمحاولة لاحقًا."),
         });
         return;
       }
@@ -128,7 +130,7 @@ export function AdminUsersView({
     startTransition(async () => {
       const res = await cancelTeamInvitation({ invitationId });
       if (!res.ok) {
-        setActionError(res.error ?? "تعذّر إلغاء الدعوة.");
+        setActionError(arabicError(res.error, "تعذّر إلغاء الدعوة."));
         return;
       }
       router.refresh();
@@ -146,7 +148,7 @@ export function AdminUsersView({
       });
 
       if (!res.ok) {
-        setActionError(res.error ?? "تعذّر تغيير حالة الحساب.");
+        setActionError(arabicError(res.error, "تعذّر تغيير حالة الحساب."));
         return;
       }
       router.refresh();
@@ -218,6 +220,7 @@ export function AdminUsersView({
                 <SelectItem value="admin">مدير</SelectItem>
               </SelectContent>
             </Select>
+            <p className="text-[11px] leading-5 text-muted-foreground">{ROLE_CAPABILITIES[inviteRole]}</p>
           </div>
 
           <Button
@@ -359,7 +362,7 @@ export function AdminUsersView({
 
                 <div className="flex flex-wrap items-center gap-3 self-end sm:self-auto">
                   {/* Role select */}
-                  <RoleSelect profileId={u.id} role={u.role as Role} isSelf={isSelf} />
+                  <RoleSelect profileId={u.id} role={u.role as Role} isSelf={isSelf} assignmentCount={u._count?.assignments ?? 0} />
 
                   {/* Disable / Enable Action */}
                   {isSelf ? (

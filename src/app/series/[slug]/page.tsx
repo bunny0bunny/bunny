@@ -77,7 +77,7 @@ export default async function SeriesDetailPage({
   const related = await getRelatedSeries(s.id, genres);
 
   const [comments, userRating, shelfRow] = await Promise.all([
-    getVisibleComments(s.id, null),
+    getVisibleComments(s.id, null, profile?.id ?? null),
     getUserRating(profile?.id ?? null, s.id),
     profile
       ? import("@/lib/db").then(({ db }) =>

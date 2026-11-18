@@ -7,7 +7,7 @@ import { WelcomeOnboarding } from "@/components/accounts/welcome-onboarding";
 export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
-  title: "مرحبًا بك — مكتبة بانيورا",
+  title: "مرحبًا بك",
 };
 
 export default async function WelcomePage({

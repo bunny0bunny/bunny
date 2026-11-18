@@ -6,6 +6,7 @@ import { hashPassword, verifyPassword } from "@/lib/password";
 import { sendAccountMail, isAccountMailConfigured, getTrustedAppOrigin, isLocalMailAllowed } from "@/lib/account-mail";
 import { checkAndIncrementRateLimit } from "@/lib/account-ratelimit";
 import { safeAccountDestination } from "@/lib/account-destination";
+import { ROLE_LABELS, ROLE_CAPABILITIES, type Role } from "@/lib/constants";
 import { readFile, readdir } from "node:fs/promises";
 import path from "node:path";
 
@@ -603,6 +604,10 @@ export async function createTeamInvitationService(
     return { ok: false, error: "لا يمكن دعوة حساب معطّل." };
   }
 
+  if (existingProfile?.role === "admin" && role !== "admin") {
+    return { ok: false, error: "هذا الحساب مدير بالفعل. لتخفيض دوره استخدم تغيير الدور من قائمة الحسابات بدل الدعوة." };
+  }
+
   if (!isAccountMailConfigured()) {
     return { ok: false, error: "خدمة البريد غير متوفرة حاليًا، يرجى المحاولة لاحقًا." };
   }
@@ -666,7 +671,7 @@ export async function createTeamInvitationService(
   const delivery = await sendAccountMail({
     to: email,
     subject: "دعوة للانضمام إلى فريق عمل مكتبة بانيورا",
-    text: `مرحبًا،\n\nتمت دعوتك للانضمام إلى فريق عمل مكتبة بانيورا بدور (${role}):\n${inviteUrl}\n\nصلاحية هذه الدعوة ٧ أيام.`,
+    text: `مرحبًا،\n\nتمت دعوتك للانضمام إلى فريق عمل مكتبة بانيورا بدور «${ROLE_LABELS[role as Role] ?? role}»: ${ROLE_CAPABILITIES[role as Role] ?? ""}\n\n${inviteUrl}\n\nصلاحية هذه الدعوة ٧ أيام.`,
   });
   if (!delivery.ok) return { ok: false, error: "تعذّر إرسال الدعوة. يمكنك إعادة المحاولة أو إلغاء الدعوة من القائمة." };
   return { ok: true, message: "تم إرسال الدعوة بنجاح." };
@@ -765,6 +770,10 @@ export async function acceptTeamInvitationService(
               return { ok: false, error: "يجب تأكيد البريد الإلكتروني للحساب قبل قبول الدعوة." };
             }
             if (existingProfile.role === "admin" && assignedRole !== "admin") return { ok: false, error: "تغيير دور الأدمن يتم من إدارة الأدوار، وليس من الدعوات." };
+            // An invitation can only raise a role. Lowering it here would skip the
+            // grant cleanup that setUserRole performs (canPublish, assignments).
+            const roleRank: Record<string, number> = { reader: 0, contributor: 1, editor: 2, admin: 3 };
+            if ((roleRank[assignedRole] ?? 0) < (roleRank[existingProfile.role] ?? 0)) return { ok: false, error: "دورك الحالي في الفريق أعلى من دور هذه الدعوة، فلا حاجة لقبولها. تواصل مع الإدارة إن أردت تغيير دورك." };
 
             // Consume invite
             await tx.accountToken.update({
