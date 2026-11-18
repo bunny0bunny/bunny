@@ -1,4 +1,5 @@
 import { withDatabaseScope } from '@/lib/db';
+import { errorSummary, logOpsEvent } from '@/lib/ops-log';
 import { allowAccountClient } from '@/lib/account-ratelimit';
 import { downloadError, getChapterDownload, isSameOriginDownload } from '@/lib/downloads/service';
 
@@ -13,5 +14,8 @@ export async function POST(request: Request, { params }: { params: Promise<{ cha
         pages: download.pages.map(({ assetId, width, height, mime, bytes }) => ({ assetId, width, height, mime, bytes })) },
       { headers: { 'Cache-Control': 'private, no-store', 'X-Content-Type-Options': 'nosniff' } });
     });
-  } catch { return downloadError(503, 'unavailable'); }
+  } catch (error) {
+    logOpsEvent('chapter-download', 'unavailable', { stage: 'route', path: new URL(request.url).pathname, ...errorSummary(error) });
+    return downloadError(503, 'unavailable');
+  }
 }

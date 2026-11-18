@@ -33,6 +33,7 @@ mock.module("react", () => ({ ...actualReact,
 const push = mock(() => {});
 mock.module("next/navigation", () => ({ useRouter: () => ({ push, refresh() {}, back() {} }) }));
 mock.module("../../src/hooks/use-toast", () => ({ useToast: () => ({ toast() {} }) }));
+mock.module("../../src/components/admin/content-trash-controls", () => ({ MoveToTrashButton: () => null }));
 mock.module("../../src/components/admin/series-cover-editor", () => ({ SeriesCoverEditor: () => null, uploadSeriesCover: mock() }));
 let lastDirty = false;
 mock.module("../../src/hooks/use-unsaved-changes", () => ({ useUnsavedChanges: (dirty: boolean) => {

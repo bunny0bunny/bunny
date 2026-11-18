@@ -10,7 +10,7 @@ function fixture() { return {
   sourceSha256: "a".repeat(64), processingProfile: "balanced-v1", keepSource: false, sourceReviewedAt: completedAt,
   sourceDeleteAfter: new Date("2026-10-08T00:00:00Z"), sourceDeletedAt: null as Date | null, sourceDeletingAt: null as Date | null, completedAt,
   expectedPages: 1, revisionVersion: 2, expiresAt: now, errorCode: null,
-  revision: { version: 3, chapter: { seriesId: "series1" } }, assets: [{ ...source }, { ...page }],
+  revision: { version: 3, chapter: { seriesId: "series1" } }, chapter: { deletedAt: null as Date | null, series: { deletedAt: null as Date | null } }, assets: [{ ...source }, { ...page }],
 }; }
 let upload = fixture();
 let actor = { id: "creator", role: "contributor", nickname: "Test" };

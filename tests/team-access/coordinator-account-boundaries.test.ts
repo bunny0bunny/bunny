@@ -17,7 +17,8 @@ const changedPassword = "Changed-password-2026!";
 async function mailedToken(to: string, route: string) {
   const root = process.env.ACCOUNT_MAIL_LOCAL_DIR!;
   const files = await readdir(root);
-  for (const filename of files.reverse()) {
+  // readdir order is filesystem-specific; names start with a timestamp, so sort newest first.
+  for (const filename of files.sort().reverse()) {
     if (!filename.endsWith(".json")) continue;
     const message = JSON.parse(await readFile(path.join(root, filename), "utf8"));
     if (message.to !== to || !message.text.includes(route)) continue;
