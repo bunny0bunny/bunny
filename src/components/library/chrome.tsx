@@ -16,7 +16,6 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { AccountAvatar } from "@/components/accounts/account-avatar";
 import { getCurrentUserRole } from "@/lib/actions";
 import type { Role } from "@/lib/constants";

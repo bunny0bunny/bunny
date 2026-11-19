@@ -7,7 +7,7 @@ import { useSession } from "next-auth/react";
 import { Flag, SendHorizonal, ShieldAlert, Heart, Pencil, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { AccountAvatar } from "@/components/accounts/account-avatar";
 import { deleteOwnComment, editOwnComment, loadMoreComments, postComment, reportComment, toggleCommentLike } from "@/lib/actions";
 import { arabicError } from "@/lib/error-messages-ar";
 import type { CommentView } from "@/lib/queries";
@@ -231,11 +231,7 @@ export function CommentsSection({
           return (
           <li key={c.id} className="rounded-2xl border border-border/60 bg-card p-4">
             <div className="flex items-start gap-3">
-              <Avatar className="size-9 border border-border">
-                <AvatarFallback className="bg-primary/15 text-primary text-sm font-semibold">
-                  {c.author.nickname.slice(0, 1)}
-                </AvatarFallback>
-              </Avatar>
+              <AccountAvatar seed={c.author.avatarSeed} name={c.author.nickname} className="size-9 text-sm" />
               <div className="min-w-0 flex-1">
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="text-sm font-semibold text-foreground">{c.author.nickname}</span>

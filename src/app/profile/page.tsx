@@ -2,7 +2,6 @@ import { getWorkTitle } from '@/lib/work-title';
 import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { BookMarked, BookOpenCheck, Check, Flame, MessageSquare, Star, History, Trophy } from "lucide-react";
 import { SiteHeader, SiteFooter, BottomNav } from "@/components/library/chrome";
 import { ProfileSettings } from "@/components/library/profile-settings";

@@ -1,3 +1,4 @@
+import { isPresetAvatar, presetAvatarSrc } from "@/lib/avatars";
 import { BrandMark } from "@/components/library/brand-mark";
 
 export type AvatarSeed = "initials" | "bunny" | "violet" | "teal" | "gold";
@@ -30,6 +31,19 @@ export function AccountAvatar({
   className?: string;
   brandMarkSize?: string;
 }) {
+  if (isPresetAvatar(seed)) {
+    return (
+      <img
+        src={presetAvatarSrc(seed)}
+        alt=""
+        aria-hidden="true"
+        loading="lazy"
+        decoding="async"
+        className={`inline-block shrink-0 rounded-full object-cover ${className}`}
+      />
+    );
+  }
+
   const safeSeed = normalizeAvatarSeed(seed);
   const initial = (name?.trim() || "؟").slice(0, 1);
 

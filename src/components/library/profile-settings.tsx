@@ -11,13 +11,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { updateProfile } from "@/lib/actions";
 import { changeAccountPassword } from "@/lib/account-actions";
-import {
-  AccountAvatar,
-  VALID_AVATAR_SEEDS,
-  AVATAR_SEED_LABELS,
-  normalizeAvatarSeed,
-  type AvatarSeed,
-} from "@/components/accounts/account-avatar";
+import { AccountAvatar } from "@/components/accounts/account-avatar";
+import { PRESET_AVATARS, isProfileAvatarChoice } from "@/lib/avatars";
 
 export function ProfileSettings({
   nickname,
@@ -34,8 +29,9 @@ export function ProfileSettings({
   // Profile details state
   const [name, setName] = useState(nickname);
   const [userBio, setUserBio] = useState(bio);
-  const [selectedSeed, setSelectedSeed] = useState<AvatarSeed>(
-    normalizeAvatarSeed(avatarSeed)
+  // Older colour seeds still render; they are only re-sent once the reader picks a new picture.
+  const [selectedSeed, setSelectedSeed] = useState<string>(
+    avatarSeed || "initials"
   );
   const [profileMsg, setProfileMsg] = useState("");
   const [profileError, setProfileError] = useState("");
@@ -64,7 +60,7 @@ export function ProfileSettings({
       const res = await updateProfile({
         nickname: name.trim(),
         bio: userBio.trim(),
-        avatarSeed: selectedSeed,
+        avatarSeed: isProfileAvatarChoice(selectedSeed) ? selectedSeed : undefined,
       } as unknown);
 
       if (!res.ok) {
@@ -119,40 +115,35 @@ export function ProfileSettings({
     <div className="space-y-6">
       {/* Profile Info & Avatar Selection */}
       <div className="space-y-4">
-        <div>
-          <label className="mb-2 block text-xs font-semibold text-foreground">
-            الصورة الرمزية للحساب
-          </label>
-          <div className="flex flex-wrap items-center gap-3">
-            <AccountAvatar
-              seed={selectedSeed}
-              name={name}
-              className="size-12 border-2 border-primary/50 shadow-sm"
-              brandMarkSize="size-7"
-            />
-            <div className="flex flex-wrap gap-2">
-              {VALID_AVATAR_SEEDS.map((s) => {
-                const isSelected = selectedSeed === s;
-                return (
-                  <button
-                    key={s}
-                    type="button"
-                    onClick={() => setSelectedSeed(s)}
-                    className={`inline-flex min-h-11 items-center gap-1.5 rounded-xl border px-3 py-1.5 text-xs font-medium transition ${
-                      isSelected
-                        ? "border-primary bg-primary/15 text-primary"
-                        : "border-border/70 bg-secondary/30 text-muted-foreground hover:border-border hover:text-foreground"
-                    }`}
-                    aria-pressed={isSelected}
-                  >
-                    <AccountAvatar seed={s} name={name} className="size-5" brandMarkSize="size-3.5" />
-                    <span>{AVATAR_SEED_LABELS[s]}</span>
-                  </button>
-                );
-              })}
-            </div>
+        <fieldset>
+          <legend className="mb-2 block text-xs font-semibold text-foreground">صورتك في الموقع</legend>
+          <div className="mb-3 flex items-center gap-3">
+            <AccountAvatar seed={selectedSeed} name={name} className="size-16 border-2 border-primary/50 shadow-sm" brandMarkSize="size-9" />
+            <p className="text-xs leading-6 text-muted-foreground">تظهر بجانب اسمك في التعليقات وقائمة الحساب.</p>
           </div>
-        </div>
+          <div role="radiogroup" aria-label="اختر صورة" className="grid grid-cols-4 gap-2 sm:grid-cols-6 md:grid-cols-9">
+            {(["initials", ...PRESET_AVATARS.map((a) => a.id)] as string[]).map((s) => {
+              const isSelected = selectedSeed === s;
+              const label = s === "initials" ? "الحرف الأول من اسمك" : PRESET_AVATARS.find((a) => a.id === s)?.labelAr ?? s;
+              return (
+                <button
+                  key={s}
+                  type="button"
+                  role="radio"
+                  aria-checked={isSelected}
+                  aria-label={label}
+                  title={label}
+                  onClick={() => setSelectedSeed(s)}
+                  className={`flex aspect-square min-h-11 items-center justify-center rounded-full border-2 p-0.5 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary ${
+                    isSelected ? "border-primary ring-2 ring-primary/40" : "border-transparent opacity-80 hover:opacity-100"
+                  }`}
+                >
+                  <AccountAvatar seed={s} name={name} className="size-full text-lg" brandMarkSize="size-6" />
+                </button>
+              );
+            })}
+          </div>
+        </fieldset>
 
         <div>
           <Label htmlFor="pf-name" className="mb-1.5 block text-xs text-muted-foreground">

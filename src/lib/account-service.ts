@@ -7,6 +7,7 @@ import { sendAccountMail, isAccountMailConfigured, getTrustedAppOrigin, isLocalM
 import { checkAndIncrementRateLimit } from "@/lib/account-ratelimit";
 import { safeAccountDestination } from "@/lib/account-destination";
 import { ROLE_LABELS, ROLE_CAPABILITIES, type Role } from "@/lib/constants";
+import { randomPresetAvatar } from "@/lib/avatars";
 import { readFile, readdir } from "node:fs/promises";
 import path from "node:path";
 
@@ -77,6 +78,7 @@ export async function registerReaderService(input: {
               email,
               nickname,
               passwordHash,
+              avatarSeed: randomPresetAvatar(),
               role: UserRole.reader,
               emailVerifiedAt: null,
               disabledAt: null,
@@ -822,6 +824,7 @@ export async function acceptTeamInvitationService(
                 email: inviteEmail,
                 nickname: input.nickname.trim(),
                 passwordHash: newPasswordHash,
+                avatarSeed: randomPresetAvatar(),
                 role: assignedRole,
                 emailVerifiedAt: now,
                 disabledAt: null,

@@ -2,6 +2,7 @@
 import { normalizeGenres } from "@/lib/genres";
 
 import { z } from "zod";
+import { isProfileAvatarChoice } from "@/lib/avatars";
 import { isChapterNumber } from '@/lib/chapter-number';
 import { getWorkTitle, workTitleIssue } from '@/lib/work-title';
 import { Prisma } from "@prisma/client";
@@ -662,7 +663,7 @@ export async function setRating(input: unknown): Promise<ActionResult & { rating
 const profileSchema = z.object({
   nickname: z.string().trim().min(2, "الاسم قصير جدًا").max(40, "الاسم ٤٠ حرفًا على الأكثر"),
   bio: z.string().trim().max(300).optional(),
-  avatarSeed: z.enum(["initials", "bunny", "violet", "teal", "gold"]).optional(),
+  avatarSeed: z.string().refine(isProfileAvatarChoice, "اختر صورة من القائمة").optional(),
 });
 
 export async function updateProfile(input: unknown): Promise<ActionResult> {
