@@ -65,7 +65,6 @@ export const authOptions: NextAuthOptions = {
           return null; // safe login failure on exception
         } finally {
           // NextAuth turns a thrown error into result.error on the client.
-          // eslint-disable-next-line no-unsafe-finally
           if (unverified) throw new Error(EMAIL_NOT_VERIFIED);
         }
       },
