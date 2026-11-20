@@ -59,7 +59,7 @@ export async function getReadingStats(profileId: string): Promise<ReadingStats> 
       select: { updatedAt: true, completed: true },
     }),
     db.libraryItem.findMany({ where: { profileId }, select: { shelf: true } }),
-    db.comment.count({ where: { profileId, status: "visible" } }),
+    db.comment.count({ where: { profileId, status: { in: ["visible", "flagged"] } } }),
     db.rating.count({ where: { profileId } }),
   ]);
 

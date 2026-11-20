@@ -8,6 +8,7 @@ declare module "next-auth" {
       role: Role;
       authVersion: number;
       avatarSeed?: string;
+      avatarPath?: string | null;
     } & DefaultSession["user"];
   }
 }

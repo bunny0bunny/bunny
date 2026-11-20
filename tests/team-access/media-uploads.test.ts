@@ -159,6 +159,29 @@ test("imported pages remain immutable through generic snapshot actions", async (
   expect((await editorial.updateDraftSnapshot({ revisionId: revision, expectedVersion: r.version, titleAr: "عنوان جديد" })).ok).toBe(true);
 });
 
+test("imported pages can be reordered or removed in a draft, but not duplicated or emptied", async () => {
+  const page = await db.mediaAsset.findFirstOrThrow({ where: { chapterId: chapter, pageIndex: 0, readyAt: { not: null } }, include: { upload: true } });
+  // Earlier tests leave this upload superseded; only pages of a ready upload are valid draft content.
+  await db.chapterUpload.update({ where: { id: page.uploadId }, data: { state: "ready" } });
+  try {
+  const media = { imagePath: "/api/media/" + page.id, width: page.width!, height: page.height! };
+  const legacy = await db.chapterPage.findFirst({ where: { chapterId: chapter, imagePath: { startsWith: "/art/" } } })
+    ?? await db.chapterPage.create({ data: { chapterId: chapter, pageIndex: 50, imagePath: "/art/pages/reorder-fixture.webp", width: 800, height: 1200 } });
+  const old = { imagePath: legacy.imagePath, width: legacy.width, height: legacy.height };
+  let r = await db.chapterRevision.update({ where: { id: revision }, data: { pagesJson: [{ pageIndex: 0, ...media }, { pageIndex: 1, ...old }], status: "draft", pendingUploadId: null } });
+  expect((await editorial.updateDraftSnapshot({ revisionId: revision, expectedVersion: r.version, pages: [media, media] })).ok).toBe(false);
+  const reordered = await editorial.updateDraftSnapshot({ revisionId: revision, expectedVersion: r.version, pages: [old, media] });
+  expect(reordered.error).toBeUndefined();
+  expect(reordered.revision!.pagesJson).toEqual([{ pageIndex: 0, ...old }, { pageIndex: 1, ...media }]);
+  r = reordered.revision!;
+  const removed = await editorial.updateDraftSnapshot({ revisionId: revision, expectedVersion: r.version, pages: [media] });
+  expect(removed.ok).toBe(true);
+  // A page dropped from this revision cannot be brought back by a snapshot edit.
+  expect((await editorial.updateDraftSnapshot({ revisionId: revision, expectedVersion: removed.revision!.version, pages: [media, old] })).ok).toBe(false);
+  expect((await editorial.updateDraftSnapshot({ revisionId: revision, expectedVersion: removed.revision!.version, pages: [] })).ok).toBe(false);
+  } finally { await db.chapterUpload.update({ where: { id: page.uploadId }, data: { state: page.upload.state } }); }
+});
+
 test("disabling new uploads preserves current published media access", async () => {
   const page = await db.mediaAsset.findFirstOrThrow({ where: { chapterId: chapter, pageIndex: 0, readyAt: { not: null } } });
   await db.chapter.update({ where: { id: chapter }, data: { workflow: "published", scheduledFor: null, isPremiumDemo: false } });

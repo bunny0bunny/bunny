@@ -1,4 +1,6 @@
+import { isPresetAvatar, presetAvatarSrc } from "@/lib/avatars";
 import { BrandMark } from "@/components/library/brand-mark";
+import { UploadedAvatarImage } from "@/components/accounts/uploaded-avatar-image";
 
 export type AvatarSeed = "initials" | "bunny" | "violet" | "teal" | "gold";
 
@@ -22,14 +24,33 @@ export function normalizeAvatarSeed(seed: unknown): AvatarSeed {
 export function AccountAvatar({
   seed,
   name,
+  src,
   className = "size-9",
   brandMarkSize = "size-5",
 }: {
   seed?: string | null;
   name?: string | null;
+  /** An uploaded picture's path; the seed is the fallback. */
+  src?: string | null;
   className?: string;
   brandMarkSize?: string;
 }) {
+  if (src) {
+    return <UploadedAvatarImage src={src} className={className} fallback={<AccountAvatar seed={seed} name={name} className={className} brandMarkSize={brandMarkSize} />} />;
+  }
+  if (isPresetAvatar(seed)) {
+    return (
+      <img
+        src={presetAvatarSrc(seed)}
+        alt=""
+        aria-hidden="true"
+        loading="lazy"
+        decoding="async"
+        className={`inline-block shrink-0 rounded-full object-cover ${className}`}
+      />
+    );
+  }
+
   const safeSeed = normalizeAvatarSeed(seed);
   const initial = (name?.trim() || "؟").slice(0, 1);
 

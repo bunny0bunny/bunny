@@ -10,7 +10,7 @@ import { readerHref } from "@/lib/reader-route";
 
 export const dynamic = "force-dynamic";
 
-export const metadata: Metadata = { title: "التحديثات — مكتبة بانيورا" };
+export const metadata: Metadata = { title: "التحديثات" };
 
 const arabicDateFormatter = new Intl.DateTimeFormat("ar-EG", {
   calendar: "gregory",
@@ -24,7 +24,7 @@ export default async function UpdatesPage({
 }: {
   searchParams: Promise<{ tab?: string }>;
 }) {
-  const profile = await requireProfile();
+  const profile = await requireProfile("/updates");
   const { tab } = await searchParams;
 
   const activeTab = tab === "unread" ? "unread" : "all";

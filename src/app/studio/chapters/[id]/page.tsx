@@ -8,7 +8,7 @@ import { SiteHeader, SiteFooter, BottomNav } from "@/components/library/chrome";
 import { currentProfileOrNull } from "@/lib/queries";
 import { isStaffRole, canManageSeries } from "@/lib/team-access";
 import { db, withDatabaseScope } from "@/lib/db";
-import { openOrCreateDraft } from "@/lib/editorial";
+import { getWorkingRevision } from "@/lib/editorial";
 import { EditorialEditor } from "@/components/studio/editorial-editor";
 import { Button } from "@/components/ui/button";
 
@@ -79,8 +79,9 @@ async function loadStudioChapterPage(params: Promise<{ id: string }>) {
     );
   }
 
-  // 3. Open or get working draft revision (lazily initialized or created if none open)
-  const openResult = await openOrCreateDraft(chapterId);
+  // 3. The open revision, or the latest one read-only. Opening a page never forks a draft;
+  // the editor's «فتح مسودة جديدة لهذا الفصل» button does that on purpose.
+  const openResult = await getWorkingRevision(chapterId);
   if (!openResult.ok && openResult.error === "conflict") {
     return <div className="flex min-h-screen flex-col bg-background">
       <SiteHeader />
@@ -99,8 +100,8 @@ async function loadStudioChapterPage(params: Promise<{ id: string }>) {
 
   const workingRevision = openResult.revision;
 
-  // Opening can initialize/fork snapshots: render the resulting public version
-  // and history, including the event just written, rather than the old query.
+  // Opening can lazily initialize legacy snapshots: render the resulting
+  // version and history, including any event just written, rather than the old query.
   chapter = await db.chapter.findUniqueOrThrow({
     where: { id: chapterId, deletedAt: null, series: { deletedAt: null } },
     include: { series: true, revisions: { orderBy: { revisionNumber: "desc" } }, editorialEvents: { orderBy: { createdAt: "desc" }, include: { actor: { select: { nickname: true } } } } },

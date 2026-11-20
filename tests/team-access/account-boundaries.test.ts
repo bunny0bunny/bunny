@@ -188,6 +188,7 @@ test("team invitation: admin can create, cancel, and new invitee can accept to r
     password: "InviteePassword123!",
   });
   expect(acceptResult.ok).toBe(true);
+  expect(acceptResult.next).toBe("/login?next=%2Fstudio");
 
   const createdProfile = await db.profile.findUniqueOrThrow({ where: { email: "invitee@bunny.test" } });
   expect(createdProfile.role).toBe("editor");

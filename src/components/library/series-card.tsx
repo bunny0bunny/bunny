@@ -63,7 +63,8 @@ export function SeriesCardItem({
           fill
           sizes="(max-width: 640px) 50vw, (max-width: 1024px) 25vw, 180px"
           priority={priority}
-          className="object-cover transition duration-500 group-hover:scale-[1.03]"
+          // Adult covers stay blurred in lists; the work page and reader ask for consent.
+          className={`object-cover transition duration-500 ${series.isAdult ? "scale-110 blur-lg" : "group-hover:scale-[1.03]"}`}
         />
 
         {/* Top Badges */}

@@ -77,7 +77,7 @@ export default async function SeriesDetailPage({
   const related = await getRelatedSeries(s.id, genres);
 
   const [comments, userRating, shelfRow] = await Promise.all([
-    getVisibleComments(s.id, null),
+    getVisibleComments(s.id, null, profile?.id ?? null),
     getUserRating(profile?.id ?? null, s.id),
     profile
       ? import("@/lib/db").then(({ db }) =>
@@ -91,15 +91,18 @@ export default async function SeriesDetailPage({
 
   // Server-side progress for signed-in reader
   let serverProgress: { chapterNumber: number; pageIndex: number; percent: number } | null = null;
+  // Latest chapter the reader finished, when it is also their latest activity: "continue" then means the next chapter.
+  let finishedChapterNumber: number | null = null;
   if (profile) {
     const row = await import("@/lib/db").then(({ db }) =>
       db.readingProgress.findFirst({
-        where: { profileId: profile.id, seriesId: s.id, completed: false, percent: { gt: 0, lt: 100 }, chapter: { ...liveChapterWhere(), isPremiumDemo: false } },
-        orderBy: { updatedAt: "desc" },
+        where: { profileId: profile.id, seriesId: s.id, chapter: { ...liveChapterWhere(), isPremiumDemo: false } },
+        orderBy: [{ updatedAt: "desc" }, { id: "desc" }],
         include: { chapter: { select: { number: true } } },
       })
     );
-    if (row) {
+    if (row && (row.completed || row.percent >= 99)) finishedChapterNumber = row.chapter.number;
+    else if (row && row.percent > 0) {
       serverProgress = {
         chapterNumber: row.chapter.number,
         pageIndex: row.pageIndex,
@@ -207,7 +210,7 @@ export default async function SeriesDetailPage({
                     </div>
                   </div>
                   <div className="mt-4 lg:mt-6">
-                    <WorkHeroActions slug={s.slug} format={s.format as Format} serverProgress={serverProgress}
+                    <WorkHeroActions slug={s.slug} format={s.format as Format} serverProgress={serverProgress} finishedChapterNumber={finishedChapterNumber}
                       chapters={published.map(c => ({ number: c.number, isPremiumDemo: c.isPremiumDemo }))}
                       titleAr={getWorkTitle(s)} initialShelf={initialShelf} />
                   </div>

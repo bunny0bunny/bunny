@@ -75,11 +75,12 @@ export async function notifyCommentLike(input: {
     likerNickname: string;
     seriesSlug: string;
     seriesTitle: string;
+    href?: string;
 }): Promise<number> {
     return notifyProfiles([input.authorProfileId], {
         type: "comment_like",
         titleAr: `أُعجب ${input.likerNickname} بتعليقك`,
         bodyAr: `على «${input.seriesTitle}» — استمر بالمشاركة!`,
-        href: `/series/${input.seriesSlug}`
+        href: input.href ?? `/series/${input.seriesSlug}`
     });
 }

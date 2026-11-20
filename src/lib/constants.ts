@@ -14,6 +14,13 @@ export const ROLE_LABELS: Record<Role, string> = {
   editor: "محرر",
   admin: "مدير",
 };
+/** One-line summary of what each role can do, shown next to role pickers. */
+export const ROLE_CAPABILITIES: Record<Role, string> = {
+  reader: "يقرأ ويعلّق ويقيّم فقط، بلا وصول إلى لوحة الفريق.",
+  contributor: "يجهّز فصول الأعمال المعيّنة له ويرسلها للمراجعة، ولا ينشر.",
+  editor: "يراجع فصول أعماله المعيّنة ويشرف على التعليقات، وينشر فقط في الأعمال التي مُنح فيها صلاحية النشر.",
+  admin: "صلاحيات كاملة: الأعمال والنشر والحسابات والأدوار وسلة المحذوفات.",
+};
 
 export const CATEGORIES = ["manga", "manhwa", "novel", "comic"] as const;
 export type Category = (typeof CATEGORIES)[number];

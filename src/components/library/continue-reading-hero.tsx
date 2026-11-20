@@ -89,7 +89,7 @@ export function ContinueReadingHero({
               <div className="flex min-w-0 flex-1 flex-col justify-center p-4 sm:p-5 md:p-6">
                 {hero.isAdult && <div className="mb-2"><AdultBadge /></div>}
                 <span className="text-xs font-semibold text-primary">
-                  كمّل القراءة
+                  {hero.nextChapter ? "الفصل التالي في انتظارك" : "كمّل القراءة"}
                 </span>
 
                 <h1 className="mt-1.5 line-clamp-2 text-lg sm:text-2xl lg:text-3xl font-extrabold text-foreground">
@@ -102,7 +102,7 @@ export function ContinueReadingHero({
                 </p>
 
                 {/* Actual Progress Bar */}
-                <div className="mt-4 flex items-center gap-3">
+                {!hero.nextChapter && <div className="mt-4 flex items-center gap-3">
                   <span className="text-xs font-medium text-muted-foreground/90 shrink-0">
                     {Math.round(hero.percent)}٪
                   </span>
@@ -112,7 +112,7 @@ export function ContinueReadingHero({
                       style={{ width: `${Math.max(5, Math.min(100, hero.percent))}%` }}
                     />
                   </div>
-                </div>
+                </div>}
 
                 {/* Primary Action Button */}
                 <div className="mt-4 flex flex-wrap items-center gap-2">
@@ -123,7 +123,7 @@ export function ContinueReadingHero({
                   >
                     <Link href={readerHref(hero.format, hero.seriesSlug, hero.chapterNumber)}>
                       <Play className="size-4 fill-current" aria-hidden />
-                      <span>كمّل القراءة</span>
+                      <span>{hero.nextChapter ? `اقرأ الفصل ${hero.chapterNumber}` : "كمّل القراءة"}</span>
                     </Link>
                   </Button>
                 </div>
@@ -143,7 +143,7 @@ export function ContinueReadingHero({
                     >
                       <span className="truncate max-w-[140px] font-medium">{it.seriesTitle}</span>
                       {it.isAdult && <AdultBadge />}
-                      <span className="text-[11px] text-muted-foreground">فصل {it.chapterNumber} ({Math.round(it.percent)}٪)</span>
+                      <span className="text-[11px] text-muted-foreground">{it.nextChapter ? `الفصل التالي: ${it.chapterNumber}` : `فصل ${it.chapterNumber} (${Math.round(it.percent)}٪)`}</span>
                     </Link>
                   ))}
                 </div>

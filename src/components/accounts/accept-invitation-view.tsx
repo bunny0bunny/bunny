@@ -1,9 +1,10 @@
 "use client";
+import { signOutAndForget } from "@/lib/sign-out";
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
-import { signOut } from "next-auth/react";
+
 import { Loader2, ShieldCheck, UserCheck, Eye, EyeOff, AlertTriangle, LogOut } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -214,7 +215,7 @@ export function AcceptInvitationView({
                 <Button
                   type="button"
                   variant="outline"
-                  onClick={() => signOut({ callbackUrl: loginToAcceptUrl })}
+                  onClick={() => signOutAndForget({ callbackUrl: loginToAcceptUrl })}
                   className="h-11 w-full gap-2 border-border text-foreground"
                 >
                   <LogOut className="size-4" aria-hidden />

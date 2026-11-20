@@ -20,13 +20,16 @@ const messages: Record<string, string> = {
   series_unavailable: "اختر عملًا منشورًا ومتاحًا للقراء قبل تحديد حالة متاح.",
   invalid_series: "اختر عملًا منشورًا ومتاحًا للقراء قبل تحديد حالة متاح.",
   body_too_large: "الرسالة طويلة جدًا. اختصرها وحاول مرة أخرى.",
+  not_withdrawable: "بدأ الفريق تجهيز هذا العمل، فلا يمكن سحب الطلب الآن.",
+  not_editable: "يمكن تعديل الطلب فقط قبل أن تبدأ الإدارة مراجعته.",
+  duplicate: "لديك طلب آخر لهذا العمل بالفعل.",
 };
 
 export function contentRequestResponse<T>(result: Result<T>): Response {
   const headers = { "Cache-Control": "private, no-store" };
   if (result.ok) return Response.json({ ok: true, ...result.data }, { headers });
   const code = Object.hasOwn(messages, result.error) ? result.error : "invalid_input";
-  const status = code === "unauthenticated" ? 401 : code === "forbidden" ? 403 : code === "not_found" ? 404 : code === "conflict" ? 409 : ["rate_limit", "rate_limited", "quota", "quota_exceeded"].includes(code) ? 429 : code === "unavailable" ? 503 : code === "body_too_large" ? 413 : 400;
+  const status = code === "unauthenticated" ? 401 : code === "forbidden" ? 403 : code === "not_found" ? 404 : code === "conflict" || code === "duplicate" ? 409 : ["rate_limit", "rate_limited", "quota", "quota_exceeded"].includes(code) ? 429 : code === "unavailable" ? 503 : code === "body_too_large" ? 413 : 400;
   return Response.json({ ok: false, code, error: messages[code] }, { status, headers });
 }
 

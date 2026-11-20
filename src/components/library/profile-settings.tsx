@@ -1,8 +1,10 @@
 "use client";
+import { signOutAndForget } from "@/lib/sign-out";
 
+import { arabicError } from "@/lib/error-messages-ar";
 import { useTransition, useState } from "react";
 import { useRouter } from "next/navigation";
-import { useSession, signOut } from "next-auth/react";
+import { useSession } from "next-auth/react";
 import { Loader2, KeyRound, Check, Eye, EyeOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -10,22 +12,24 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { updateProfile } from "@/lib/actions";
 import { changeAccountPassword } from "@/lib/account-actions";
-import {
-  AccountAvatar,
-  VALID_AVATAR_SEEDS,
-  AVATAR_SEED_LABELS,
-  normalizeAvatarSeed,
-  type AvatarSeed,
-} from "@/components/accounts/account-avatar";
+import { AccountAvatar } from "@/components/accounts/account-avatar";
+import { isProfileAvatarChoice } from "@/lib/avatars";
+import { AvatarChoiceGrid, UPLOADED_AVATAR as UPLOADED } from "@/components/accounts/avatar-choice-grid";
+import { ProfileAvatarUploader, deleteProfileAvatar, profileAvatarError } from "@/components/accounts/profile-avatar-uploader";
+
 
 export function ProfileSettings({
   nickname,
   bio,
   avatarSeed,
+  avatarPath = null,
+  uploadsEnabled = false,
 }: {
   nickname: string;
   bio: string;
   avatarSeed?: string | null;
+  avatarPath?: string | null;
+  uploadsEnabled?: boolean;
 }) {
   const router = useRouter();
   const { update: updateSession } = useSession();
@@ -33,9 +37,13 @@ export function ProfileSettings({
   // Profile details state
   const [name, setName] = useState(nickname);
   const [userBio, setUserBio] = useState(bio);
-  const [selectedSeed, setSelectedSeed] = useState<AvatarSeed>(
-    normalizeAvatarSeed(avatarSeed)
+  // Older colour seeds still render; they are only re-sent once the reader picks a new picture.
+  const [uploadedPath, setUploadedPath] = useState<string | null>(avatarPath);
+  const [selectedSeed, setSelectedSeed] = useState<string>(
+    avatarPath ? UPLOADED : avatarSeed || "initials"
   );
+  // The preset behind an uploaded picture (shown if the upload is removed).
+  const fallbackSeed = selectedSeed === UPLOADED ? avatarSeed || "initials" : selectedSeed;
   const [profileMsg, setProfileMsg] = useState("");
   const [profileError, setProfileError] = useState("");
   const [pendingProfile, startProfileTransition] = useTransition();
@@ -59,15 +67,23 @@ export function ProfileSettings({
     }
 
     startProfileTransition(async () => {
-      // Pass nickname, bio, and avatarSeed to updateProfile
+      // Picking a preset while an uploaded picture exists replaces the upload.
+      if (uploadedPath && selectedSeed !== UPLOADED) {
+        const removed = await deleteProfileAvatar();
+        if (!removed.ok) {
+          setProfileError(profileAvatarError(removed.error));
+          return;
+        }
+        setUploadedPath(null);
+      }
       const res = await updateProfile({
         nickname: name.trim(),
         bio: userBio.trim(),
-        avatarSeed: selectedSeed,
+        avatarSeed: isProfileAvatarChoice(selectedSeed) ? selectedSeed : undefined,
       } as unknown);
 
       if (!res.ok) {
-        setProfileError(res.error ?? "تعذّر حفظ التغييرات.");
+        setProfileError(arabicError(res.error, "تعذّر حفظ التغييرات."));
         return;
       }
 
@@ -101,13 +117,13 @@ export function ProfileSettings({
       });
 
       if (!res.ok) {
-        setPasswordError(res.error ?? "تعذّر تغيير كلمة المرور. تأكد من كلمة المرور الحالية.");
+        setPasswordError(arabicError(res.error, "تعذّر تغيير كلمة المرور. تأكد من كلمة المرور الحالية."));
         return;
       }
 
       setPasswordMsg("تم تغيير كلمة المرور بنجاح. يتم تسجيل الخروج لإلغاء الجلسات القديمة...");
       setTimeout(async () => {
-        await signOut({ redirect: false });
+        await signOutAndForget({ redirect: false });
         router.push("/login");
         router.refresh();
       }, 1200);
@@ -118,40 +134,27 @@ export function ProfileSettings({
     <div className="space-y-6">
       {/* Profile Info & Avatar Selection */}
       <div className="space-y-4">
-        <div>
-          <label className="mb-2 block text-xs font-semibold text-foreground">
-            الصورة الرمزية للحساب
-          </label>
-          <div className="flex flex-wrap items-center gap-3">
-            <AccountAvatar
-              seed={selectedSeed}
-              name={name}
-              className="size-12 border-2 border-primary/50 shadow-sm"
-              brandMarkSize="size-7"
-            />
-            <div className="flex flex-wrap gap-2">
-              {VALID_AVATAR_SEEDS.map((s) => {
-                const isSelected = selectedSeed === s;
-                return (
-                  <button
-                    key={s}
-                    type="button"
-                    onClick={() => setSelectedSeed(s)}
-                    className={`inline-flex min-h-11 items-center gap-1.5 rounded-xl border px-3 py-1.5 text-xs font-medium transition ${
-                      isSelected
-                        ? "border-primary bg-primary/15 text-primary"
-                        : "border-border/70 bg-secondary/30 text-muted-foreground hover:border-border hover:text-foreground"
-                    }`}
-                    aria-pressed={isSelected}
-                  >
-                    <AccountAvatar seed={s} name={name} className="size-5" brandMarkSize="size-3.5" />
-                    <span>{AVATAR_SEED_LABELS[s]}</span>
-                  </button>
-                );
-              })}
-            </div>
+        <fieldset>
+          <legend className="mb-2 block text-xs font-semibold text-foreground">صورتك في الموقع</legend>
+          <div className="mb-3 flex items-center gap-3">
+            <AccountAvatar seed={fallbackSeed} src={selectedSeed === UPLOADED ? uploadedPath : null} name={name} className="size-16 border-2 border-primary/50 shadow-sm" brandMarkSize="size-9" />
+            <p className="text-xs leading-6 text-muted-foreground">تظهر بجانب اسمك في التعليقات وقائمة الحساب. اختر صورة جاهزة أو ارفع صورتك.</p>
           </div>
-        </div>
+          <AvatarChoiceGrid selected={selectedSeed} onSelect={setSelectedSeed} name={name} uploadedPath={uploadedPath} fallbackSeed={fallbackSeed} />
+          {uploadsEnabled && (
+            <div className="mt-3">
+              <ProfileAvatarUploader
+                disabled={pendingProfile}
+                onUploaded={(path) => {
+                  setUploadedPath(path);
+                  setSelectedSeed(UPLOADED);
+                  setProfileMsg("تم حفظ صورتك ✓");
+                  router.refresh();
+                }}
+              />
+            </div>
+          )}
+        </fieldset>
 
         <div>
           <Label htmlFor="pf-name" className="mb-1.5 block text-xs text-muted-foreground">

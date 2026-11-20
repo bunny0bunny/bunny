@@ -2,12 +2,16 @@
 import { normalizeGenres } from "@/lib/genres";
 
 import { z } from "zod";
+import { cleanProfileName } from "@/lib/profile-name";
+import { isProfileAvatarChoice } from "@/lib/avatars";
 import { isChapterNumber } from '@/lib/chapter-number';
 import { getWorkTitle, workTitleIssue } from '@/lib/work-title';
 import { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
-import { currentProfileOrNull, liveChapterWhere } from "@/lib/queries";
+import { currentProfileOrNull, liveChapterWhere, getVisibleComments, COMMENTS_PAGE_SIZE, type CommentView } from "@/lib/queries";
 import { notifyCommentLike } from "@/lib/notifications";
+import { readerHref } from "@/lib/reader-route";
+import type { Format } from "@/lib/constants";
 import { revalidatePath } from "next/cache";
 import { isWorkflow, isRole, type Workflow, type Role } from "@/lib/constants";
 import { isStaffRole, isAssignableRole, isAssignedToSeries } from "@/lib/team-access";
@@ -68,6 +72,46 @@ export async function saveReadingProgress(input: unknown): Promise<ActionResult>
     });
   }
   return { ok: true };
+}
+
+const guestProgressSchema = z.array(z.object({
+  seriesSlug: z.string().min(1).max(200),
+  chapterNumber: z.number().refine(isChapterNumber),
+  pageIndex: z.number().int().min(0).max(100000),
+  pageOffset: z.number().finite().min(0).max(1).nullable().optional(),
+  percent: z.number().min(0).max(100),
+  completed: z.boolean().optional(),
+  updatedAt: z.number().int().positive(),
+})).max(50);
+
+/**
+ * After sign-in, copy the positions this device saved as a guest into the account.
+ * The newer position wins; a guest entry never clears a finished chapter. Idempotent.
+ */
+export async function mergeGuestProgress(input: unknown): Promise<ActionResult & { merged?: number }> {
+  const profile = await currentProfileOrNull();
+  if (!profile) return { ok: false, error: "unauthenticated" };
+  const parsed = guestProgressSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: "invalid" };
+  let merged = 0;
+  for (const entry of parsed.data) {
+    const series = await db.series.findUnique({ where: { slug: entry.seriesSlug, deletedAt: null }, select: { id: true } });
+    if (!series) continue;
+    const chapter = await db.chapter.findFirst({ where: { ...liveChapterWhere(), seriesId: series.id, number: entry.chapterNumber, isPremiumDemo: false }, select: { id: true } });
+    if (!chapter) continue;
+    const savedAt = Math.min(entry.updatedAt, Date.now());
+    const existing = await db.readingProgress.findUnique({ where: { profileId_chapterId: { profileId: profile.id, chapterId: chapter.id } } });
+    if (existing && (existing.updatedAt.getTime() >= savedAt || (existing.pageIndex === entry.pageIndex && existing.percent === entry.percent))) continue;
+    const completed = entry.completed === true || entry.percent >= 99;
+    await db.readingProgress.upsert({
+      where: { profileId_chapterId: { profileId: profile.id, chapterId: chapter.id } },
+      update: { pageIndex: entry.pageIndex, pageOffset: entry.pageOffset ?? null, percent: entry.percent, ...(completed ? { completed: true } : {}) },
+      create: { profileId: profile.id, seriesId: series.id, chapterId: chapter.id, pageIndex: entry.pageIndex, pageOffset: entry.pageOffset ?? null, percent: entry.percent, completed },
+    });
+    merged++;
+  }
+  if (merged) { revalidatePath("/"); revalidatePath("/library"); }
+  return { ok: true, merged };
 }
 
 /* ------------------------------------------------------------------ */
@@ -508,11 +552,81 @@ export async function reportComment(input: unknown): Promise<ActionResult> {
     update: { reasonAr: parsed.data.reasonAr ?? null },
     create: { commentId: comment.id, profileId: profile.id, reasonAr: parsed.data.reasonAr ?? null },
   });
-  if (comment.status === "visible") {
-    await db.comment.update({ where: { id: comment.id }, data: { status: "flagged" } });
+  // A single report only queues the comment for moderators; it stays public.
+  // Several independent reports hide it until a moderator decides.
+  if (comment.status !== "hidden") {
+    const reportCount = await db.commentReport.count({ where: { commentId: comment.id } });
+    const nextStatus = reportCount >= COMMENT_AUTO_HIDE_REPORTS ? "hidden" : "flagged";
+    if (nextStatus !== comment.status) {
+      await db.comment.update({ where: { id: comment.id }, data: { status: nextStatus } });
+    }
   }
   revalidatePath("/admin/moderation");
   return { ok: true };
+}
+
+/** Distinct reporters needed before a comment is hidden pending review. */
+const COMMENT_AUTO_HIDE_REPORTS = 3;
+/** Authors may edit their comment for this long after posting. */
+const COMMENT_EDIT_WINDOW_MS = 15 * 60 * 1000;
+
+const ownCommentSchema = z.object({ commentId: z.string().min(1) });
+const editCommentSchema = ownCommentSchema.extend({
+  body: z.string().trim().min(2, "التعليق قصير جدًا").max(2000, "التعليق طويل جدًا"),
+});
+
+/** Lets the author permanently delete their own comment. */
+export async function deleteOwnComment(input: unknown): Promise<ActionResult> {
+  const profile = await currentProfileOrNull();
+  if (!profile) return { ok: false, error: "unauthenticated" };
+  const parsed = ownCommentSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: "invalid" };
+  const comment = await db.comment.findUnique({ where: { id: parsed.data.commentId }, select: { profileId: true, series: { select: { slug: true } } } });
+  if (!comment) return { ok: false, error: "not_found" };
+  if (comment.profileId !== profile.id) return { ok: false, error: "forbidden" };
+  await db.comment.deleteMany({ where: { id: parsed.data.commentId, profileId: profile.id } });
+  revalidatePath(`/series/${comment.series.slug}`);
+  revalidatePath("/admin/moderation");
+  return { ok: true };
+}
+
+/** Lets the author fix their comment shortly after posting. Hidden comments stay hidden. */
+export async function editOwnComment(input: unknown): Promise<ActionResult> {
+  const profile = await currentProfileOrNull();
+  if (!profile) return { ok: false, error: "unauthenticated" };
+  const parsed = editCommentSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "invalid" };
+  const comment = await db.comment.findUnique({ where: { id: parsed.data.commentId }, select: { profileId: true, status: true, createdAt: true, series: { select: { slug: true } } } });
+  if (!comment) return { ok: false, error: "not_found" };
+  if (comment.profileId !== profile.id) return { ok: false, error: "forbidden" };
+  if (comment.status === "hidden") return { ok: false, error: "هذا التعليق مخفي بقرار من الإشراف ولا يمكن تعديله." };
+  if (Date.now() - comment.createdAt.getTime() > COMMENT_EDIT_WINDOW_MS) return { ok: false, error: "انتهت مهلة التعديل (١٥ دقيقة من النشر). يمكنك حذف التعليق وكتابة غيره." };
+  await db.comment.updateMany({ where: { id: parsed.data.commentId, profileId: profile.id }, data: { body: parsed.data.body } });
+  revalidatePath(`/series/${comment.series.slug}`);
+  return { ok: true };
+}
+
+const moreCommentsSchema = z.object({
+  seriesSlug: z.string().min(1),
+  chapterNumber: z.number().refine(isChapterNumber).nullable().optional(),
+  offset: z.number().int().min(0).max(5000),
+});
+
+/** Next page of public comments for the "load more" button. */
+export async function loadMoreComments(input: unknown): Promise<{ ok: true; comments: CommentView[] } | { ok: false; error: string }> {
+  const parsed = moreCommentsSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: "invalid" };
+  const series = await db.series.findUnique({ where: { slug: parsed.data.seriesSlug, deletedAt: null }, select: { id: true } });
+  if (!series) return { ok: false, error: "not_found" };
+  let chapterId: string | null = null;
+  if (parsed.data.chapterNumber) {
+    const chapter = await db.chapter.findFirst({ where: { ...liveChapterWhere(), seriesId: series.id, number: parsed.data.chapterNumber }, select: { id: true } });
+    if (!chapter) return { ok: false, error: "not_found" };
+    chapterId = chapter.id;
+  }
+  const profile = await currentProfileOrNull();
+  const comments = await getVisibleComments(series.id, chapterId, profile?.id ?? null, COMMENTS_PAGE_SIZE, parsed.data.offset);
+  return { ok: true, comments };
 }
 
 const likeSchema = z.object({
@@ -537,11 +651,12 @@ export async function toggleCommentLike(
       id: true,
       status: true,
       profileId: true,
-      series: { select: { slug: true, titleAr: true, titleOriginal: true } },
+      series: { select: { slug: true, titleAr: true, titleOriginal: true, format: true } },
+      chapter: { select: { number: true } },
       _count: { select: { likes: true } },
     },
   });
-  if (!comment || comment.status !== "visible") return { ok: false, error: "not_found" };
+  if (!comment || comment.status === "hidden") return { ok: false, error: "not_found" };
 
   const key = { commentId_profileId: { commentId: comment.id, profileId: profile.id } };
   const existing = await db.commentLike.findUnique({ where: key });
@@ -558,6 +673,8 @@ export async function toggleCommentLike(
         likerNickname: profile.nickname,
         seriesSlug: comment.series.slug,
         seriesTitle: getWorkTitle(comment.series),
+        // A like on a chapter comment opens that chapter, where the comment lives.
+        href: comment.chapter ? readerHref(comment.series.format as Format, comment.series.slug, comment.chapter.number) : `/series/${comment.series.slug}`,
       });
     }
   }
@@ -590,9 +707,9 @@ export async function setRating(input: unknown): Promise<ActionResult & { rating
 }
 
 const profileSchema = z.object({
-  nickname: z.string().trim().min(2, "الاسم قصير جدًا").max(40),
+  nickname: z.string().trim().min(1).max(200),
   bio: z.string().trim().max(300).optional(),
-  avatarSeed: z.enum(["initials", "bunny", "violet", "teal", "gold"]).optional(),
+  avatarSeed: z.string().refine(isProfileAvatarChoice, "اختر صورة من القائمة").optional(),
 });
 
 export async function updateProfile(input: unknown): Promise<ActionResult> {
@@ -600,9 +717,16 @@ export async function updateProfile(input: unknown): Promise<ActionResult> {
   if (!profile) return { ok: false, error: "unauthenticated" };
   const parsed = profileSchema.safeParse(input);
   if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "invalid" };
+  // Name rules apply when a name is set or changed; older names are never forced to change.
+  let nickname = profile.nickname;
+  if (parsed.data.nickname !== profile.nickname) {
+    const cleaned = cleanProfileName(parsed.data.nickname);
+    if (!cleaned.ok) return { ok: false, error: cleaned.error };
+    nickname = cleaned.name;
+  }
   await db.profile.update({
     where: { id: profile.id },
-    data: { nickname: parsed.data.nickname, bio: parsed.data.bio || null, ...(parsed.data.avatarSeed ? { avatarSeed: parsed.data.avatarSeed } : {}) },
+    data: { nickname, ...(parsed.data.bio !== undefined ? { bio: parsed.data.bio || null } : {}), ...(parsed.data.avatarSeed ? { avatarSeed: parsed.data.avatarSeed } : {}) },
   });
   revalidatePath("/profile");
   return { ok: true };
@@ -626,6 +750,9 @@ export async function moderateComment(input: unknown): Promise<ActionResult> {
   const comment = await db.comment.findUnique({ where: { id: parsed.data.commentId, series: { deletedAt: null }, OR: [{ chapterId: null }, { chapter: { deletedAt: null } }] }, select: { series: { select: { slug: true } } } });
   if (!comment) return { ok: false, error: "not_found" };
   await db.comment.update({ where: { id: parsed.data.commentId, series: { deletedAt: null }, OR: [{ chapterId: null }, { chapter: { deletedAt: null } }] }, data: { status: parsed.data.status } });
+  // A moderator's "keep visible" settles the existing reports, so they don't
+  // count toward auto-hiding again.
+  if (parsed.data.status === "visible") await db.commentReport.deleteMany({ where: { commentId: parsed.data.commentId } });
   revalidatePath("/admin/moderation");
   revalidatePath(`/series/${comment.series.slug}`);
   return { ok: true };
@@ -716,6 +843,23 @@ export async function markNotificationRead(input: unknown): Promise<ActionResult
     return { ok: false, error: "not_found" }; // not owned / not found — no info leak
   }
   return { ok: true };
+}
+
+export async function deleteNotification(input: unknown): Promise<ActionResult> {
+  const profile = await currentProfileOrNull();
+  if (!profile) return { ok: false, error: "unauthenticated" };
+  const parsed = z.object({ id: z.string().min(1).max(64) }).safeParse(input);
+  if (!parsed.success) return { ok: false, error: "invalid" };
+  const removed = await db.notification.deleteMany({ where: { id: parsed.data.id, profileId: profile.id } });
+  return removed.count ? { ok: true } : { ok: false, error: "not_found" };
+}
+
+/** Delete every notification the reader already read. */
+export async function clearReadNotifications(): Promise<ActionResult & { removed?: number }> {
+  const profile = await currentProfileOrNull();
+  if (!profile) return { ok: false, error: "unauthenticated" };
+  const removed = await db.notification.deleteMany({ where: { profileId: profile.id, readAt: { not: null } } });
+  return { ok: true, removed: removed.count };
 }
 
 export async function markAllNotificationsRead(): Promise<ActionResult> {

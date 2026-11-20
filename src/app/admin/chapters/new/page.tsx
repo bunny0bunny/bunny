@@ -27,6 +27,14 @@ export default async function NewChapterPage({
     _max: { number: true },
   }) : [];
   const nextNumbers = new Map(highestNumbers.map(row => [row.seriesId, nextChapterNumber(row._max.number)]));
+  // Every live number per work (drafts included), so people see what is taken before they save.
+  const existing = seriesList.length ? await db.chapter.findMany({
+    where: { seriesId: { in: seriesList.map(series => series.id) }, deletedAt: null },
+    select: { seriesId: true, number: true },
+    orderBy: { number: "asc" },
+  }) : [];
+  const takenNumbers = new Map<string, number[]>();
+  for (const row of existing) takenNumbers.set(row.seriesId, [...(takenNumbers.get(row.seriesId) ?? []), Number(row.number)]);
   const options = seriesList.map((s) => ({
     id: s.id,
     titleAr: getWorkTitle(s),
@@ -34,6 +42,7 @@ export default async function NewChapterPage({
     defaultReadingDirection: s.defaultReadingDirection,
     defaultPresentation: s.defaultPresentation,
     nextNumber: nextNumbers.get(s.id) ?? 1,
+    takenNumbers: takenNumbers.get(s.id) ?? [],
   }));
   // preselect via ?series=
   if (preferred) options.sort((a, b) => (a.id === preferred ? -1 : b.id === preferred ? 1 : 0));

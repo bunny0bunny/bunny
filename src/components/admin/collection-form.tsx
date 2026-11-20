@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { Checkbox } from "@/components/ui/checkbox";
+import { arabicError } from "@/lib/error-messages-ar";
 import {
   Select,
   SelectContent,
@@ -48,6 +49,7 @@ export function CollectionForm({
     initial ?? { slug: "", titleAr: "", descriptionAr: "", theme: "violet", displayOrder: 10, isFeatured: true, seriesSlugs: [] }
   );
   const [msg, setMsg] = useState("");
+  const [confirmRemove, setConfirmRemove] = useState(false);
   const [pending, startTransition] = useTransition();
   const router = useRouter();
 
@@ -66,7 +68,7 @@ export function CollectionForm({
     setMsg("");
     startTransition(async () => {
       const res = await upsertCollection(d);
-      setMsg(res.ok ? "تم الحفظ ✓" : (res.error ?? "تعذّر الحفظ"));
+      setMsg(res.ok ? "تم الحفظ ✓" : arabicError(res.error, "تعذّر الحفظ"));
       if (res.ok) router.refresh();
     });
   };
@@ -79,7 +81,8 @@ export function CollectionForm({
         router.push("/admin/collections");
         router.refresh();
       } else {
-        setMsg(res.error ?? "تعذّر الحذف");
+        setMsg(arabicError(res.error, "تعذّر الحذف"));
+        setConfirmRemove(false);
       }
     });
   };
@@ -148,12 +151,19 @@ export function CollectionForm({
         <Button size="sm" disabled={pending} onClick={save} className="gap-1.5 bg-primary text-primary-foreground hover:bg-primary/90">
           <Save className="size-3.5" /> حفظ
         </Button>
-        {d.id && (
-          <Button size="sm" disabled={pending} variant="outline" className="gap-1.5 border-danger/40 text-danger hover:bg-danger/10" onClick={remove}>
+        {d.id && !confirmRemove && (
+          <Button size="sm" disabled={pending} variant="outline" className="gap-1.5 border-danger/40 text-danger hover:bg-danger/10" onClick={() => setConfirmRemove(true)}>
             <Trash2 className="size-3.5" /> حذف
           </Button>
         )}
       </div>
+      {d.id && confirmRemove && (
+        <div role="alertdialog" aria-label="تأكيد حذف المجموعة" className="flex flex-wrap items-center gap-2 rounded-xl border border-danger/40 bg-danger/10 p-2 text-xs">
+          <span className="font-semibold text-danger">حذف هذه المجموعة نهائيًا؟ الأعمال نفسها لن تُحذف.</span>
+          <Button size="sm" variant="destructive" disabled={pending} onClick={remove} className="h-9 px-3">نعم، احذف</Button>
+          <Button size="sm" variant="ghost" disabled={pending} onClick={() => setConfirmRemove(false)} className="h-9 px-2">إلغاء</Button>
+        </div>
+      )}
     </div>
   );
 }

@@ -2,11 +2,13 @@ import { getWorkTitle } from '@/lib/work-title';
 import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { BookMarked, BookOpenCheck, Check, Flame, MessageSquare, Star, History, Trophy } from "lucide-react";
 import { SiteHeader, SiteFooter, BottomNav } from "@/components/library/chrome";
 import { ProfileSettings } from "@/components/library/profile-settings";
+import { PreferredGenresEditor } from "@/components/library/preferred-genres-editor";
+import { GENRES } from "@/lib/constants";
 import { AccountAvatar } from "@/components/accounts/account-avatar";
+import { profileAvatarPath } from "@/lib/profile-avatar-policy";
 import { ReadingActivityChart } from "@/components/library/reading-activity-chart";
 import {
   requireProfile,
@@ -16,16 +18,17 @@ import {
 } from "@/lib/queries";
 import { getReadingStats } from "@/lib/reading-stats";
 import { EVENT_LABELS } from "@/lib/labels";
+import { db } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
 
-export const metadata: Metadata = { title: "حسابي — مكتبة بانيورا" };
+export const metadata: Metadata = { title: "حسابي" };
 
 function timeAgoAr(date: Date) {
   const diff = Date.now() - new Date(date).getTime();
   const days = Math.floor(diff / 86400000);
   if (days < 1) return "اليوم";
-  if (days < 30) return `قبل ${days} يوم`;
+  if (days < 30) return `قبل ${days === 1 ? "يوم" : days === 2 ? "يومين" : `${days} ${daysUnitAr(days)}`}`;
   return `قبل ${Math.floor(days / 30)} شهر`;
 }
 
@@ -38,21 +41,25 @@ function daysUnitAr(n: number): string {
 }
 
 export default async function ProfilePage() {
-  const profile = await requireProfile();
+  const profile = await requireProfile("/profile");
   // Retire the old seeded placeholder without hiding user-written biographies.
   const bio = profile.bio === "حساب تجريبي ضمن النسخة التجريبية من مكتبة باني." ? "" : (profile.bio ?? "");
-  const [stats, activity, genres, readingStats] = await Promise.all([
+  const [stats, activity, genres, readingStats, ownsTeam] = await Promise.all([
     getProfileStats(profile.id),
     getProfileActivity(profile.id),
     getFavoriteGenres(profile.id),
     getReadingStats(profile.id),
+    db.publicIdentity.count({ where: { ownerProfileId: profile.id, kind: "team" } }).then((n) => n > 0),
   ]);
+  let preferredGenres: string[] = [];
+  try { const raw = JSON.parse(profile.preferredGenresJson || "[]"); preferredGenres = Array.isArray(raw) ? raw.filter((g): g is string => (GENRES as readonly string[]).includes(g)) : []; } catch { preferredGenres = []; }
+
 
   const statCards = [
     { label: "في مكتبتي", value: stats.libraryCount, icon: BookMarked, href: "/library" },
-    { label: "فصل أتممته", value: stats.chaptersRead, icon: BookOpenCheck, href: "/updates" },
-    { label: "تعليق", value: stats.commentCount, icon: MessageSquare, href: "/library" },
-    { label: "تقييم", value: stats.ratingCount, icon: Star, href: "/library" },
+    { label: "فصل أتممته", value: stats.chaptersRead, icon: BookOpenCheck, href: null },
+    { label: "تعليق", value: stats.commentCount, icon: MessageSquare, href: null },
+    { label: "تقييم", value: stats.ratingCount, icon: Star, href: null },
   ];
 
   return (
@@ -64,6 +71,7 @@ export default async function ProfilePage() {
           <header className="flex items-center gap-4">
             <AccountAvatar
               seed={profile.avatarSeed}
+              src={profileAvatarPath(profile.id, profile.avatarKey)}
               name={profile.nickname}
               className="size-16 text-2xl font-bold border border-border"
               brandMarkSize="size-10"
@@ -88,21 +96,28 @@ export default async function ProfilePage() {
 
           <Link href="/following" className="mt-5 inline-flex min-h-11 items-center rounded-lg border border-border px-4 text-sm hover:text-primary">أتابعهم</Link>
 
-          <Link href="/profile/teams" className="ms-3 mt-5 inline-flex min-h-11 items-center rounded-lg border border-border px-4 text-sm hover:text-primary">إدارة فريقي</Link>
+          {ownsTeam && <Link href="/profile/teams" className="ms-3 mt-5 inline-flex min-h-11 items-center rounded-lg border border-border px-4 text-sm hover:text-primary">إدارة فريقي</Link>}
 
           {/* stats */}
           <section aria-label="إحصاءات القراءة" className="mt-7 grid grid-cols-2 gap-3 sm:grid-cols-4">
-            {statCards.map((s) => (
-              <Link
-                key={s.label}
-                href={s.href}
-                className="rounded-2xl border border-border/60 bg-card p-4 transition hover:border-primary/40"
-              >
-                <s.icon className="size-4 text-primary" aria-hidden />
-                <p className="mt-2 text-2xl font-bold tabular-nums">{s.value}</p>
-                <p className="text-xs text-muted-foreground">{s.label}</p>
-              </Link>
-            ))}
+            {statCards.map((s) => {
+              const body = (
+                <>
+                  <s.icon className="size-4 text-primary" aria-hidden />
+                  <p className="mt-2 text-2xl font-bold tabular-nums">{s.value}</p>
+                  <p className="text-xs text-muted-foreground">{s.label}</p>
+                </>
+              );
+              return s.href ? (
+                <Link key={s.label} href={s.href} className="rounded-2xl border border-border/60 bg-card p-4 transition hover:border-primary/40">
+                  {body}
+                </Link>
+              ) : (
+                <div key={s.label} className="rounded-2xl border border-border/60 bg-card p-4">
+                  {body}
+                </div>
+              );
+            })}
           </section>
 
           {/* reading streak (Release D, FD-12) */}
@@ -198,12 +213,14 @@ export default async function ProfilePage() {
             {/* settings */}
             <section aria-label="إعدادات الحساب" className="rounded-2xl border border-border/60 bg-card p-4">
               <h2 className="mb-3 text-sm font-bold">إعدادات الحساب</h2>
-              <ProfileSettings nickname={profile.nickname} bio={bio} avatarSeed={profile.avatarSeed} />
+              <ProfileSettings nickname={profile.nickname} bio={bio} avatarSeed={profile.avatarSeed} avatarPath={profileAvatarPath(profile.id, profile.avatarKey)} uploadsEnabled={process.env.MEDIA_UPLOADS_ENABLED === "1"} />
             </section>
 
             {/* favorite genres */}
             <section aria-label="الأنواع المفضلة" className="rounded-2xl border border-border/60 bg-card p-4">
               <h2 className="mb-3 text-sm font-bold">أنواعك المفضلة</h2>
+              <PreferredGenresEditor initial={preferredGenres} />
+              <h3 className="mb-2 mt-5 text-xs font-semibold text-muted-foreground">من قراءاتك</h3>
               {genres.length === 0 ? (
                 <p className="text-sm text-muted-foreground">أضف أعمالًا إلى مكتبتك لتكتشف ذوقك.</p>
               ) : (
@@ -245,7 +262,7 @@ export default async function ProfilePage() {
                       <span className="min-w-0 flex-1">
                         <span className="block truncate text-sm font-medium">{getWorkTitle(p.series)}</span>
                         <span className="block text-[11px] text-muted-foreground">
-                          الفصل {p.chapter.number} · قارأتم {Math.round(p.percent)}٪
+                          الفصل {p.chapter.number} · قرأت {Math.round(p.percent)}٪
                         </span>
                       </span>
                       <span className="shrink-0 text-[11px] text-muted-foreground">{timeAgoAr(p.updatedAt)}</span>

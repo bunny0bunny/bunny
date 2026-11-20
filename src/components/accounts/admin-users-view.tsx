@@ -28,11 +28,13 @@ import {
 } from "@/components/ui/select";
 import { RoleSelect } from "@/components/admin/role-select";
 import { AccountAvatar } from "@/components/accounts/account-avatar";
-import { ROLE_LABELS, type Role } from "@/lib/constants";
+import { ROLE_CAPABILITIES, ROLE_LABELS, type Role } from "@/lib/constants";
+import { arabicError } from "@/lib/error-messages-ar";
 import {
   createTeamInvitation,
   cancelTeamInvitation,
   setAccountEnabled,
+  removeProfileAvatar,
 } from "@/lib/account-actions";
 
 export type AdminUserItem = {
@@ -41,6 +43,7 @@ export type AdminUserItem = {
   nickname: string;
   role: string;
   avatarSeed?: string | null;
+  avatarPath?: string | null;
   createdAt: string;
   emailVerifiedAt?: string | null;
   disabledAt?: string | null;
@@ -48,6 +51,7 @@ export type AdminUserItem = {
     libraryItems: number;
     comments: number;
     readingProgress: number;
+    assignments?: number;
   };
 };
 
@@ -92,6 +96,7 @@ export function AdminUsersView({
   const [confirmDisableId, setConfirmDisableId] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
+  const [confirmAvatarId, setConfirmAvatarId] = useState<string | null>(null);
 
   const handleCreateInvite = (e: React.FormEvent) => {
     e.preventDefault();
@@ -109,7 +114,7 @@ export function AdminUsersView({
       if (!res.ok) {
         setInviteMsg({
           type: "error",
-          text: res.error ?? "تعذّر إرسال الدعوة. يرجى مراجعة البيانات والمحاولة لاحقًا.",
+          text: arabicError(res.error, "تعذّر إرسال الدعوة. يرجى مراجعة البيانات والمحاولة لاحقًا."),
         });
         return;
       }
@@ -128,7 +133,7 @@ export function AdminUsersView({
     startTransition(async () => {
       const res = await cancelTeamInvitation({ invitationId });
       if (!res.ok) {
-        setActionError(res.error ?? "تعذّر إلغاء الدعوة.");
+        setActionError(arabicError(res.error, "تعذّر إلغاء الدعوة."));
         return;
       }
       router.refresh();
@@ -146,7 +151,20 @@ export function AdminUsersView({
       });
 
       if (!res.ok) {
-        setActionError(res.error ?? "تعذّر تغيير حالة الحساب.");
+        setActionError(arabicError(res.error, "تعذّر تغيير حالة الحساب."));
+        return;
+      }
+      router.refresh();
+    });
+  };
+
+  const handleRemoveAvatar = (profileId: string) => {
+    setActionError(null);
+    setConfirmAvatarId(null);
+    startTransition(async () => {
+      const res = await removeProfileAvatar({ profileId });
+      if (!res.ok) {
+        setActionError(arabicError(res.error, "تعذّر حذف الصورة."));
         return;
       }
       router.refresh();
@@ -218,6 +236,7 @@ export function AdminUsersView({
                 <SelectItem value="admin">مدير</SelectItem>
               </SelectContent>
             </Select>
+            <p className="text-[11px] leading-5 text-muted-foreground">{ROLE_CAPABILITIES[inviteRole]}</p>
           </div>
 
           <Button
@@ -322,6 +341,7 @@ export function AdminUsersView({
                 <div className="flex items-center gap-3">
                   <AccountAvatar
                     seed={u.avatarSeed}
+                    src={u.avatarPath}
                     name={u.nickname}
                     className="size-11 border border-border"
                   />
@@ -359,7 +379,19 @@ export function AdminUsersView({
 
                 <div className="flex flex-wrap items-center gap-3 self-end sm:self-auto">
                   {/* Role select */}
-                  <RoleSelect profileId={u.id} role={u.role as Role} isSelf={isSelf} />
+                  <RoleSelect profileId={u.id} role={u.role as Role} isSelf={isSelf} assignmentCount={u._count?.assignments ?? 0} />
+
+                  {u.avatarPath && (confirmAvatarId === u.id ? (
+                    <div className="flex items-center gap-1.5 rounded-xl border border-danger/40 bg-danger/10 p-1.5 text-xs">
+                      <span className="text-[10px] font-semibold text-danger">حذف صورته المرفوعة؟</span>
+                      <Button type="button" size="sm" variant="destructive" disabled={isPending} onClick={() => handleRemoveAvatar(u.id)} className="h-7 px-2 text-[11px]">نعم، حذف</Button>
+                      <Button type="button" size="sm" variant="ghost" onClick={() => setConfirmAvatarId(null)} className="h-7 px-1.5 text-[11px]">إلغاء</Button>
+                    </div>
+                  ) : (
+                    <Button type="button" size="sm" variant="ghost" onClick={() => setConfirmAvatarId(u.id)} className="h-8 text-xs text-muted-foreground hover:text-danger">
+                      حذف الصورة
+                    </Button>
+                  ))}
 
                   {/* Disable / Enable Action */}
                   {isSelf ? (

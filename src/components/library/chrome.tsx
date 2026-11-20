@@ -1,9 +1,10 @@
 "use client";
+import { signOutAndForget } from "@/lib/sign-out";
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useSession, signOut } from "next-auth/react";
+import { useSession } from "next-auth/react";
 import { BookOpenText, BookMarked, Compass, Library, Search, LogOut, ShieldCheck, UserRound, PenTool, MessageSquarePlus, UsersRound } from "lucide-react";
 import { BrandMark } from "@/components/library/brand-mark";
 import { NotificationBell } from "@/components/library/notification-bell";
@@ -16,7 +17,6 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { AccountAvatar } from "@/components/accounts/account-avatar";
 import { getCurrentUserRole } from "@/lib/actions";
 import type { Role } from "@/lib/constants";
@@ -144,7 +144,7 @@ export function SiteHeader() {
           </form>
 
           {/* Compact navigation keeps translation profiles discoverable without another header row. */}
-          <DropdownMenu><DropdownMenuTrigger asChild><Button variant="ghost" size="icon" className="size-11 text-muted-foreground lg:hidden" aria-label="البحث وقائمة المكتبة"><Search className="size-4" aria-hidden /></Button></DropdownMenuTrigger><DropdownMenuContent align="end"><DropdownMenuItem asChild><Link href="/explore" className="min-h-11 cursor-pointer"><Search className="me-2 size-4" aria-hidden />البحث والاستكشاف</Link></DropdownMenuItem><DropdownMenuItem asChild><Link href="/translators" className="min-h-11 cursor-pointer"><UsersRound className="me-2 size-4" aria-hidden />فرق الترجمة</Link></DropdownMenuItem>{session && <DropdownMenuItem asChild><Link href="/following" className="min-h-11 cursor-pointer">أتابعهم</Link></DropdownMenuItem>}</DropdownMenuContent></DropdownMenu>
+          <DropdownMenu><DropdownMenuTrigger asChild><Button variant="ghost" size="icon" className="size-11 text-muted-foreground lg:hidden" aria-label="البحث وقائمة المكتبة"><Search className="size-4" aria-hidden /></Button></DropdownMenuTrigger><DropdownMenuContent align="end"><DropdownMenuItem asChild><Link href="/explore" className="min-h-11 cursor-pointer"><Search className="me-2 size-4" aria-hidden />البحث والاستكشاف</Link></DropdownMenuItem><DropdownMenuItem asChild><Link href="/translators" className="min-h-11 cursor-pointer"><UsersRound className="me-2 size-4" aria-hidden />فرق الترجمة</Link></DropdownMenuItem>{session && <DropdownMenuItem asChild><Link href="/following" className="min-h-11 cursor-pointer">أتابعهم</Link></DropdownMenuItem>}<DropdownMenuItem asChild><Link href="/requests/new" className="min-h-11 cursor-pointer"><MessageSquarePlus className="me-2 size-4" aria-hidden />اطلب عملًا</Link></DropdownMenuItem></DropdownMenuContent></DropdownMenu>
 
           <Button asChild variant="ghost" size="sm" className="hidden min-h-11 text-muted-foreground xl:inline-flex">
             <Link href="/requests/new"><MessageSquarePlus className="me-1.5 size-4" aria-hidden />اطلب عملًا</Link>
@@ -161,7 +161,8 @@ export function SiteHeader() {
                   aria-label="قائمة الحساب"
                 >
                   <AccountAvatar
-                    seed={(session.user as { avatarSeed?: string })?.avatarSeed}
+                    seed={session.user?.avatarSeed}
+                    src={session.user?.avatarPath}
                     name={session.user?.name}
                     className="size-9 border border-border"
                   />
@@ -186,11 +187,11 @@ export function SiteHeader() {
                 {isStaff && (
                   <DropdownMenuItem asChild>
                     <Link href="/studio" className="cursor-pointer">
-                      <PenTool className="size-4 me-2" aria-hidden /> استوديو المبدعين
+                      <PenTool className="size-4 me-2" aria-hidden /> استوديو الفريق
                     </Link>
                   </DropdownMenuItem>
                 )}
-                {isStaff && (
+                {isStaff && session.user?.role !== "contributor" && (
                   <DropdownMenuItem asChild>
                     <Link href="/admin" className="cursor-pointer">
                       <ShieldCheck className="size-4 me-2" aria-hidden /> لوحة الإدارة
@@ -200,7 +201,7 @@ export function SiteHeader() {
                 <DropdownMenuSeparator />
                 <DropdownMenuItem
                   className="cursor-pointer text-danger focus:text-danger"
-                  onClick={() => signOut({ callbackUrl: "/" })}
+                  onClick={() => signOutAndForget({ callbackUrl: "/" })}
                 >
                   <LogOut className="size-4 me-2" aria-hidden /> تسجيل الخروج
                 </DropdownMenuItem>
@@ -232,8 +233,11 @@ export function BottomNav() {
   ];
   if (pathname.startsWith("/admin") || pathname.startsWith("/read/")) return null;
   return (
+    <>
+    {/* Spacer so the fixed bar never covers the end of the page (footer included). */}
+    <div aria-hidden className="h-14 lg:hidden" />
     <nav
-      className="fixed inset-x-0 bottom-0 z-40 border-t border-border/60 bg-background/90 backdrop-blur-md md:hidden pb-[env(safe-area-inset-bottom)]"
+      className="fixed inset-x-0 bottom-0 z-40 border-t border-border/60 bg-background/90 backdrop-blur-md lg:hidden pb-[env(safe-area-inset-bottom)]"
       aria-label="التنقل السفلي"
     >
       <div className="grid grid-cols-5">
@@ -255,10 +259,13 @@ export function BottomNav() {
         })}
       </div>
     </nav>
+    </>
   );
 }
 
 export function SiteFooter() {
+  const { status } = useSession();
+  const signedIn = status === "authenticated";
   return (
     <footer className="mt-auto border-t border-border/60 bg-card/40">
       <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6">
@@ -285,7 +292,15 @@ export function SiteFooter() {
             <div>
               <p className="mb-2 font-medium text-foreground">الحساب</p>
               <ul className="space-y-1.5 text-muted-foreground">
-                <li><Link className="hover:text-foreground" href="/login">تسجيل الدخول</Link></li>
+                {signedIn ? (
+                  <>
+                    <li><Link className="hover:text-foreground" href="/profile">حسابي</Link></li>
+                    <li><Link className="hover:text-foreground" href="/requests">طلباتي</Link></li>
+                  </>
+                ) : (
+                  <li><Link className="hover:text-foreground" href="/login">تسجيل الدخول</Link></li>
+                )}
+                <li><Link className="hover:text-foreground" href="/requests/new">اطلب عملًا</Link></li>
               </ul>
             </div>
           </div>

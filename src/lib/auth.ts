@@ -1,6 +1,9 @@
 import type { NextAuthOptions } from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
 import { db } from "@/lib/db";
+import { profileAvatarPath } from "@/lib/profile-avatar-policy";
+
+export const EMAIL_NOT_VERIFIED = "EMAIL_NOT_VERIFIED";
 import { verifyPassword } from "@/lib/password";
 import { isRole, type Role } from "@/lib/constants";
 import { allowAccountClient } from "@/lib/account-ratelimit";
@@ -22,6 +25,8 @@ export const authOptions: NextAuthOptions = {
         password: { label: "كلمة المرور", type: "password" },
       },
       async authorize(credentials, request) {
+        // Only said after the password matched, so it never reveals whether an address is registered.
+        let unverified = false;
         try {
           const parsed = loginSchema.safeParse(credentials);
           if (!parsed.success) return null;
@@ -36,11 +41,11 @@ export const authOptions: NextAuthOptions = {
           // Reject disabled accounts
           if (profile.disabledAt) return null;
 
-          // Reject unverified accounts
-          if (!profile.emailVerifiedAt) return null;
-
           const ok = await verifyPassword(password, profile.passwordHash);
           if (!ok) return null;
+
+          // Reject unverified accounts, telling the owner why.
+          if (!profile.emailVerifiedAt) { unverified = true; return null; }
 
           // update last login event (non-blocking failure tolerated)
           try {
@@ -58,6 +63,9 @@ export const authOptions: NextAuthOptions = {
           };
         } catch {
           return null; // safe login failure on exception
+        } finally {
+          // NextAuth turns a thrown error into result.error on the client.
+          if (unverified) throw new Error(EMAIL_NOT_VERIFIED);
         }
       },
     }),
@@ -108,8 +116,9 @@ export const authOptions: NextAuthOptions = {
         session.user.id = (token.uid as string) ?? "";
         session.user.role = (isRole(token.role) ? token.role : "reader") as Role;
         session.user.authVersion = (token.authVersion as number) ?? 0;
-        const current = await db.profile.findUnique({ where: { id: session.user.id }, select: { avatarSeed: true } });
+        const current = await db.profile.findUnique({ where: { id: session.user.id }, select: { avatarSeed: true, avatarKey: true } });
         session.user.avatarSeed = current?.avatarSeed;
+        session.user.avatarPath = profileAvatarPath(session.user.id, current?.avatarKey);
       } else if (session.user) {
         session.user.id = "";
       }

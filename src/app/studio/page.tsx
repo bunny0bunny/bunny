@@ -32,6 +32,8 @@ export const metadata: Metadata = {
 };
 
 const STATUS_FILTER_LABELS: Record<string, string> = {
+  actionable: "يحتاج عملًا",
+  mine: "شغلي",
   all: "الكل",
   review: "قيد المراجعة",
   draft: "مسودة",
@@ -40,6 +42,17 @@ const STATUS_FILTER_LABELS: Record<string, string> = {
   scheduled: "مجدول",
   published: "منشور",
 };
+const ACTIONABLE = ["draft", "changes_requested", "review"];
+const PAGE_SIZE = 50;
+
+function sinceAr(date: Date): string {
+  const minutes = Math.max(0, Math.floor((Date.now() - date.getTime()) / 60000));
+  if (minutes < 60) return minutes <= 1 ? "منذ دقيقة" : `منذ ${minutes} دقيقة`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return hours === 1 ? "منذ ساعة" : `منذ ${hours} ساعة`;
+  const days = Math.floor(hours / 24);
+  return days === 1 ? "منذ يوم" : `منذ ${days} يوم`;
+}
 
 const REVISION_BADGE_STYLES: Record<string, string> = {
   draft: "border-border bg-secondary text-muted-foreground",
@@ -57,7 +70,17 @@ export default async function StudioWorkspacePage({
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const sp = await searchParams;
-  const statusParam = typeof sp.status === "string" ? sp.status : "all";
+  // Default view: what needs someone's hands now.
+  const statusParam = typeof sp.status === "string" && sp.status in STATUS_FILTER_LABELS ? sp.status : "actionable";
+  const seriesParam = typeof sp.series === "string" ? sp.series : null;
+  const pageParam = Math.max(1, Math.min(1000, Number(typeof sp.page === "string" ? sp.page : 1) || 1));
+  const filterHref = (status: string, series = seriesParam, page = 1) => {
+    const q = new URLSearchParams();
+    if (status !== "actionable") q.set("status", status);
+    if (series) q.set("series", series);
+    if (page > 1) q.set("page", String(page));
+    return q.size ? `/studio?${q}` : "/studio";
+  };
 
   // 1. Authenticate & Role Gate
   const actor = await currentProfileOrNull();
@@ -70,12 +93,12 @@ export default async function StudioWorkspacePage({
   // 2. Scoped Series IDs for staff
   let seriesWhere: any = {};
   let canStartChapter = isAdmin;
+  const myAssignments = isAdmin ? [] : await db.seriesAssignment.findMany({
+    where: { profileId: actor.id, series: { deletedAt: null } },
+    select: { seriesId: true, series: { select: { id: true, titleAr: true, titleOriginal: true, coverPath: true } } },
+  });
   if (!isAdmin) {
-    const assignments = await db.seriesAssignment.findMany({
-      where: { profileId: actor.id, series: { deletedAt: null } },
-      select: { seriesId: true },
-    });
-    const assignedIds = assignments.map((a) => a.seriesId);
+    const assignedIds = myAssignments.map((a) => a.seriesId);
     canStartChapter = assignedIds.length > 0;
     seriesWhere = { seriesId: { in: assignedIds } };
   }
@@ -105,8 +128,17 @@ export default async function StudioWorkspacePage({
     orderBy: [{ updatedAt: "desc" }, { number: "asc" }],
   });
 
+  // Chapters this person touched (any editorial event), for the "mine" filter.
+  const mine = new Set((await db.chapterEditorialEvent.findMany({
+    where: { actorId: actor.id, chapterId: { in: chapters.map((c) => c.id) } },
+    distinct: ["chapterId"],
+    select: { chapterId: true },
+  })).map((e) => e.chapterId));
+
   // Calculate status counts
   const counts = {
+    actionable: 0,
+    mine: mine.size,
     all: chapters.length,
     review: 0,
     draft: 0,
@@ -122,6 +154,7 @@ export default async function StudioWorkspacePage({
     if (effectiveStatus in counts) {
       (counts as any)[effectiveStatus]++;
     }
+    if (ACTIONABLE.includes(effectiveStatus)) counts.actionable++;
     return {
       chapter: ch,
       latestRev,
@@ -130,10 +163,15 @@ export default async function StudioWorkspacePage({
     };
   });
 
-  // Filter rows
-  const filteredRows = statusParam === "all"
-    ? rows
-    : rows.filter((r) => r.effectiveStatus === statusParam);
+  // Filter rows, newest work first, then page.
+  const matching = rows
+    .filter((r) => !seriesParam || r.chapter.seriesId === seriesParam)
+    .filter((r) => statusParam === "all" ? true : statusParam === "actionable" ? ACTIONABLE.includes(r.effectiveStatus) : statusParam === "mine" ? mine.has(r.chapter.id) : r.effectiveStatus === statusParam)
+    .sort((a, b) => (b.latestRev?.updatedAt ?? b.chapter.updatedAt).getTime() - (a.latestRev?.updatedAt ?? a.chapter.updatedAt).getTime());
+  const pages = Math.max(1, Math.ceil(matching.length / PAGE_SIZE));
+  const page = Math.min(pageParam, pages);
+  const filteredRows = matching.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+  const seriesFilterName = seriesParam ? (() => { const s = chapters.find((c) => c.seriesId === seriesParam)?.series; return s ? getWorkTitle(s) : null; })() : null;
 
   return (
     <div className="flex min-h-screen flex-col bg-background">
@@ -164,10 +202,35 @@ export default async function StudioWorkspacePage({
 
           {!isAdmin && <TeamWorkflowGuide role={actor.role === 'editor' ? 'editor' : 'contributor'} />}
 
+          {!isAdmin && myAssignments.length === 0 && (
+            <p role="status" className="mb-6 rounded-2xl border border-dashed border-border p-6 text-center text-sm leading-7 text-muted-foreground">
+              لم تُسند إليك أعمال بعد. ستظهر هنا عندما تضيفك الإدارة إلى عمل.
+            </p>
+          )}
+          {myAssignments.length > 0 && (
+            <section aria-label="أعمالي" className="mb-6">
+              <h2 className="mb-3 text-sm font-bold">أعمالي</h2>
+              <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                {myAssignments.map(({ series }) => (
+                  <li key={series.id} className="flex items-center gap-3 rounded-2xl border border-border/60 bg-card p-3">
+                    <img src={series.coverPath || "/art/covers/no-cover.svg"} alt="" className="aspect-[3/4] w-10 shrink-0 rounded-md object-cover" loading="lazy" />
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-semibold">{getWorkTitle(series)}</p>
+                      <div className="mt-1 flex flex-wrap gap-x-3 text-xs">
+                        <Link href={filterHref("all", series.id)} className="inline-flex min-h-9 items-center text-muted-foreground hover:text-foreground">فصوله</Link>
+                        <Link href={`/admin/chapters/new?series=${encodeURIComponent(series.id)}`} className="inline-flex min-h-9 items-center font-semibold text-primary hover:underline">فصل جديد لهذا العمل</Link>
+                      </div>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
+
           {/* Useful Count Cards */}
           <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-6">
             <Link
-              href="/studio"
+              href="/studio?status=all"
               className={`rounded-2xl border p-3.5 transition hover:border-primary/40 ${
                 statusParam === "all" ? "border-primary bg-primary/10" : "border-border/60 bg-card"
               }`}
@@ -222,6 +285,12 @@ export default async function StudioWorkspacePage({
             </Link>
           </div>
 
+          {seriesFilterName && (
+            <p className="mb-3 flex flex-wrap items-center gap-2 text-sm">
+              <span className="text-muted-foreground">فصول عمل:</span> <span className="font-semibold">{seriesFilterName}</span>
+              <Link href={filterHref(statusParam, null)} className="inline-flex min-h-9 items-center text-xs text-primary hover:underline">إظهار كل الأعمال</Link>
+            </p>
+          )}
           {/* Filter Bar */}
           <div className="mb-4 flex flex-wrap items-center gap-1.5 rounded-xl border border-border/60 bg-card p-1.5">
             {Object.entries(STATUS_FILTER_LABELS).map(([key, label]) => {
@@ -236,8 +305,8 @@ export default async function StudioWorkspacePage({
                     isActive ? "bg-accent font-bold text-foreground" : "text-muted-foreground"
                   }`}
                 >
-                  <Link href={key === "all" ? "/studio" : `/studio?status=${key}`}>
-                    {label}
+                  <Link href={filterHref(key)}>
+                    {label}{key in counts ? ` (${(counts as Record<string, number>)[key]})` : ""}
                   </Link>
                 </Button>
               );
@@ -317,7 +386,7 @@ export default async function StudioWorkspacePage({
                           </div>
                           {latestRev && (
                             <span className="text-[11px] text-muted-foreground">
-                              مراجعة #{latestRev.revisionNumber} (v{latestRev.version})
+                              مراجعة #{latestRev.revisionNumber} · آخر تعديل {sinceAr(latestRev.updatedAt)}
                             </span>
                           )}
                           {ch.scheduledFor && (
@@ -375,13 +444,20 @@ export default async function StudioWorkspacePage({
             {filteredRows.length === 0 && (
               <div className="flex flex-col items-center gap-2 p-12 text-center text-muted-foreground">
                 <FileEdit className="size-8" aria-hidden />
-                <p className="text-sm">لا توجد فصول تطابق الفلتر المحدد حاليًا.</p>
+                <p className="text-sm">{statusParam === "actionable" ? "مفيش فصول محتاجة شغل دلوقتي." : "لا توجد فصول تطابق الفلتر المحدد حاليًا."}</p>
                 <Button asChild variant="outline" size="sm" className="mt-2 min-h-[44px]">
-                  <Link href="/studio">عرض كل الفصول</Link>
+                  <Link href={filterHref("all", null)}>عرض كل الفصول</Link>
                 </Button>
               </div>
             )}
           </div>
+          {pages > 1 && (
+            <nav aria-label="صفحات الفصول" className="mt-4 flex items-center justify-between text-sm">
+              {page > 1 ? <Link href={filterHref(statusParam, seriesParam, page - 1)} className="inline-flex min-h-11 items-center rounded-lg border border-border px-4">السابق</Link> : <span />}
+              <span className="text-muted-foreground">صفحة {page} من {pages}</span>
+              {page < pages ? <Link href={filterHref(statusParam, seriesParam, page + 1)} className="inline-flex min-h-11 items-center rounded-lg border border-border px-4">التالي</Link> : <span />}
+            </nav>
+          )}
         </div>
       </main>
       <SiteFooter />

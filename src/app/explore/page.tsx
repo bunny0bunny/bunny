@@ -18,8 +18,8 @@ import { Button } from "@/components/ui/button";
 export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
-  title: "استكشف المكتبة — مكتبة بانيورا",
-  description: "اكتشف آلاف الفصول والقصص المصورة والروايات العربية المنسقة بعناية.",
+  title: "استكشف المكتبة",
+  description: "اكتشف المانجا والمانهوا والروايات العربية المنسقة بعناية.",
 };
 
 function EmptyState({
@@ -85,7 +85,11 @@ export default async function ExplorePage({
     genre: get("genre"),
     status: get("status"),
     sort: get("sort") ?? "popular",
+    hideAdult: get("adult") === "hide",
   };
+  // Toggle link that keeps every other filter.
+  const adultToggle = new URLSearchParams(Object.entries(sp).flatMap(([k, v]) => (typeof v === "string" && k !== "adult" ? [[k, v]] : [])));
+  if (!filters.hideAdult) adultToggle.set("adult", "hide");
 
   const series = await getPublishedSeries(filters);
   const hasFilters = Boolean(
@@ -121,6 +125,9 @@ export default async function ExplorePage({
               <div className="min-w-0 flex-1 w-full space-y-4">
                 {/* Search Input */}
                 <ExploreSearchInput />
+                <Link href={`/explore${adultToggle.size ? `?${adultToggle}` : ""}`} aria-pressed={filters.hideAdult} className={`inline-flex min-h-11 items-center rounded-lg border px-3 text-xs font-medium ${filters.hideAdult ? "border-primary/60 bg-primary/15 text-primary" : "border-border text-muted-foreground hover:text-foreground"}`}>
+                  {filters.hideAdult ? "أعمال +18 مخفية · إظهارها" : "إخفاء أعمال +18"}
+                </Link>
                 <ExploreMobileCategoryTabs />
 
                 {/* Mobile Filter Controls Row (Sheet trigger + Sort + Result count) */}

@@ -76,3 +76,9 @@ export function hasReadLocal(seriesSlug: string, chapterNumber: number): boolean
   if (!p) return false;
   return p.chapterNumber > chapterNumber || (p.chapterNumber === chapterNumber && (p.completed === true || p.percent >= 99));
 }
+
+/** Forget this device's reading positions (on sign-out, or after they were merged into an account). */
+export function clearLocalProgress() {
+  if (typeof window === "undefined") return;
+  try { window.localStorage.removeItem(KEY); } catch { /* storage unavailable */ }
+}

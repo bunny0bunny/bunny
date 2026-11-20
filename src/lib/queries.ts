@@ -8,6 +8,7 @@ import { getServerSession } from "next-auth";
 import { redirect } from "next/navigation";
 import { authOptions } from "@/lib/auth";
 import { db } from "@/lib/db";
+import { profileAvatarPath } from "@/lib/profile-avatar-policy";
 import { CATEGORIES, FORMATS } from "@/lib/constants";
 import { scoreDocument, suggestTitle, tokenizeArabic } from "@/lib/arabic-search";
 import type { Category, CommentStatus, Format, Role, SeriesStatus, Workflow } from "@/lib/constants";
@@ -24,13 +25,18 @@ export async function getSession() {
   return getServerSession(authOptions);
 }
 
-export async function requireProfile() {
+/**
+ * `next` is an internal path to return to after signing in. The login form
+ * validates it again before navigating, so only same-site paths are honoured.
+ */
+export async function requireProfile(next?: string) {
+  const loginHref = next && next.startsWith("/") && !next.startsWith("//") ? `/login?next=${encodeURIComponent(next)}` : "/login";
   const session = await getSession();
-  if (!session?.user?.id) redirect("/login");
+  if (!session?.user?.id) redirect(loginHref);
   const profile = await db.profile.findUnique({ where: { id: session.user.id } });
-  if (!profile || profile.disabledAt || !profile.emailVerifiedAt) redirect("/login");
+  if (!profile || profile.disabledAt || !profile.emailVerifiedAt) redirect(loginHref);
   if (profile.authVersion !== session.user.authVersion) {
-    redirect("/login");
+    redirect(loginHref);
   }
   return profile;
 }
@@ -97,6 +103,7 @@ export type ExploreFilters = {
   genre?: string;
   status?: string;
   sort?: string; // popular | newest | rating
+  hideAdult?: boolean;
 };
 
 export function toCard(s: {
@@ -171,6 +178,7 @@ export async function getPublishedSeries(filters: ExploreFilters): Promise<Serie
   if (filters.format && (FORMATS as readonly string[]).includes(filters.format)) where.format = filters.format;
   if (filters.status && ["ongoing", "completed", "hiatus"].includes(filters.status))
     where.status = filters.status;
+  if (filters.hideAdult) where.isAdult = false;
 
   const rows = await db.series.findMany({
     where,
@@ -411,30 +419,46 @@ export type ContinueReadingItem = {
   chapterTitle: string;
   percent: number;
   updatedAt: Date;
+  /** The previous chapter is finished; this is the next one to start. */
+  nextChapter?: boolean;
 };
 
-export async function getContinueReading(profileId: string, limit = 3): Promise<ContinueReadingItem[]> {
+export async function getContinueReading(profileId: string, limit = 3, options: { includeNext?: boolean } = {}): Promise<ContinueReadingItem[]> {
+  const includeNext = options.includeNext ?? true;
+  const seriesSelect = { slug: true, titleAr: true, titleOriginal: true, coverPath: true, accent: true, format: true, isAdult: true } as const;
+  // Latest position per work first, then de-duplicate: several open chapters of one work must not crowd out other works.
   const rows = await db.readingProgress.findMany({
-    where: { profileId, completed: false, percent: { gt: 0, lt: 99 }, chapter: { ...liveChapterWhere(), isPremiumDemo: false } },
-    orderBy: { updatedAt: "desc" },
-    take: limit,
-    include: {
-      series: { select: { slug: true, titleAr: true, titleOriginal: true, coverPath: true, accent: true, format: true, isAdult: true } },
-      chapter: { select: { number: true, titleAr: true } },
-    },
+    where: { profileId, series: { deletedAt: null }, chapter: { ...liveChapterWhere(), isPremiumDemo: false }, ...(includeNext ? {} : { completed: false, percent: { gt: 0, lt: 99 } }) },
+    orderBy: [{ updatedAt: "desc" }, { id: "desc" }],
+    take: Math.min(500, Math.max(limit * 6, 30)),
+    include: { series: { select: seriesSelect }, chapter: { select: { number: true, titleAr: true } } },
   });
-  return rows.map((r) => ({
-    seriesSlug: r.series.slug,
-    seriesTitle: getWorkTitle(r.series),
-    isAdult: r.series.isAdult,
-    coverPath: displayCover(r.series.coverPath),
-    accent: r.series.accent,
-    format: r.series.format as Format,
-    chapterNumber: r.chapter.number,
-    chapterTitle: getChapterTitle(r.chapter),
-    percent: r.percent,
-    updatedAt: r.updatedAt,
-  }));
+  const latest = new Map<string, (typeof rows)[number]>();
+  for (const row of rows) if (!latest.has(row.seriesId)) latest.set(row.seriesId, row);
+  const finished = (row: (typeof rows)[number]) => row.completed || row.percent >= 99;
+  const unfinished = [...latest.values()].filter((row) => !finished(row) && row.percent > 0);
+  // When the latest chapter of a work is finished, "continue" means its next readable chapter.
+  const done = includeNext ? [...latest.values()].filter(finished) : [];
+  const nextChapters = done.length
+    ? await db.chapter.findMany({
+        where: { ...liveChapterWhere(), isPremiumDemo: false, OR: done.map((row) => ({ seriesId: row.seriesId, number: { gt: row.chapter.number } })) },
+        orderBy: [{ number: "asc" }],
+        select: { seriesId: true, number: true, titleAr: true },
+      })
+    : [];
+  const nextBySeries = new Map<string, (typeof nextChapters)[number]>();
+  for (const chapter of nextChapters) if (!nextBySeries.has(chapter.seriesId)) nextBySeries.set(chapter.seriesId, chapter);
+  const items: ContinueReadingItem[] = [];
+  for (const row of latest.values()) {
+    const base = { seriesSlug: row.series.slug, seriesTitle: getWorkTitle(row.series), isAdult: row.series.isAdult, coverPath: displayCover(row.series.coverPath), accent: row.series.accent, format: row.series.format as Format, updatedAt: row.updatedAt };
+    if (unfinished.includes(row)) items.push({ ...base, chapterNumber: row.chapter.number, chapterTitle: getChapterTitle(row.chapter), percent: row.percent });
+    else {
+      const next = nextBySeries.get(row.seriesId);
+      if (next) items.push({ ...base, chapterNumber: next.number, chapterTitle: getChapterTitle(next), percent: 0, nextChapter: true });
+    }
+    if (items.length >= limit) break;
+  }
+  return items;
 }
 
 /* ------------------------------------------------------------------ */
@@ -748,24 +772,32 @@ export type CommentView = {
   body: string;
   createdAt: Date;
   status: CommentStatus;
-  author: { id: string; nickname: string; avatarSeed: string; role: string };
+  author: { id: string; nickname: string; avatarSeed: string; role: string; avatarPath: string | null };
   chapterNumber: number | null;
   likeCount: number;
   likedByMe: boolean;
 };
 
+export const COMMENTS_PAGE_SIZE = 30;
+
+/**
+ * Public comments, newest first. "flagged" comments stay public while they
+ * wait for a moderator; only "hidden" ones are withheld.
+ */
 export async function getVisibleComments(
   seriesId: string,
   chapterId: string | null,
   viewerProfileId?: string | null,
-  limit = 30
+  limit = COMMENTS_PAGE_SIZE,
+  offset = 0
 ): Promise<CommentView[]> {
   const rows = await db.comment.findMany({
-    where: { seriesId, chapterId, series: { deletedAt: null }, OR: [{ chapterId: null }, { chapter: liveChapterWhere() }], status: "visible" },
-    orderBy: { createdAt: "desc" },
+    where: { seriesId, chapterId, series: { deletedAt: null }, OR: [{ chapterId: null }, { chapter: liveChapterWhere() }], status: { in: ["visible", "flagged"] } },
+    orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+    skip: offset,
     take: limit,
     include: {
-      profile: { select: { id: true, nickname: true, avatarSeed: true, role: true } },
+      profile: { select: { id: true, nickname: true, avatarSeed: true, role: true, avatarKey: true, disabledAt: true } },
       chapter: { select: { number: true } },
       _count: { select: { likes: true } },
       likes: { select: { profileId: true } },
@@ -776,7 +808,7 @@ export async function getVisibleComments(
     body: c.body,
     createdAt: c.createdAt,
     status: c.status as CommentStatus,
-    author: c.profile,
+    author: { id: c.profile.id, nickname: c.profile.nickname, avatarSeed: c.profile.avatarSeed, role: c.profile.role, avatarPath: c.profile.disabledAt ? null : profileAvatarPath(c.profile.id, c.profile.avatarKey) },
     chapterNumber: c.chapter?.number ?? null,
     likeCount: c._count.likes,
     likedByMe: viewerProfileId ? c.likes.some((l) => l.profileId === viewerProfileId) : false,
@@ -784,7 +816,7 @@ export async function getVisibleComments(
 }
 
 export async function getCommentCount(seriesId: string) {
-  return db.comment.count({ where: { seriesId, series: { deletedAt: null }, OR: [{ chapterId: null }, { chapter: liveChapterWhere() }], status: "visible" } });
+  return db.comment.count({ where: { seriesId, series: { deletedAt: null }, OR: [{ chapterId: null }, { chapter: liveChapterWhere() }], status: { in: ["visible", "flagged"] } } });
 }
 
 export async function getUserRating(profileId: string | null, seriesId: string) {
@@ -799,7 +831,7 @@ export async function getProfileStats(profileId: string) {
   const [libraryCount, chaptersRead, commentCount, ratingCount, recentProgress] = await Promise.all([
     db.libraryItem.count({ where: { profileId, series: { deletedAt: null } } }),
     db.readingProgress.count({ where: { profileId, completed: true, chapter: liveChapterWhere() } }),
-    db.comment.count({ where: { profileId, status: "visible", series: { deletedAt: null }, OR: [{ chapterId: null }, { chapter: { deletedAt: null } }] } }),
+    db.comment.count({ where: { profileId, status: { in: ["visible", "flagged"] }, series: { deletedAt: null }, OR: [{ chapterId: null }, { chapter: { deletedAt: null } }] } }),
     db.rating.count({ where: { profileId, series: { deletedAt: null } } }),
     db.readingProgress.findMany({
       where: { profileId, chapter: liveChapterWhere() },
@@ -846,7 +878,7 @@ export async function getModerationQueue() {
       where: { series: { deletedAt: null }, OR: [{ chapterId: null }, { chapter: { deletedAt: null } }], status: { in: ["flagged", "hidden"] as ("flagged" | "hidden")[] } },
       orderBy: { updatedAt: "desc" },
       include: {
-        profile: { select: { nickname: true, avatarSeed: true } },
+        profile: { select: { id: true, nickname: true, avatarSeed: true, avatarKey: true } },
         series: { select: { slug: true, titleAr: true, titleOriginal: true } },
         chapter: { select: { number: true } },
         reports: { include: { profile: { select: { nickname: true } } } },
@@ -864,9 +896,9 @@ export async function getAdminUsers() {
   return db.profile.findMany({
     orderBy: { createdAt: "asc" },
     select: {
-      id: true, email: true, nickname: true, role: true, avatarSeed: true, createdAt: true,
+      id: true, email: true, nickname: true, role: true, avatarSeed: true, avatarKey: true, createdAt: true,
       emailVerifiedAt: true, disabledAt: true,
-      _count: { select: { comments: true, libraryItems: true, readingProgress: true } },
+      _count: { select: { comments: true, libraryItems: true, readingProgress: true, assignments: true } },
     },
   });
 }
@@ -908,7 +940,7 @@ export async function getDashboardActivity(days = 14): Promise<DashboardPoint[]>
 
 export async function getCommunityCounts() {
   const [comments, ratings, libraryItems, avg] = await Promise.all([
-    db.comment.count({ where: { series: { deletedAt: null }, OR: [{ chapterId: null }, { chapter: { deletedAt: null } }], status: "visible" } }),
+    db.comment.count({ where: { series: { deletedAt: null }, OR: [{ chapterId: null }, { chapter: { deletedAt: null } }], status: { in: ["visible", "flagged"] } } }),
     db.rating.count({ where: { series: { deletedAt: null } } }),
     db.libraryItem.count({ where: { series: { deletedAt: null } } }),
     db.rating.aggregate({ where: { series: { deletedAt: null } }, _avg: { value: true } }),
@@ -958,7 +990,7 @@ export async function getStudioOverview(): Promise<StudioSeriesRow[]> {
   });
   if (rows.length === 0) return [];
   const [commentCounts, topEvents] = await Promise.all([
-    db.comment.groupBy({ by: ["seriesId"], where: { series: { deletedAt: null }, OR: [{ chapterId: null }, { chapter: { deletedAt: null } }], status: "visible" }, _count: { _all: true } }),
+    db.comment.groupBy({ by: ["seriesId"], where: { series: { deletedAt: null }, OR: [{ chapterId: null }, { chapter: { deletedAt: null } }], status: { in: ["visible", "flagged"] } }, _count: { _all: true } }),
     db.analyticsEvent.groupBy({
       by: ["seriesId", "chapterId"],
       where: { type: "read_start", chapterId: { not: null } },

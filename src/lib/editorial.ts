@@ -127,6 +127,22 @@ export async function openOrCreateDraft(chapterId: string): Promise<EditorialRes
   }, { invalidate: false });
 }
 
+/**
+ * What the studio page shows: the open (pending) revision if there is one, otherwise the latest
+ * revision read-only. Unlike openOrCreateDraft it never forks a new draft, so merely opening a
+ * published chapter leaves no stray drafts behind. Lazy initialization of legacy chapters still runs.
+ */
+export async function getWorkingRevision(chapterId: string): Promise<EditorialResult & { readOnly?: boolean }> {
+  return withSerializableTx(async (tx, actor) => {
+    const chapter = await tx.chapter.findUnique({ where: { id: chapterId } });
+    if (!chapter || chapter.deletedAt) return { ok: false, error: "not_found" };
+    if (!await checkStaffSeriesAccess(tx, actor, chapter.seriesId)) return { ok: false, error: "forbidden" };
+    await ensureChapterRevisionsInitialized(tx, chapterId);
+    const latest = await tx.chapterRevision.findFirstOrThrow({ where: { chapterId }, orderBy: { revisionNumber: "desc" } });
+    return { ok: true, revision: latest, readOnly: !pendingStates.some(state => state === latest.status) };
+  }, { invalidate: false });
+}
+
 export async function editableRevision(tx: Tx, actor: Actor, input: VersionInput) {
   const revision = await tx.chapterRevision.findUnique({ where: { id: input.revisionId }, include: { chapter: { include: { series: true } } } });
   if (!revision || revision.chapter.deletedAt || revision.chapter.series.deletedAt) return { error: "not_found" } as const;
@@ -139,11 +155,14 @@ export async function editableRevision(tx: Tx, actor: Actor, input: VersionInput
   return { revision } as const;
 }
 
-export async function updateDraftSnapshot(input: VersionInput & { titleAr?: string; readingDirection?: ReadingDirection; isPremiumDemo?: boolean; novelBody?: string; pages?: unknown }): Promise<EditorialResult> {
+export async function updateDraftSnapshot(input: VersionInput & { titleAr?: string; readingDirection?: ReadingDirection; isPremiumDemo?: boolean; novelBody?: string; pages?: unknown; confirmLeaveReview?: boolean }): Promise<EditorialResult> {
   return withSerializableTx(async (tx, actor) => {
     const found = await editableRevision(tx, actor, input);
     if (found.error) return { ok: false, error: found.error };
     const revision = found.revision!;
+    // Saving takes a revision out of review; the editor must say so explicitly.
+    const leavesReview = revision.status === "review";
+    if (leavesReview && input.confirmLeaveReview !== true) return { ok: false, error: "leaves_review" };
     if (revision.pendingUploadId) return { ok: false, error: "upload_pending" };
     if (input.isPremiumDemo !== undefined && actor.role !== "admin") return { ok: false, error: "forbidden" };
     if (input.titleAr !== undefined && (typeof input.titleAr !== "string" || input.titleAr.trim().length > 300)) return { ok: false, error: "عنوان الفصل غير صالح" };
@@ -151,8 +170,14 @@ export async function updateDraftSnapshot(input: VersionInput & { titleAr?: stri
     if (input.readingDirection !== undefined && !["rtl", "ltr"].includes(input.readingDirection)) return { ok: false, error: "اتجاه القراءة غير صالح" };
     const pages = input.pages === undefined ? null : validatePagesSnapshot(input.pages);
     const currentPages = validatePagesSnapshot(revision.pagesJson);
-    if (input.pages !== undefined && (currentPages?.some(page => page.imagePath.startsWith("/api/media/")) || pages?.some(page => page.imagePath.startsWith("/api/media/"))) && JSON.stringify(pages) !== JSON.stringify(currentPages)) {
-      return { ok: false, error: "لتغيير صفحات الفصل، استبدل ملف PDF كاملًا" };
+    // Imported (PDF) pages can be removed or reordered, never added or duplicated here:
+    // new pages only arrive through an upload. Assets stay owned by the chapter.
+    if (input.pages !== undefined && pages && (currentPages?.some(page => page.imagePath.startsWith("/api/media/")) || pages.some(page => page.imagePath.startsWith("/api/media/")))) {
+      const current = new Set((currentPages ?? []).map(page => `${page.imagePath}|${page.width}|${page.height}`));
+      const next = pages.map(page => `${page.imagePath}|${page.width}|${page.height}`);
+      if (!pages.length || new Set(next).size !== next.length || next.some(key => !current.has(key))) {
+        return { ok: false, error: "يمكن حذف صفحات النسخة الحالية أو ترتيبها فقط؛ لإضافة صفحات ارفع ملف PDF جديدًا" };
+      }
     }
     if (input.pages !== undefined && (!pages || !await pagesBelongToChapter(tx, revision.chapterId, pages))) return { ok: false, error: "يمكن ترتيب صفحات هذا الفصل الموجودة فقط" };
     const revoked = ["approved", "scheduled"].includes(revision.status);
@@ -160,7 +185,8 @@ export async function updateDraftSnapshot(input: VersionInput & { titleAr?: stri
       titleAr: input.titleAr?.trim(), novelBody: input.novelBody, readingDirection: input.readingDirection, isPremiumDemo: input.isPremiumDemo,
       ...(pages ? { pagesJson: pages } : {}), status: "draft", approvedAt: null, approvedById: null, scheduledFor: null, version: { increment: 1 },
     } });
-    await audit(tx, actor, updated, revoked ? "edit_revoked_approval" : "update_draft", revoked ? "تعديل النسخة ألغى اعتمادها وجدولتها" : undefined);
+    await audit(tx, actor, updated, revoked ? "edit_revoked_approval" : leavesReview ? "edit_left_review" : "update_draft", revoked ? "تعديل النسخة ألغى اعتمادها وجدولتها" : leavesReview ? "التعديل سحب النسخة من المراجعة" : undefined);
+    if (leavesReview) await notifyEditorialTransition(tx, { action: "left_review", actorId: actor.id, seriesId: revision.chapter.seriesId, chapterId: revision.chapterId });
     if (revoked) await notifyEditorialTransition(tx, { action: "approval_invalidated", actorId: actor.id, seriesId: revision.chapter.seriesId, chapterId: revision.chapterId });
     return { ok: true, revision: updated };
   });
@@ -198,14 +224,30 @@ async function transition(input: VersionInput & { reason?: string; note?: string
     } });
     const names = { submit: "submit_for_review", return: "return_for_changes", recommend: "recommend_approval", approve: "approve_revision", schedule: "schedule_revision", cancel: "cancel_schedule" };
     await audit(tx, actor, updated, names[action], input.reason?.trim() || input.note?.trim(), { scheduledFor: updated.scheduledFor?.toISOString() ?? null });
+    const submitterId = action === "submit" ? null : (await tx.chapterEditorialEvent.findFirst({ where: { revisionId: revision.id, action: "submit_for_review" }, orderBy: { createdAt: "desc" }, select: { actorId: true } }))?.actorId ?? null;
     if (action === "submit" || action === "recommend" || action === "return") {
-      await notifyEditorialTransition(tx, { action, actorId: actor.id, seriesId: revision.chapter.seriesId, chapterId: revision.chapterId });
+      await notifyEditorialTransition(tx, { action, actorId: actor.id, seriesId: revision.chapter.seriesId, chapterId: revision.chapterId, submitterId });
     }
+    if (action === "approve") await notifyEditorialTransition(tx, { action: "approved", actorId: actor.id, seriesId: revision.chapter.seriesId, chapterId: revision.chapterId, submitterId });
     if (action === "schedule" || action === "cancel") await notifyEditorialTransition(tx, { action: action === "schedule" ? "scheduled" : "cancelled", actorId: actor.id, seriesId: revision.chapter.seriesId, chapterId: revision.chapterId });
     return { ok: true, revision: updated };
   });
 }
 export const submitForReview = (input: VersionInput) => transition(input, "submit");
+/** Take one's own submission back out of review to keep editing; reviewers are told they can stop. */
+export async function withdrawFromReview(input: VersionInput): Promise<EditorialResult> {
+  return withSerializableTx(async (tx, actor) => {
+    const found = await editableRevision(tx, actor, input);
+    if (found.error) return { ok: false, error: found.error };
+    const revision = found.revision!;
+    if (revision.status !== "review") return { ok: false, error: "الإجراء غير متاح لحالة النسخة الحالية" };
+    if (revision.pendingUploadId) return { ok: false, error: "upload_pending" };
+    const updated = await tx.chapterRevision.update({ where: { id: revision.id }, data: { status: "draft", version: { increment: 1 } } });
+    await audit(tx, actor, updated, "withdraw_from_review");
+    await notifyEditorialTransition(tx, { action: "left_review", actorId: actor.id, seriesId: revision.chapter.seriesId, chapterId: revision.chapterId });
+    return { ok: true, revision: updated };
+  });
+}
 export const returnForChanges = (input: VersionInput & { reason: string }) => transition(input, "return");
 export const recommendApproval = (input: VersionInput & { note?: string }) => transition(input, "recommend");
 export const approveRevision = (input: VersionInput) => transition(input, "approve");
