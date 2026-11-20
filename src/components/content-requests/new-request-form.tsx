@@ -39,7 +39,7 @@ export function NewRequestForm({ initialTitle = "" }: { initialTitle?: string })
     busy.current = true; setPending(true); setError("");
     submission.current ??= createSubmission(crypto.randomUUID());
     const result = await submission.current({ title, category, referenceUrl, message });
-    if (result.ok) { router.push(`/requests/${encodeURIComponent(result.id)}`); return; }
+    if (result.ok) { router.push(`/requests/${encodeURIComponent(result.id)}${result.duplicate ? "?duplicate=1" : ""}`); return; }
     setError(result.error); setUncertain(Boolean(result.uncertain)); busy.current = false; setPending(false);
   }
   return <form onSubmit={submit} className="space-y-6 rounded-2xl border border-border bg-card p-5 sm:p-7">

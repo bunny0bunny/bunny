@@ -598,6 +598,8 @@ model ContentRequest {
   statusNote String?
   fulfilledSeriesId String?
   mergedIntoId String?
+  /// Set when the requester withdraws it; the row stays for quotas and group history.
+  withdrawnAt DateTime?
   version Int @default(1)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -606,7 +608,8 @@ model ContentRequest {
   mergedInto ContentRequest? @relation("RequestGroup", fields:[mergedIntoId], references:[id], onDelete:Restrict)
   members ContentRequest[] @relation("RequestGroup")
   @@unique([profileId,submissionId])
-  @@unique([profileId,category,normalizedTitle])
+  // Partial unique index in SQL: one live request per title ("withdrawnAt" IS NULL).
+  @@index([profileId,category,normalizedTitle])
   @@index([profileId,createdAt])
   @@index([mergedIntoId,status,createdAt])
   @@index([fulfilledSeriesId])

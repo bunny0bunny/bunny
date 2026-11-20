@@ -5,6 +5,7 @@ import { db } from "@/lib/db";
 import { currentProfileOrNull, getPublishedSeries, liveChapterWhere } from "@/lib/queries";
 import { hashRateLimitKey } from "@/lib/account-ratelimit";
 import { revalidatePath } from "next/cache";
+import { z } from "zod";
 import { createRequestSchema, statusRequestSchema, replyRequestSchema, mergeRequestSchema, normalizeRequestTitle, requestPage } from "./policy";
 import { REQUEST_STATUS_LABELS, type RequestResult, type ReaderRequest, type AdminRequestSummary, type AdminRequestDetail, type CatalogWork, type RequestStatus } from "./contracts";
 type Tx = Prisma.TransactionClient;
@@ -12,6 +13,10 @@ type Actor = {id:string;role:string};
 const fail = (error:string): {ok:false;error:string} => ({ok:false,error});
 const ok = <T>(data:T):RequestResult<T> => ({ok:true,data});
 const groupWhere = (id:string) => ({OR:[{id},{mergedIntoId:id}]});
+/** Admin lists skip groups whose every requester withdrew. */
+const stillWanted:Prisma.ContentRequestWhereInput = {OR:[{withdrawnAt:null},{members:{some:{withdrawnAt:null}}}]};
+/** A reader may withdraw until the team starts preparing the work. */
+const WITHDRAWABLE:RequestStatus[] = ["new","reviewing","declined"];
 
 /** Recheck identity, verification and current role inside the same serializable snapshot as each operation. */
 async function authenticated<T>(admin:boolean, work:(tx:Tx,actor:Actor)=>Promise<RequestResult<T>>, mutate=false):Promise<RequestResult<T>> {
@@ -66,7 +71,7 @@ export async function createContentRequest(input:unknown):Promise<RequestResult<
     if(!await attemptAllowed(tx,actor.id))return fail("rate_limited");
     const parsed=createRequestSchema.safeParse(input);if(!parsed.success)return fail("invalid_input");
     const data=parsed.data,normalizedTitle=normalizeRequestTitle(data.title);
-    const duplicate=await tx.contentRequest.findUnique({where:{profileId_submissionId:{profileId:actor.id,submissionId:data.submissionId}}}) ?? await tx.contentRequest.findUnique({where:{profileId_category_normalizedTitle:{profileId:actor.id,category:data.category,normalizedTitle}}});
+    const duplicate=await tx.contentRequest.findUnique({where:{profileId_submissionId:{profileId:actor.id,submissionId:data.submissionId}}}) ?? await tx.contentRequest.findFirst({where:{profileId:actor.id,category:data.category,normalizedTitle,withdrawnAt:null}});
     if(duplicate)return ok({id:duplicate.id,duplicate:true});
     const recent=await tx.contentRequest.count({where:{profileId:actor.id,createdAt:{gte:new Date(Date.now()-86400000)}}});
     if(recent>=3)return fail("quota_exceeded");
@@ -80,40 +85,41 @@ async function readerRequest(tx:Tx,row:ContentRequest):Promise<ReaderRequest>{
   const root=row.mergedIntoId?await tx.contentRequest.findUnique({where:{id:row.mergedIntoId}}):row;
   if(!root)throw new Error("Missing content request group");
   const series=root.status==="available"&&root.fulfilledSeriesId?await tx.series.findFirst({where:{id:root.fulfilledSeriesId,deletedAt:null,chapters:{some:liveChapterWhere()}},select:{id:true,titleAr:true,titleOriginal:true,slug:true}}):null;
-  return {id:row.id,title:row.title,category:row.category,referenceUrl:row.referenceUrl,message:row.message,reply:row.reply,status:root.status,statusNote:root.statusNote,createdAt:row.createdAt.toISOString(),updatedAt:new Date(Math.max(row.updatedAt.getTime(),root.updatedAt.getTime())).toISOString(),availableSeries:series?{id:series.id,title:getWorkTitle(series),href:`/series/${series.slug}`}:null};
+  const memberCount=row.mergedIntoId?0:await tx.contentRequest.count({where:{mergedIntoId:row.id}});
+  return {id:row.id,version:row.version,canWithdraw:WITHDRAWABLE.includes(root.status),canEdit:root.status==="new"&&!row.mergedIntoId&&memberCount===0,title:row.title,category:row.category,referenceUrl:row.referenceUrl,message:row.message,reply:row.reply,status:root.status,statusNote:root.statusNote,createdAt:row.createdAt.toISOString(),updatedAt:new Date(Math.max(row.updatedAt.getTime(),root.updatedAt.getTime())).toISOString(),availableSeries:series?{id:series.id,title:getWorkTitle(series),href:`/series/${series.slug}`}:null};
 }
 export async function listMyRequests(input?:{page?:number}):Promise<RequestResult<{items:ReaderRequest[];page:number;pages:number;total:number}>>{
   return authenticated(false,async(tx,actor)=>{
-    const total=await tx.contentRequest.count({where:{profileId:actor.id}}),pages=Math.max(1,Math.ceil(total/50)),page=Math.min(requestPage(input?.page),pages);
-    const rows=await tx.contentRequest.findMany({where:{profileId:actor.id},orderBy:[{createdAt:"desc"},{id:"desc"}],skip:(page-1)*50,take:50});
+    const total=await tx.contentRequest.count({where:{profileId:actor.id,withdrawnAt:null}}),pages=Math.max(1,Math.ceil(total/50)),page=Math.min(requestPage(input?.page),pages);
+    const rows=await tx.contentRequest.findMany({where:{profileId:actor.id,withdrawnAt:null},orderBy:[{createdAt:"desc"},{id:"desc"}],skip:(page-1)*50,take:50});
     return ok({items:await Promise.all(rows.map(row=>readerRequest(tx,row))),total,pages,page});
   });
 }
 export async function getMyRequest(id:string):Promise<RequestResult<ReaderRequest>>{
   return authenticated(false,async(tx,actor)=>{
     if(typeof id!=="string"||id.length>128)return fail("not_found");
-    const row=await tx.contentRequest.findFirst({where:{id,profileId:actor.id}});
+    const row=await tx.contentRequest.findFirst({where:{id,profileId:actor.id,withdrawnAt:null}});
     return row?ok(await readerRequest(tx,row)):fail("not_found");
   });
 }
-const summaryInclude={members:{select:{profileId:true}}} satisfies Prisma.ContentRequestInclude;
+const summaryInclude={members:{where:{withdrawnAt:null},select:{profileId:true}}} satisfies Prisma.ContentRequestInclude;
 function summary(row:ContentRequest & {members:{profileId:string}[]}):AdminRequestSummary{
-  return {id:row.id,title:row.title,category:row.category,status:row.status,version:row.version,requesterCount:new Set([row.profileId,...row.members.map(member=>member.profileId)]).size,createdAt:row.createdAt.toISOString(),updatedAt:row.updatedAt.toISOString()};
+  return {id:row.id,title:row.title,category:row.category,status:row.status,version:row.version,requesterCount:new Set([...(row.withdrawnAt?[]:[row.profileId]),...row.members.map(member=>member.profileId)]).size,createdAt:row.createdAt.toISOString(),updatedAt:row.updatedAt.toISOString()};
 }
 export async function listAdminRequests(input?:{q?:string;status?:string;page?:number}):Promise<RequestResult<{items:AdminRequestSummary[];page:number;pages:number;total:number;newCount:number}>>{
   return authenticated(true,async tx=>{
     const q=typeof input?.q==="string"?input.q.trim().slice(0,150):"";
     const status=input?.status && Object.hasOwn(REQUEST_STATUS_LABELS,input.status)?input.status as RequestStatus:undefined;
     const search:Prisma.ContentRequestWhereInput=q?{OR:[{title:{contains:q,mode:"insensitive"}},{members:{some:{title:{contains:q,mode:"insensitive"}}}}]}:{};
-    const where:Prisma.ContentRequestWhereInput={mergedIntoId:null,...(status?{status}:{}),...search};
+    const where:Prisma.ContentRequestWhereInput={mergedIntoId:null,...(status?{status}:{}),AND:[stillWanted,search]};
     const total=await tx.contentRequest.count({where}),pages=Math.max(1,Math.ceil(total/20)),page=Math.min(requestPage(input?.page),pages);
     const rows=await tx.contentRequest.findMany({where,include:summaryInclude,orderBy:[{createdAt:"desc"},{id:"desc"}],skip:(page-1)*20,take:20});
-    const newCount=await tx.contentRequest.count({where:{mergedIntoId:null,status:"new"}});
+    const newCount=await tx.contentRequest.count({where:{mergedIntoId:null,status:"new",...stillWanted}});
     return ok({items:rows.map(summary),total,pages,page,newCount});
   });
 }
 export async function getAdminNewRequestCount():Promise<number>{
-  const result=await authenticated(true,async tx=>ok(await tx.contentRequest.count({where:{mergedIntoId:null,status:"new"}})));
+  const result=await authenticated(true,async tx=>ok(await tx.contentRequest.count({where:{mergedIntoId:null,status:"new",...stillWanted}})));
   return result.ok?result.data:0;
 }
 export async function findRequestCatalog(q:string):Promise<CatalogWork[]>{
@@ -128,7 +134,7 @@ export async function getAdminRequest(id:string):Promise<RequestResult<AdminRequ
     const members=await tx.contentRequest.findMany({where:groupWhere(root.id),include:{profile:{select:{nickname:true}}},orderBy:[{createdAt:"asc"},{id:"asc"}],take:200});
     const targets=root.status==="available"?[]:await tx.contentRequest.findMany({where:{id:{not:root.id},mergedIntoId:null,category:root.category,status:{not:"available"}},include:summaryInclude,orderBy:[{createdAt:"desc"},{id:"desc"}],take:200});
     const works=await tx.series.findMany({where:{deletedAt:null,chapters:{some:liveChapterWhere()}},select:{id:true,titleAr:true,titleOriginal:true,slug:true,category:true},orderBy:{titleAr:"asc"},take:200});
-    return ok({...summary(root),statusNote:root.statusNote,seriesId:root.fulfilledSeriesId,members:members.map(member=>({id:member.id,nickname:member.profile.nickname,title:member.title,referenceUrl:member.referenceUrl,message:member.message,reply:member.reply,internalNote:member.internalNote,version:member.version,createdAt:member.createdAt.toISOString()})),mergeTargets:targets.filter(target=>target.members.length+members.length+1<=200).map(summary),workOptions:works.map(row=>({id:row.id,title:getWorkTitle(row),href:`/series/${row.slug}`,category:row.category}))});
+    return ok({...summary(root),statusNote:root.statusNote,seriesId:root.fulfilledSeriesId,members:members.map(member=>({id:member.id,withdrawn:Boolean(member.withdrawnAt),nickname:member.profile.nickname,title:member.title,referenceUrl:member.referenceUrl,message:member.message,reply:member.reply,internalNote:member.internalNote,version:member.version,createdAt:member.createdAt.toISOString()})),mergeTargets:targets.filter(target=>target.members.length+members.length+1<=200).map(summary),workOptions:works.map(row=>({id:row.id,title:getWorkTitle(row),href:`/series/${row.slug}`,category:row.category}))});
   });
 }
 export async function updateRequestStatus(input:unknown):Promise<RequestResult<{id:string}>>{
@@ -141,7 +147,7 @@ export async function updateRequestStatus(input:unknown):Promise<RequestResult<{
     if(row.status===data.status && row.statusNote===data.statusNote && row.fulfilledSeriesId===seriesId)return ok({id:row.id});
     const changed=await tx.contentRequest.updateMany({where:{id:row.id,version:data.expectedVersion,mergedIntoId:null},data:{status:data.status,statusNote:data.statusNote,fulfilledSeriesId:seriesId,version:{increment:1}}});
     if(changed.count!==1)return fail("conflict");
-    const members=await tx.contentRequest.findMany({where:groupWhere(row.id),select:{id:true,profileId:true}});
+    const members=await tx.contentRequest.findMany({where:{...groupWhere(row.id),withdrawnAt:null},select:{id:true,profileId:true}});
     await notify(tx,distinctOwners(members),`تحديث طلب العمل: ${REQUEST_STATUS_LABELS[data.status]}`,data.statusNote);
     return ok({id:row.id});
   },true);
@@ -154,7 +160,7 @@ export async function replyToRequest(input:unknown):Promise<RequestResult<{id:st
     if(row.reply===data.reply&&row.internalNote===data.internalNote)return ok({id:row.mergedIntoId??row.id});
     const changed=await tx.contentRequest.updateMany({where:{id:row.id,version:data.expectedVersion},data:{reply:data.reply,internalNote:data.internalNote,version:{increment:1}}});
     if(changed.count!==1)return fail("conflict");
-    if(data.reply && row.reply!==data.reply)await notify(tx,[{id:row.id,profileId:row.profileId}],"رد الإدارة على طلبك",data.reply);
+    if(data.reply && row.reply!==data.reply && !row.withdrawnAt)await notify(tx,[{id:row.id,profileId:row.profileId}],"رد الإدارة على طلبك",data.reply);
     return ok({id:row.mergedIntoId??row.id});
   },true);
 }
@@ -166,13 +172,48 @@ export async function mergeContentRequests(input:unknown):Promise<RequestResult<
     if(!source||!target)return fail("not_found");
     if(source.version!==data.expectedSourceVersion||target.version!==data.expectedTargetVersion)return fail("conflict");
     if(source.mergedIntoId||target.mergedIntoId||source.category!==target.category||source.status==="available"||target.status==="available")return fail("invalid_merge");
-    const sourceMembers=await tx.contentRequest.findMany({where:groupWhere(source.id),select:{id:true,profileId:true}});
+    const sourceMembers=await tx.contentRequest.findMany({where:groupWhere(source.id),select:{id:true,profileId:true,withdrawnAt:true}});
     const targetCount=await tx.contentRequest.count({where:groupWhere(target.id)});
     if(sourceMembers.length+targetCount>200)return fail("group_limit");
     // Increment every moved member so stale member replies cannot race the changed group context.
     await tx.contentRequest.updateMany({where:groupWhere(source.id),data:{mergedIntoId:target.id,version:{increment:1}}});
     await tx.contentRequest.update({where:{id:target.id},data:{version:{increment:1}}});
-    if(source.status!==target.status||source.statusNote!==target.statusNote)await notify(tx,distinctOwners(sourceMembers),`تحديث طلب العمل: ${REQUEST_STATUS_LABELS[target.status]}`,target.statusNote);
+    if(source.status!==target.status||source.statusNote!==target.statusNote)await notify(tx,distinctOwners(sourceMembers.filter(member=>!member.withdrawnAt)),`تحديث طلب العمل: ${REQUEST_STATUS_LABELS[target.status]}`,target.statusNote);
     return ok({id:target.id});
   },true);
+}
+
+const withdrawSchema = z.object({id:z.string().trim().min(1).max(128),expectedVersion:z.number().int().min(1).max(2147483646)});
+/** The requester withdraws their own request. The row stays (quota, group history) but disappears from their list. */
+export async function withdrawContentRequest(input:unknown):Promise<RequestResult<{id:string}>>{
+  return authenticated(false,async(tx,actor)=>{
+    const parsed=withdrawSchema.safeParse(input);if(!parsed.success)return fail("invalid_input");
+    const row=await tx.contentRequest.findFirst({where:{id:parsed.data.id,profileId:actor.id,withdrawnAt:null}});
+    if(!row)return fail("not_found");if(row.version!==parsed.data.expectedVersion)return fail("conflict");
+    const root=row.mergedIntoId?await tx.contentRequest.findUnique({where:{id:row.mergedIntoId}}):row;
+    if(!root||!WITHDRAWABLE.includes(root.status))return fail("not_withdrawable");
+    const changed=await tx.contentRequest.updateMany({where:{id:row.id,version:row.version,withdrawnAt:null},data:{withdrawnAt:new Date(),version:{increment:1}}});
+    if(changed.count!==1)return fail("conflict");
+    return ok({id:row.id});
+  },true);
+}
+const editSchema = createRequestSchema.omit({submissionId:true}).extend({id:z.string().trim().min(1).max(128),expectedVersion:z.number().int().min(1).max(2147483646)});
+/** The requester fixes their request while it is still new and stands alone. */
+export async function editContentRequest(input:unknown):Promise<RequestResult<{id:string}>>{
+  return authenticated(false,async(tx,actor)=>{
+    const parsed=editSchema.safeParse(input);if(!parsed.success)return fail("invalid_input");
+    const data=parsed.data,row=await tx.contentRequest.findFirst({where:{id:data.id,profileId:actor.id,withdrawnAt:null}});
+    if(!row)return fail("not_found");if(row.version!==data.expectedVersion)return fail("conflict");
+    if(row.status!=="new"||row.mergedIntoId||await tx.contentRequest.count({where:{mergedIntoId:row.id}}))return fail("not_editable");
+    const normalizedTitle=normalizeRequestTitle(data.title);
+    if(await tx.contentRequest.findFirst({where:{id:{not:row.id},profileId:actor.id,category:data.category,normalizedTitle,withdrawnAt:null},select:{id:true}}))return fail("duplicate");
+    const changed=await tx.contentRequest.updateMany({where:{id:row.id,version:row.version},data:{title:data.title,category:data.category,referenceUrl:data.referenceUrl,message:data.message,normalizedTitle,version:{increment:1}}});
+    if(changed.count!==1)return fail("conflict");
+    return ok({id:row.id});
+  },true);
+}
+/** How many new requests the reader can still send in the rolling 24 hours (withdrawn ones still count). */
+export async function getMyRequestAllowance():Promise<number|null>{
+  const result=await authenticated(false,async(tx,actor)=>ok(Math.max(0,3-await tx.contentRequest.count({where:{profileId:actor.id,createdAt:{gte:new Date(Date.now()-86400000)}}}))));
+  return result.ok?result.data:null;
 }
