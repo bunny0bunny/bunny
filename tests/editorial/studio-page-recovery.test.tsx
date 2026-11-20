@@ -5,7 +5,7 @@ mock.module("../../src/components/library/chrome", () => ({ SiteHeader: () => nu
 mock.module("../../src/components/studio/editorial-editor", () => ({ EditorialEditor: () => null }));
 mock.module("../../src/lib/queries", () => ({ currentProfileOrNull: async () => ({ id: "admin", role: "admin" }) }));
 mock.module("../../src/lib/team-access", () => ({ isStaffRole: () => true, canManageSeries: async () => true }));
-mock.module("../../src/lib/editorial", () => ({ openOrCreateDraft: async () => ({ ok: false, error: "conflict" }) }));
+mock.module("../../src/lib/editorial", () => ({ openOrCreateDraft: async () => ({ ok: false, error: "conflict" }), getWorkingRevision: async () => ({ ok: false, error: "conflict" }) }));
 mock.module("../../src/lib/db", () => ({ withDatabaseScope: (work: () => unknown) => work(), db: { chapter: { findUnique: async () => ({ id: "owned-chapter", seriesId: "owned-series", series: {}, revisions: [], editorialEvents: [] }) } } }));
 const { default: StudioChapterPage } = await import("../../src/app/studio/chapters/[id]/page");
 function find(node: any, predicate: (node: any) => boolean): any {

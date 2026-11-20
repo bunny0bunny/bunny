@@ -3,6 +3,7 @@
 import { z } from "zod";
 import {
   openOrCreateDraft as openDraftService,
+  withdrawFromReview as withdrawFromReviewService,
   updateDraftSnapshot as updateDraftService,
   submitForReview as submitForReviewService,
   returnForChanges as returnForChangesService,
@@ -25,6 +26,7 @@ const errorTranslations: Record<string, string> = {
   not_found: "لم يتم العثور على العنصر المطلوب.",
   conflict: "تم تعديل النسخة بواسطة مستخدم آخر أو أن البيانات غير متزامنة. يرجى إعادة تحميل الصفحة.",
   reason_required: "سبب الإجراء مطلوب ولا يمكن تركه فارغاً.",
+  leaves_review: "النسخة قيد المراجعة. أكّد أن الحفظ سيسحبها من المراجعة.",
 };
 
 function translateError(err?: string): string {
@@ -52,6 +54,7 @@ const updateDraftSnapshotSchema = z.object({
   isPremiumDemo: z.boolean().optional(),
   novelBody: z.string().max(60000).optional(),
   pages: z.array(pageSnapshotSchema).optional(),
+  confirmLeaveReview: z.boolean().optional(),
 });
 
 const submitForReviewSchema = z.object({
@@ -263,5 +266,12 @@ export async function approveAndPublishRevisionAction(input: unknown) {
   const parsed = publishRevisionNowSchema.safeParse(input);
   if (!parsed.success) return { ok: false, error: "بيانات الاعتماد والنشر الفوري غير صالحة" };
   const res = await approveAndPublishRevisionService(parsed.data);
+  return { ok: res.ok, error: res.error ? translateError(res.error) : undefined, revision: res.revision };
+}
+
+export async function withdrawFromReviewAction(input: unknown) {
+  const parsed = submitForReviewSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: "بيانات السحب غير صالحة" };
+  const res = await withdrawFromReviewService(parsed.data);
   return { ok: res.ok, error: res.error ? translateError(res.error) : undefined, revision: res.revision };
 }

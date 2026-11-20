@@ -99,7 +99,9 @@ test("editing a submitted revision requires resubmission before review continues
   const opened = await openOrCreateDraft(current.id);
   const submitted = await submitForReview({ revisionId: opened.revision!.id, expectedVersion: opened.revision!.version });
   expect(submitted.ok).toBe(true);
-  const edited = await updateDraftSnapshot({ revisionId: submitted.revision!.id, expectedVersion: submitted.revision!.version, novelBody: "محتوى تغير أثناء المراجعة." });
+  const input = { revisionId: submitted.revision!.id, expectedVersion: submitted.revision!.version, novelBody: "محتوى تغير أثناء المراجعة." };
+  expect((await updateDraftSnapshot(input)).error).toBe("leaves_review");
+  const edited = await updateDraftSnapshot({ ...input, confirmLeaveReview: true });
   expect(edited.ok).toBe(true);
   expect(edited.revision!.status).toBe("draft");
 });

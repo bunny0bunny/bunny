@@ -49,6 +49,7 @@ import {
   cancelScheduledRevisionAction,
   withdrawPublishedChapterAction,
   openOrCreateDraftAction,
+  withdrawFromReviewAction,
 } from "@/lib/editorial-actions";
 
 type PageItem = {
@@ -143,6 +144,8 @@ const ACTION_LABELS: Record<string, string> = {
   fork_draft: "إنشاء مسودة مراجعة جديدة",
   update_draft: "تحديث مسودة المحتوى",
   edit_revoked_approval: "تعديل محتوى ألغى الاعتماد والجدولة",
+  edit_left_review: "تعديل سحب النسخة من المراجعة",
+  withdraw_from_review: "سحب النسخة من المراجعة",
   submit_for_review: "إرسال للمراجعة التحريرية",
   return_for_changes: "إعادة لطلب تعديلات",
   recommend_approval: "توصية باعتماد النسخة",
@@ -314,6 +317,8 @@ export function EditorialEditor({
         isPremiumDemo: isAdmin ? isPremiumDemo : undefined,
         novelBody: chapter.format === "novel" ? novelBody : undefined,
         pages: isVisual ? pages : undefined,
+        // The button says so explicitly while the revision is in review.
+        confirmLeaveReview: revision.status === "review" ? true : undefined,
       });
 
       if (!res.ok) {
@@ -331,6 +336,22 @@ export function EditorialEditor({
         setRevision(res.revision as any);
         toast({ title: "تم الحفظ بنجاح", description: `تم تحديث مسودة المراجعة إلى النسخة ${res.revision.version}.` });
       }
+      router.refresh();
+    });
+  }
+
+  // Take one's own submission back to keep editing.
+  async function handleWithdrawFromReview() {
+    if (guardUpload()) return;
+    setErrorMessage(null);
+    runAction(async () => {
+      const res = await withdrawFromReviewAction({ revisionId: revision.id, expectedVersion: revision.version });
+      if (!res.ok) {
+        setErrorMessage(res.error ?? "تعذّر سحب النسخة من المراجعة");
+        return;
+      }
+      if (res.revision) setRevision(res.revision as any);
+      toast({ title: "سُحبت النسخة من المراجعة", description: "تقدر تعدّلها وترسلها مرة أخرى." });
       router.refresh();
     });
   }
@@ -608,6 +629,18 @@ export function EditorialEditor({
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      {revision.status === "changes_requested" && (() => {
+        // Events are newest first: the latest return is what the reviewer wants now.
+        const latestReturn = events.find((ev) => ev.action === "return_for_changes");
+        if (!latestReturn) return null;
+        return (
+          <section role="status" aria-label="ملاحظات المراجع" className="rounded-xl border border-gold/40 bg-gold/10 p-4">
+            <h2 className="text-sm font-bold">المطلوب تعديله</h2>
+            {latestReturn.reasonAr && <p className="mt-2 whitespace-pre-wrap break-words text-sm leading-7">{latestReturn.reasonAr}</p>}
+            <p className="mt-2 text-xs text-muted-foreground">من {latestReturn.actorName} · {new Date(latestReturn.createdAt).toLocaleString("ar-EG", { day: "numeric", month: "short", hour: "numeric", minute: "2-digit" })}</p>
+          </section>
+        );
+      })()}
       {scheduledLocked && <p role="status" className="rounded-xl border border-primary/30 bg-primary/10 p-4 text-sm leading-7">الفصل مجدول بواسطة الإدارة. اطلب إلغاء الجدولة قبل التعديل. يمكنك معاينة الفصل والاطلاع على سجله.</p>}
       {!isAdmin && revision.status === "approved" && <p role="status" className="rounded-xl border border-gold/30 bg-gold/10 p-4 text-sm leading-7">هذه النسخة معتمدة. حفظ أي تعديل يعيدها إلى مسودة ويلغي اعتمادها، مع إشعار الإدارة لإعادة مراجعتها.</p>}
       {draftRecovery.recovered && !isReadOnlyStatus && (
@@ -953,8 +986,16 @@ export function EditorialEditor({
                   className="min-h-[44px] w-full gap-2 bg-primary text-primary-foreground hover:bg-primary/90"
                 >
                   {isPending ? <Loader2 className="size-4 animate-spin" /> : <FileText className="size-4" />}
-                  حفظ المسودة
+                  {revision.status === "review" ? "حفظ وسحب النسخة من المراجعة" : "حفظ المسودة"}
                 </Button>
+              )}
+              {revision.status === "review" && !isReadOnlyStatus && (
+                <>
+                  <p role="note" className="rounded-lg border border-gold/30 bg-gold/10 p-2.5 text-xs leading-6">هذه النسخة قيد المراجعة. حفظ أي تعديل يسحبها من المراجعة حتى ترسلها مرة أخرى.</p>
+                  <Button onClick={handleWithdrawFromReview} disabled={actionsBlocked || hasUnsavedChanges} variant="ghost" className="min-h-[44px] w-full text-xs">
+                    سحب من المراجعة بدون تعديل
+                  </Button>
+                </>
               )}
 
               {/* Submit For Review (Draft or Changes Requested) */}
