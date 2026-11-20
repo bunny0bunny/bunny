@@ -6,6 +6,7 @@ import { BookMarked, BookOpenCheck, Check, Flame, MessageSquare, Star, History, 
 import { SiteHeader, SiteFooter, BottomNav } from "@/components/library/chrome";
 import { ProfileSettings } from "@/components/library/profile-settings";
 import { AccountAvatar } from "@/components/accounts/account-avatar";
+import { profileAvatarPath } from "@/lib/profile-avatar-policy";
 import { ReadingActivityChart } from "@/components/library/reading-activity-chart";
 import {
   requireProfile,
@@ -65,6 +66,7 @@ export default async function ProfilePage() {
           <header className="flex items-center gap-4">
             <AccountAvatar
               seed={profile.avatarSeed}
+              src={profileAvatarPath(profile.id, profile.avatarKey)}
               name={profile.nickname}
               className="size-16 text-2xl font-bold border border-border"
               brandMarkSize="size-10"
@@ -206,7 +208,7 @@ export default async function ProfilePage() {
             {/* settings */}
             <section aria-label="إعدادات الحساب" className="rounded-2xl border border-border/60 bg-card p-4">
               <h2 className="mb-3 text-sm font-bold">إعدادات الحساب</h2>
-              <ProfileSettings nickname={profile.nickname} bio={bio} avatarSeed={profile.avatarSeed} />
+              <ProfileSettings nickname={profile.nickname} bio={bio} avatarSeed={profile.avatarSeed} avatarPath={profileAvatarPath(profile.id, profile.avatarKey)} uploadsEnabled={process.env.MEDIA_UPLOADS_ENABLED === "1"} />
             </section>
 
             {/* favorite genres */}

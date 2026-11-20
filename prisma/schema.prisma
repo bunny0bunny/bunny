@@ -128,6 +128,7 @@ model Profile {
   passwordHash          String
   role                  UserRole           @default(reader)
   avatarSeed            String             @default("v1")
+  avatarKey             String?
   bio                   String?
   emailVerifiedAt       DateTime?
   disabledAt            DateTime?

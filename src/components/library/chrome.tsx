@@ -160,7 +160,8 @@ export function SiteHeader() {
                   aria-label="قائمة الحساب"
                 >
                   <AccountAvatar
-                    seed={(session.user as { avatarSeed?: string })?.avatarSeed}
+                    seed={session.user?.avatarSeed}
+                    src={session.user?.avatarPath}
                     name={session.user?.name}
                     className="size-9 border border-border"
                   />

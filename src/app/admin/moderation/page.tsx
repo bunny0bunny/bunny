@@ -2,6 +2,7 @@ import { getWorkTitle } from '@/lib/work-title';
 import Link from "next/link";
 import { MessageSquareWarning, ShieldCheck } from "lucide-react";
 import { AccountAvatar } from "@/components/accounts/account-avatar";
+import { profileAvatarPath } from "@/lib/profile-avatar-policy";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { requireRole, getModerationQueue } from "@/lib/queries";
@@ -57,7 +58,7 @@ export default async function AdminModerationPage() {
           {q.items.map((c) => (
             <li key={c.id} className="rounded-2xl border border-border/60 bg-card p-4">
               <div className="flex items-start gap-3">
-                <AccountAvatar seed={c.profile.avatarSeed} name={c.profile.nickname} className="size-9 text-sm" />
+                <AccountAvatar seed={c.profile.avatarSeed} src={profileAvatarPath(c.profile.id, c.profile.avatarKey)} name={c.profile.nickname} className="size-9 text-sm" />
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-2">
                     <span className="text-sm font-semibold text-foreground">{c.profile.nickname}</span>

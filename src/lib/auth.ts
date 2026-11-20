@@ -1,6 +1,7 @@
 import type { NextAuthOptions } from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
 import { db } from "@/lib/db";
+import { profileAvatarPath } from "@/lib/profile-avatar-policy";
 import { verifyPassword } from "@/lib/password";
 import { isRole, type Role } from "@/lib/constants";
 import { allowAccountClient } from "@/lib/account-ratelimit";
@@ -108,8 +109,9 @@ export const authOptions: NextAuthOptions = {
         session.user.id = (token.uid as string) ?? "";
         session.user.role = (isRole(token.role) ? token.role : "reader") as Role;
         session.user.authVersion = (token.authVersion as number) ?? 0;
-        const current = await db.profile.findUnique({ where: { id: session.user.id }, select: { avatarSeed: true } });
+        const current = await db.profile.findUnique({ where: { id: session.user.id }, select: { avatarSeed: true, avatarKey: true } });
         session.user.avatarSeed = current?.avatarSeed;
+        session.user.avatarPath = profileAvatarPath(session.user.id, current?.avatarKey);
       } else if (session.user) {
         session.user.id = "";
       }

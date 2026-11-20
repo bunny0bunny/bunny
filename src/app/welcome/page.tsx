@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 import { requireProfile } from "@/lib/queries";
 import { safeAccountDestination } from "@/lib/account-destination";
 import { WelcomeOnboarding } from "@/components/accounts/welcome-onboarding";
+import { profileAvatarPath } from "@/lib/profile-avatar-policy";
 
 export const dynamic = "force-dynamic";
 
@@ -33,6 +34,9 @@ export default async function WelcomePage({
         nickname={profile.nickname}
         isStaff={isStaff}
         next={targetNext}
+        avatarSeed={profile.avatarSeed}
+        avatarPath={profileAvatarPath(profile.id, profile.avatarKey)}
+        uploadsEnabled={process.env.MEDIA_UPLOADS_ENABLED === "1"}
       />
     </main>
   );

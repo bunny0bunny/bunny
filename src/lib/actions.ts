@@ -2,6 +2,7 @@
 import { normalizeGenres } from "@/lib/genres";
 
 import { z } from "zod";
+import { cleanProfileName } from "@/lib/profile-name";
 import { isProfileAvatarChoice } from "@/lib/avatars";
 import { isChapterNumber } from '@/lib/chapter-number';
 import { getWorkTitle, workTitleIssue } from '@/lib/work-title';
@@ -661,7 +662,7 @@ export async function setRating(input: unknown): Promise<ActionResult & { rating
 }
 
 const profileSchema = z.object({
-  nickname: z.string().trim().min(2, "الاسم قصير جدًا").max(40, "الاسم ٤٠ حرفًا على الأكثر"),
+  nickname: z.string().trim().min(1).max(200),
   bio: z.string().trim().max(300).optional(),
   avatarSeed: z.string().refine(isProfileAvatarChoice, "اختر صورة من القائمة").optional(),
 });
@@ -671,9 +672,16 @@ export async function updateProfile(input: unknown): Promise<ActionResult> {
   if (!profile) return { ok: false, error: "unauthenticated" };
   const parsed = profileSchema.safeParse(input);
   if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "invalid" };
+  // Name rules apply when a name is set or changed; older names are never forced to change.
+  let nickname = profile.nickname;
+  if (parsed.data.nickname !== profile.nickname) {
+    const cleaned = cleanProfileName(parsed.data.nickname);
+    if (!cleaned.ok) return { ok: false, error: cleaned.error };
+    nickname = cleaned.name;
+  }
   await db.profile.update({
     where: { id: profile.id },
-    data: { nickname: parsed.data.nickname, bio: parsed.data.bio || null, ...(parsed.data.avatarSeed ? { avatarSeed: parsed.data.avatarSeed } : {}) },
+    data: { nickname, ...(parsed.data.bio !== undefined ? { bio: parsed.data.bio || null } : {}), ...(parsed.data.avatarSeed ? { avatarSeed: parsed.data.avatarSeed } : {}) },
   });
   revalidatePath("/profile");
   return { ok: true };

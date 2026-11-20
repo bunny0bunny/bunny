@@ -9,17 +9,39 @@ import { GENRES } from "@/lib/constants";
 import { saveOnboarding } from "@/lib/account-actions";
 import { safeAccountDestination } from "@/lib/account-destination";
 import { AccountShell } from "@/components/accounts/account-shell";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { updateProfile } from "@/lib/actions";
+import { isProfileAvatarChoice } from "@/lib/avatars";
+import { arabicError } from "@/lib/error-messages-ar";
+import { AccountAvatar } from "@/components/accounts/account-avatar";
+import { AvatarChoiceGrid, UPLOADED_AVATAR } from "@/components/accounts/avatar-choice-grid";
+import { ProfileAvatarUploader } from "@/components/accounts/profile-avatar-uploader";
+import { useSession } from "next-auth/react";
 
 export function WelcomeOnboarding({
   nickname,
   isStaff,
   next,
+  avatarSeed = "initials",
+  avatarPath = null,
+  uploadsEnabled = false,
 }: {
   nickname: string;
   isStaff: boolean;
   next: string;
+  avatarSeed?: string;
+  avatarPath?: string | null;
+  uploadsEnabled?: boolean;
 }) {
   const router = useRouter();
+  const { update: updateSession } = useSession();
+  // Step 1: name and picture. Step 2: favourite genres. Both can be skipped.
+  const [step, setStep] = useState<"identity" | "genres">("identity");
+  const [name, setName] = useState(nickname);
+  const [uploadedPath, setUploadedPath] = useState<string | null>(avatarPath);
+  const [choice, setChoice] = useState(avatarPath ? UPLOADED_AVATAR : avatarSeed);
+  const fallbackSeed = choice === UPLOADED_AVATAR ? avatarSeed : choice;
   const safeNext = safeAccountDestination(next, isStaff ? "/studio" : "/");
 
   const [selectedGenres, setSelectedGenres] = useState<string[]>([]);
@@ -52,9 +74,55 @@ export function WelcomeOnboarding({
     });
   };
 
+  const saveIdentity = () => {
+    setError(null);
+    startTransition(async () => {
+      const res = await updateProfile({ nickname: name.trim(), avatarSeed: isProfileAvatarChoice(choice) ? choice : undefined });
+      if (!res.ok) {
+        setError(arabicError(res.error, "تعذّر حفظ الاسم والصورة."));
+        return;
+      }
+      try { await updateSession?.({ name: name.trim() }); } catch {}
+      setStep("genres");
+    });
+  };
+
+  if (step === "identity") {
+    return (
+      <AccountShell title="اختر اسمك وصورتك" description="هكذا سيراك القرّاء الآخرون في التعليقات. تقدر تغيّرهم في أي وقت من صفحة حسابك.">
+        <div className="space-y-5">
+          <div className="flex items-center gap-3">
+            <AccountAvatar seed={fallbackSeed} src={choice === UPLOADED_AVATAR ? uploadedPath : null} name={name} className="size-16 border-2 border-primary/50" brandMarkSize="size-9" />
+            <div className="min-w-0 flex-1">
+              <Label htmlFor="welcome-name" className="mb-1.5 block text-xs text-muted-foreground">الاسم الظاهر</Label>
+              <Input id="welcome-name" value={name} onChange={(e) => setName(e.target.value)} maxLength={40} className="h-11 bg-card" />
+            </div>
+          </div>
+          <AvatarChoiceGrid selected={choice} onSelect={setChoice} name={name} uploadedPath={uploadedPath} fallbackSeed={fallbackSeed} className="grid-cols-5 sm:grid-cols-6" />
+          {uploadsEnabled && (
+            <ProfileAvatarUploader disabled={isPending} onUploaded={(path) => { setUploadedPath(path); setChoice(UPLOADED_AVATAR); }} />
+          )}
+          {error && (
+            <p role="alert" className="rounded-xl border border-danger/40 bg-danger/10 p-3 text-xs text-danger">{error}</p>
+          )}
+          <div className="flex flex-col gap-2.5">
+            <Button type="button" disabled={isPending || name.trim().length < 2} onClick={saveIdentity} className="h-11 w-full gap-2 bg-primary font-bold text-primary-foreground hover:bg-primary/90">
+              {isPending ? <Loader2 className="size-4 animate-spin" aria-hidden /> : <Check className="size-4" aria-hidden />}
+              حفظ والمتابعة
+            </Button>
+            <Button type="button" variant="outline" disabled={isPending} onClick={() => { setError(null); setStep("genres"); }} className="h-11 w-full gap-2 border-border text-muted-foreground hover:text-foreground">
+              <span>تخطي هذه الخطوة</span>
+              <ArrowLeft className="size-4 rtl:rotate-180" aria-hidden />
+            </Button>
+          </div>
+        </div>
+      </AccountShell>
+    );
+  }
+
   return (
     <AccountShell
-      title={`أهلاً بك، ${nickname}`}
+      title={`أهلاً بك، ${name.trim() || nickname}`}
       description="احفظ الأنواع التي تحب قراءتها ضمن تفضيلات حسابك، أو تخطَّ هذه الخطوة وابدأ التصفح."
       footer={
         isStaff ? (

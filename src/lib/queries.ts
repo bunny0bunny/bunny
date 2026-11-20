@@ -8,6 +8,7 @@ import { getServerSession } from "next-auth";
 import { redirect } from "next/navigation";
 import { authOptions } from "@/lib/auth";
 import { db } from "@/lib/db";
+import { profileAvatarPath } from "@/lib/profile-avatar-policy";
 import { CATEGORIES, FORMATS } from "@/lib/constants";
 import { scoreDocument, suggestTitle, tokenizeArabic } from "@/lib/arabic-search";
 import type { Category, CommentStatus, Format, Role, SeriesStatus, Workflow } from "@/lib/constants";
@@ -753,7 +754,7 @@ export type CommentView = {
   body: string;
   createdAt: Date;
   status: CommentStatus;
-  author: { id: string; nickname: string; avatarSeed: string; role: string };
+  author: { id: string; nickname: string; avatarSeed: string; role: string; avatarPath: string | null };
   chapterNumber: number | null;
   likeCount: number;
   likedByMe: boolean;
@@ -778,7 +779,7 @@ export async function getVisibleComments(
     skip: offset,
     take: limit,
     include: {
-      profile: { select: { id: true, nickname: true, avatarSeed: true, role: true } },
+      profile: { select: { id: true, nickname: true, avatarSeed: true, role: true, avatarKey: true, disabledAt: true } },
       chapter: { select: { number: true } },
       _count: { select: { likes: true } },
       likes: { select: { profileId: true } },
@@ -789,7 +790,7 @@ export async function getVisibleComments(
     body: c.body,
     createdAt: c.createdAt,
     status: c.status as CommentStatus,
-    author: c.profile,
+    author: { id: c.profile.id, nickname: c.profile.nickname, avatarSeed: c.profile.avatarSeed, role: c.profile.role, avatarPath: c.profile.disabledAt ? null : profileAvatarPath(c.profile.id, c.profile.avatarKey) },
     chapterNumber: c.chapter?.number ?? null,
     likeCount: c._count.likes,
     likedByMe: viewerProfileId ? c.likes.some((l) => l.profileId === viewerProfileId) : false,
@@ -859,7 +860,7 @@ export async function getModerationQueue() {
       where: { series: { deletedAt: null }, OR: [{ chapterId: null }, { chapter: { deletedAt: null } }], status: { in: ["flagged", "hidden"] as ("flagged" | "hidden")[] } },
       orderBy: { updatedAt: "desc" },
       include: {
-        profile: { select: { nickname: true, avatarSeed: true } },
+        profile: { select: { id: true, nickname: true, avatarSeed: true, avatarKey: true } },
         series: { select: { slug: true, titleAr: true, titleOriginal: true } },
         chapter: { select: { number: true } },
         reports: { include: { profile: { select: { nickname: true } } } },
@@ -877,7 +878,7 @@ export async function getAdminUsers() {
   return db.profile.findMany({
     orderBy: { createdAt: "asc" },
     select: {
-      id: true, email: true, nickname: true, role: true, avatarSeed: true, createdAt: true,
+      id: true, email: true, nickname: true, role: true, avatarSeed: true, avatarKey: true, createdAt: true,
       emailVerifiedAt: true, disabledAt: true,
       _count: { select: { comments: true, libraryItems: true, readingProgress: true, assignments: true } },
     },

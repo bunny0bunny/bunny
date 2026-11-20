@@ -12,16 +12,23 @@ import { Label } from "@/components/ui/label";
 import { updateProfile } from "@/lib/actions";
 import { changeAccountPassword } from "@/lib/account-actions";
 import { AccountAvatar } from "@/components/accounts/account-avatar";
-import { PRESET_AVATARS, isProfileAvatarChoice } from "@/lib/avatars";
+import { isProfileAvatarChoice } from "@/lib/avatars";
+import { AvatarChoiceGrid, UPLOADED_AVATAR as UPLOADED } from "@/components/accounts/avatar-choice-grid";
+import { ProfileAvatarUploader, deleteProfileAvatar, profileAvatarError } from "@/components/accounts/profile-avatar-uploader";
+
 
 export function ProfileSettings({
   nickname,
   bio,
   avatarSeed,
+  avatarPath = null,
+  uploadsEnabled = false,
 }: {
   nickname: string;
   bio: string;
   avatarSeed?: string | null;
+  avatarPath?: string | null;
+  uploadsEnabled?: boolean;
 }) {
   const router = useRouter();
   const { update: updateSession } = useSession();
@@ -30,9 +37,12 @@ export function ProfileSettings({
   const [name, setName] = useState(nickname);
   const [userBio, setUserBio] = useState(bio);
   // Older colour seeds still render; they are only re-sent once the reader picks a new picture.
+  const [uploadedPath, setUploadedPath] = useState<string | null>(avatarPath);
   const [selectedSeed, setSelectedSeed] = useState<string>(
-    avatarSeed || "initials"
+    avatarPath ? UPLOADED : avatarSeed || "initials"
   );
+  // The preset behind an uploaded picture (shown if the upload is removed).
+  const fallbackSeed = selectedSeed === UPLOADED ? avatarSeed || "initials" : selectedSeed;
   const [profileMsg, setProfileMsg] = useState("");
   const [profileError, setProfileError] = useState("");
   const [pendingProfile, startProfileTransition] = useTransition();
@@ -56,7 +66,15 @@ export function ProfileSettings({
     }
 
     startProfileTransition(async () => {
-      // Pass nickname, bio, and avatarSeed to updateProfile
+      // Picking a preset while an uploaded picture exists replaces the upload.
+      if (uploadedPath && selectedSeed !== UPLOADED) {
+        const removed = await deleteProfileAvatar();
+        if (!removed.ok) {
+          setProfileError(profileAvatarError(removed.error));
+          return;
+        }
+        setUploadedPath(null);
+      }
       const res = await updateProfile({
         nickname: name.trim(),
         bio: userBio.trim(),
@@ -118,31 +136,23 @@ export function ProfileSettings({
         <fieldset>
           <legend className="mb-2 block text-xs font-semibold text-foreground">صورتك في الموقع</legend>
           <div className="mb-3 flex items-center gap-3">
-            <AccountAvatar seed={selectedSeed} name={name} className="size-16 border-2 border-primary/50 shadow-sm" brandMarkSize="size-9" />
-            <p className="text-xs leading-6 text-muted-foreground">تظهر بجانب اسمك في التعليقات وقائمة الحساب.</p>
+            <AccountAvatar seed={fallbackSeed} src={selectedSeed === UPLOADED ? uploadedPath : null} name={name} className="size-16 border-2 border-primary/50 shadow-sm" brandMarkSize="size-9" />
+            <p className="text-xs leading-6 text-muted-foreground">تظهر بجانب اسمك في التعليقات وقائمة الحساب. اختر صورة جاهزة أو ارفع صورتك.</p>
           </div>
-          <div role="radiogroup" aria-label="اختر صورة" className="grid grid-cols-4 gap-2 sm:grid-cols-6 md:grid-cols-9">
-            {(["initials", ...PRESET_AVATARS.map((a) => a.id)] as string[]).map((s) => {
-              const isSelected = selectedSeed === s;
-              const label = s === "initials" ? "الحرف الأول من اسمك" : PRESET_AVATARS.find((a) => a.id === s)?.labelAr ?? s;
-              return (
-                <button
-                  key={s}
-                  type="button"
-                  role="radio"
-                  aria-checked={isSelected}
-                  aria-label={label}
-                  title={label}
-                  onClick={() => setSelectedSeed(s)}
-                  className={`flex aspect-square min-h-11 items-center justify-center rounded-full border-2 p-0.5 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary ${
-                    isSelected ? "border-primary ring-2 ring-primary/40" : "border-transparent opacity-80 hover:opacity-100"
-                  }`}
-                >
-                  <AccountAvatar seed={s} name={name} className="size-full text-lg" brandMarkSize="size-6" />
-                </button>
-              );
-            })}
-          </div>
+          <AvatarChoiceGrid selected={selectedSeed} onSelect={setSelectedSeed} name={name} uploadedPath={uploadedPath} fallbackSeed={fallbackSeed} />
+          {uploadsEnabled && (
+            <div className="mt-3">
+              <ProfileAvatarUploader
+                disabled={pendingProfile}
+                onUploaded={(path) => {
+                  setUploadedPath(path);
+                  setSelectedSeed(UPLOADED);
+                  setProfileMsg("تم حفظ صورتك ✓");
+                  router.refresh();
+                }}
+              />
+            </div>
+          )}
         </fieldset>
 
         <div>

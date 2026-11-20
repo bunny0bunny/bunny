@@ -3,6 +3,7 @@ import { UsersRound } from "lucide-react";
 import { requireRole, getAdminUsers } from "@/lib/queries";
 import { getAccountInvitations } from "@/lib/account-service";
 import { AdminUsersView } from "@/components/accounts/admin-users-view";
+import { profileAvatarPath } from "@/lib/profile-avatar-policy";
 
 export const dynamic = "force-dynamic";
 
@@ -23,6 +24,7 @@ export default async function AdminUsersPage() {
     nickname: u.nickname,
     role: u.role,
     avatarSeed: u.avatarSeed,
+    avatarPath: profileAvatarPath(u.id, u.avatarKey),
     createdAt: u.createdAt instanceof Date ? u.createdAt.toISOString() : String(u.createdAt),
     emailVerifiedAt: u.emailVerifiedAt ? (u.emailVerifiedAt instanceof Date ? u.emailVerifiedAt.toISOString() : String(u.emailVerifiedAt)) : null,
     disabledAt: u.disabledAt ? (u.disabledAt instanceof Date ? u.disabledAt.toISOString() : String(u.disabledAt)) : null,

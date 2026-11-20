@@ -1,6 +1,8 @@
 "use server";
 
 import { z } from "zod";
+import { profileNameSchema } from "@/lib/profile-name";
+import { removeProfileAvatarAsAdmin } from "@/lib/profile-avatar";
 import { GENRES } from "@/lib/constants";
 import { currentProfileOrNull } from "@/lib/queries";
 import { headers } from "next/headers";
@@ -26,7 +28,7 @@ async function safely(operation: Promise<OperationResult>): Promise<OperationRes
 
 const registerSchema = z.object({
   email: z.string().trim().max(254).email("البريد الإلكتروني غير صالح"),
-  nickname: z.string().trim().min(2, "الاسم حرفان على الأقل").max(40, "الاسم ٤٠ حرفًا على الأكثر"),
+  nickname: profileNameSchema,
   password: z.string().min(12, "كلمة المرور ١٢ حرفًا على الأقل").max(128, "كلمة المرور ١٢٨ حرفًا على الأكثر"),
   next: z.string().optional(),
 });
@@ -72,7 +74,7 @@ const cancelInviteSchema = z.object({
 
 const acceptInviteSchema = z.object({
   token: z.string().regex(/^[a-f0-9]{64}$/),
-  nickname: z.string().trim().min(2).max(40).optional(),
+  nickname: profileNameSchema.optional(),
   password: z.string().min(12).max(128).optional(),
 });
 
@@ -197,4 +199,16 @@ export async function setAccountEnabled(input: unknown): Promise<OperationResult
     return { ok: false, error: parsed.error.issues[0]?.message ?? "بيانات غير صالحة" };
   }
   return safely(setAccountEnabledService(session.id, parsed.data, session.authVersion));
+}
+
+const removeAvatarSchema = z.object({ profileId: z.string().min(1).max(96) });
+
+/** Admin moderation: remove a member's uploaded picture (audited). */
+export async function removeProfileAvatar(input: unknown): Promise<OperationResult> {
+  const parsed = removeAvatarSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: "invalid" };
+  try {
+    const result = await removeProfileAvatarAsAdmin(parsed.data.profileId);
+    return result.ok ? { ok: true } : { ok: false, error: result.error ?? "invalid" };
+  } catch { return { ok: false, error: "تعذّر إكمال العملية. حاول مرة أخرى." }; }
 }

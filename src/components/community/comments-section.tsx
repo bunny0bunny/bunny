@@ -231,7 +231,7 @@ export function CommentsSection({
           return (
           <li key={c.id} className="rounded-2xl border border-border/60 bg-card p-4">
             <div className="flex items-start gap-3">
-              <AccountAvatar seed={c.author.avatarSeed} name={c.author.nickname} className="size-9 text-sm" />
+              <AccountAvatar seed={c.author.avatarSeed} src={c.author.avatarPath} name={c.author.nickname} className="size-9 text-sm" />
               <div className="min-w-0 flex-1">
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="text-sm font-semibold text-foreground">{c.author.nickname}</span>
