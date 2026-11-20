@@ -435,7 +435,7 @@ export function ChapterForm({
   currentActorId,
 }: {
   currentActorId: string;
-  seriesOptions: { id: string; titleAr: string; format: Format; nextNumber?: number; defaultReadingDirection?: "rtl" | "ltr"; defaultPresentation?: "paged" | "continuous" }[];
+  seriesOptions: { id: string; titleAr: string; format: Format; nextNumber?: number; takenNumbers?: number[]; defaultReadingDirection?: "rtl" | "ltr"; defaultPresentation?: "paged" | "continuous" }[];
   isAdmin?: boolean;
 }) {
   const formId = useId();
@@ -454,6 +454,8 @@ export function ChapterForm({
   const submitGate = useRef(createSubmissionGate());
   const selected = seriesOptions.find((s) => s.id === seriesId);
   const suggestedNumber = String(selected?.nextNumber ?? 1);
+  const takenNumbers = selected?.takenNumbers ?? [];
+  const numberTaken = number.trim() !== "" && takenNumbers.includes(Number(number));
   const { markSaved } = useUnsavedChanges(Boolean(titleAr || novelBody || number !== suggestedNumber || seriesId !== (seriesOptions[0]?.id ?? "") || workflow !== "draft" || readingDirection !== (selected?.defaultReadingDirection ?? "rtl")));
   const formRecovery = useSessionFormDraft(
     { actorId: currentActorId, entityId: `chapter:new:${seriesId}`, serverSnapshot: "new-chapter-v1" },
@@ -478,7 +480,7 @@ export function ChapterForm({
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
-    if (!seriesId || loading || recoveryRequired || !submitGate.current.begin()) return;
+    if (!seriesId || loading || recoveryRequired || numberTaken || !submitGate.current.begin()) return;
     setLoading(true);
     let uncertain = false;
     try {
@@ -559,6 +561,13 @@ export function ChapterForm({
           <Input id={`${formId}-number`} type="number" inputMode="decimal" min={1} step="any" required value={number} onChange={(e) => setNumber(e.target.value)} className="min-h-[44px] bg-card" />
           <p className="text-xs leading-6 text-muted-foreground">يمكنك استخدام رقم عشري للفصول الإضافية، مثل 7.5 أو 7.6.</p>
           <p className="text-xs leading-6 text-muted-foreground">الرقم التالي المقترح: {Number(suggestedNumber).toLocaleString("ar-EG")}. يمكنك تغييره؛ يتحقق الموقع من عدم تكراره عند الحفظ.</p>
+          {numberTaken && <p role="alert" className="text-xs font-semibold leading-6 text-danger">الفصل {Number(number).toLocaleString("ar-EG")} موجود بالفعل في هذا العمل (قد يكون مسودة عند زميل). اختر رقمًا آخر.</p>}
+          {takenNumbers.length > 0 && (
+            <details className="text-xs leading-6 text-muted-foreground">
+              <summary className="cursor-pointer">الأرقام المستخدمة في هذا العمل ({takenNumbers.length.toLocaleString("ar-EG")})</summary>
+              <p dir="ltr" className="mt-1 break-words text-end">{takenNumbers.slice(-60).join("، ")}{takenNumbers.length > 60 ? " …" : ""}</p>
+            </details>
+          )}
         </div>
 
       </div>
@@ -610,7 +619,7 @@ export function ChapterForm({
       </fieldset>
       {recoveryRequired && <Link href={isAdmin ? "/admin/chapters" : "/studio"} target="_blank" rel="noopener noreferrer" className="inline-block text-sm text-primary underline">افتح قائمة الفصول للتحقق من نتيجة الإنشاء</Link>}
       {error && <p role="alert" className="rounded-lg border border-danger/40 bg-danger/10 px-3 py-2 text-xs text-danger">{error}</p>}
-      <Button type="submit" disabled={loading || recoveryRequired || !seriesOptions.length} className="min-h-[44px] gap-2 bg-primary text-primary-foreground hover:bg-primary/90">
+      <Button type="submit" disabled={loading || recoveryRequired || numberTaken || !seriesOptions.length} className="min-h-[44px] gap-2 bg-primary text-primary-foreground hover:bg-primary/90">
         {loading ? <Loader2 className="size-4 animate-spin" aria-hidden /> : <Plus className="size-4" aria-hidden />}
         إنشاء الفصل والمتابعة للاستوديو
       </Button>
