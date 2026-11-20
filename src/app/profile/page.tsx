@@ -5,6 +5,8 @@ import Link from "next/link";
 import { BookMarked, BookOpenCheck, Check, Flame, MessageSquare, Star, History, Trophy } from "lucide-react";
 import { SiteHeader, SiteFooter, BottomNav } from "@/components/library/chrome";
 import { ProfileSettings } from "@/components/library/profile-settings";
+import { PreferredGenresEditor } from "@/components/library/preferred-genres-editor";
+import { GENRES } from "@/lib/constants";
 import { AccountAvatar } from "@/components/accounts/account-avatar";
 import { profileAvatarPath } from "@/lib/profile-avatar-policy";
 import { ReadingActivityChart } from "@/components/library/reading-activity-chart";
@@ -49,6 +51,9 @@ export default async function ProfilePage() {
     getReadingStats(profile.id),
     db.publicIdentity.count({ where: { ownerProfileId: profile.id, kind: "team" } }).then((n) => n > 0),
   ]);
+  let preferredGenres: string[] = [];
+  try { const raw = JSON.parse(profile.preferredGenresJson || "[]"); preferredGenres = Array.isArray(raw) ? raw.filter((g): g is string => (GENRES as readonly string[]).includes(g)) : []; } catch { preferredGenres = []; }
+
 
   const statCards = [
     { label: "في مكتبتي", value: stats.libraryCount, icon: BookMarked, href: "/library" },
@@ -214,6 +219,8 @@ export default async function ProfilePage() {
             {/* favorite genres */}
             <section aria-label="الأنواع المفضلة" className="rounded-2xl border border-border/60 bg-card p-4">
               <h2 className="mb-3 text-sm font-bold">أنواعك المفضلة</h2>
+              <PreferredGenresEditor initial={preferredGenres} />
+              <h3 className="mb-2 mt-5 text-xs font-semibold text-muted-foreground">من قراءاتك</h3>
               {genres.length === 0 ? (
                 <p className="text-sm text-muted-foreground">أضف أعمالًا إلى مكتبتك لتكتشف ذوقك.</p>
               ) : (

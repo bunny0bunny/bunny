@@ -103,6 +103,7 @@ export type ExploreFilters = {
   genre?: string;
   status?: string;
   sort?: string; // popular | newest | rating
+  hideAdult?: boolean;
 };
 
 export function toCard(s: {
@@ -177,6 +178,7 @@ export async function getPublishedSeries(filters: ExploreFilters): Promise<Serie
   if (filters.format && (FORMATS as readonly string[]).includes(filters.format)) where.format = filters.format;
   if (filters.status && ["ongoing", "completed", "hiatus"].includes(filters.status))
     where.status = filters.status;
+  if (filters.hideAdult) where.isAdult = false;
 
   const rows = await db.series.findMany({
     where,

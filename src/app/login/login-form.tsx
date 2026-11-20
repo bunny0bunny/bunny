@@ -39,9 +39,14 @@ export function LoginForm() {
     });
     setLoading(false);
 
-    if (res?.error) {
-      setError("البريد الإلكتروني أو كلمة المرور غير صحيحة، أو أن الحساب معطّل أو بانتظار التأكيد.");
+    if (res?.error === "EMAIL_NOT_VERIFIED") {
+      setError("بريدك لم يُفعَّل بعد. افتح رسالة التأكيد التي أرسلناها، أو اطلب رسالة جديدة.");
       setShowResendPrompt(true);
+      return;
+    }
+    if (res?.error) {
+      setError("البريد الإلكتروني أو كلمة المرور غير صحيحة، أو أن الحساب معطّل.");
+      setShowResendPrompt(false);
       return;
     }
 

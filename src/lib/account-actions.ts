@@ -1,6 +1,8 @@
 "use server";
 
 import { z } from "zod";
+import { revalidatePath } from "next/cache";
+import { db } from "@/lib/db";
 import { profileNameSchema } from "@/lib/profile-name";
 import { removeProfileAvatarAsAdmin } from "@/lib/profile-avatar";
 import { GENRES } from "@/lib/constants";
@@ -211,4 +213,18 @@ export async function removeProfileAvatar(input: unknown): Promise<OperationResu
     const result = await removeProfileAvatarAsAdmin(parsed.data.profileId);
     return result.ok ? { ok: true } : { ok: false, error: result.error ?? "invalid" };
   } catch { return { ok: false, error: "تعذّر إكمال العملية. حاول مرة أخرى." }; }
+}
+
+const preferredGenresSchema = z.object({ genres: z.array(z.enum(GENRES)).max(GENRES.length) });
+
+/** Readers edit the genres they like; the "for you" rail uses them. */
+export async function updatePreferredGenres(input: unknown): Promise<OperationResult> {
+  const profile = await currentProfileOrNull();
+  if (!profile) return { ok: false, error: "unauthenticated" };
+  const parsed = preferredGenresSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: "invalid" };
+  await db.profile.update({ where: { id: profile.id }, data: { preferredGenresJson: JSON.stringify([...new Set(parsed.data.genres)]) } });
+  revalidatePath("/");
+  revalidatePath("/profile");
+  return { ok: true };
 }

@@ -3,9 +3,9 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { BookOpenText, Heart, Sparkles, CheckCheck, BellOff } from "lucide-react";
+import { BookOpenText, Heart, Sparkles, CheckCheck, BellOff, Trash2, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { markAllNotificationsRead, markNotificationRead } from "@/lib/actions";
+import { markAllNotificationsRead, markNotificationRead, deleteNotification, clearReadNotifications } from "@/lib/actions";
 
 /**
  * Full-page notifications list (Release E). Times are precomputed on the
@@ -48,6 +48,20 @@ export function NotificationsList({ items, unread }: { items: NotificationRow[];
     });
   };
 
+  const run = (work: () => Promise<{ ok: boolean }>, failure: string) => {
+    setError(null);
+    startTransition(async () => {
+      try {
+        const result = await work();
+        if (!result.ok) throw new Error("save failed");
+        router.refresh();
+      } catch {
+        setError(failure);
+      }
+    });
+  };
+  const hasRead = rows.some((it) => it.read);
+
   const open = (it: NotificationRow) => {
     setError(null);
     startTransition(async () => {
@@ -67,13 +81,23 @@ export function NotificationsList({ items, unread }: { items: NotificationRow[];
   return (
     <div className="mt-6 pb-10">
       {error && <p role="alert" className="mb-3 text-sm leading-7 text-danger">{error}</p>}
-      {remaining > 0 && (
-        <div className="mb-3 flex items-center justify-between">
-          <span className="text-xs text-muted-foreground">{remaining} إشعارًا غير مقروء</span>
-          <Button variant="ghost" size="sm" disabled={pending} className="min-h-11 gap-1.5 px-2 text-sm text-primary hover:text-primary" onClick={markAll}>
-            <CheckCheck className="size-3.5" aria-hidden />
-            تعليم الكل كمقروء
-          </Button>
+      {(remaining > 0 || hasRead) && (
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+          <span className="text-xs text-muted-foreground">{remaining > 0 ? `${remaining} إشعارًا غير مقروء` : "لا جديد"}</span>
+          <div className="flex flex-wrap gap-1">
+            {remaining > 0 && (
+              <Button variant="ghost" size="sm" disabled={pending} className="min-h-11 gap-1.5 px-2 text-sm text-primary hover:text-primary" onClick={markAll}>
+                <CheckCheck className="size-3.5" aria-hidden />
+                تعليم الكل كمقروء
+              </Button>
+            )}
+            {hasRead && (
+              <Button variant="ghost" size="sm" disabled={pending} className="min-h-11 gap-1.5 px-2 text-sm text-muted-foreground" onClick={() => run(clearReadNotifications, "تعذّر حذف الإشعارات المقروءة.")}>
+                <Trash2 className="size-3.5" aria-hidden />
+                حذف المقروء
+              </Button>
+            )}
+          </div>
         </div>
       )}
       {rows.length === 0 ? (
@@ -110,17 +134,27 @@ export function NotificationsList({ items, unread }: { items: NotificationRow[];
               </>
             );
             return (
-              <li key={it.id}>
+              <li key={it.id} className="group relative">
+                <div className="absolute end-2 top-2 z-10 flex gap-1">
+                  {!it.href && !it.read && (
+                    <button type="button" disabled={pending} onClick={() => run(() => markNotificationRead({ id: it.id }), "تعذّر تحديث الإشعار.")} aria-label="تعليم كمقروء" title="تعليم كمقروء" className="grid size-11 place-items-center rounded-xl text-muted-foreground transition hover:bg-accent hover:text-foreground">
+                      <Check className="size-4" aria-hidden />
+                    </button>
+                  )}
+                  <button type="button" disabled={pending} onClick={() => run(() => deleteNotification({ id: it.id }), "تعذّر حذف الإشعار.")} aria-label="حذف الإشعار" title="حذف الإشعار" className="grid size-11 place-items-center rounded-xl text-muted-foreground transition hover:bg-danger/10 hover:text-danger">
+                    <Trash2 className="size-4" aria-hidden />
+                  </button>
+                </div>
                 {it.href ? (
                   <button
                     onClick={() => open(it)}
                     disabled={pending}
-                    className={`flex w-full items-start gap-3 rounded-2xl border border-border/60 bg-card p-4 text-start transition hover:border-primary/30 hover:bg-accent/30 ${it.read ? "" : "border-primary/25 bg-primary/5"}`}
+                    className={`flex w-full items-start gap-3 rounded-2xl border border-border/60 bg-card p-4 pe-24 text-start transition hover:border-primary/30 hover:bg-accent/30 ${it.read ? "" : "border-primary/25 bg-primary/5"}`}
                   >
                     {body}
                   </button>
                 ) : (
-                  <div className={`flex items-start gap-3 rounded-2xl border border-border/60 bg-card p-4 ${it.read ? "" : "border-primary/25 bg-primary/5"}`}>
+                  <div className={`flex items-start gap-3 rounded-2xl border border-border/60 bg-card p-4 pe-24 ${it.read ? "" : "border-primary/25 bg-primary/5"}`}>
                     {body}
                   </div>
                 )}

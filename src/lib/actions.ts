@@ -10,6 +10,8 @@ import { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 import { currentProfileOrNull, liveChapterWhere, getVisibleComments, COMMENTS_PAGE_SIZE, type CommentView } from "@/lib/queries";
 import { notifyCommentLike } from "@/lib/notifications";
+import { readerHref } from "@/lib/reader-route";
+import type { Format } from "@/lib/constants";
 import { revalidatePath } from "next/cache";
 import { isWorkflow, isRole, type Workflow, type Role } from "@/lib/constants";
 import { isStaffRole, isAssignableRole, isAssignedToSeries } from "@/lib/team-access";
@@ -649,7 +651,8 @@ export async function toggleCommentLike(
       id: true,
       status: true,
       profileId: true,
-      series: { select: { slug: true, titleAr: true, titleOriginal: true } },
+      series: { select: { slug: true, titleAr: true, titleOriginal: true, format: true } },
+      chapter: { select: { number: true } },
       _count: { select: { likes: true } },
     },
   });
@@ -670,6 +673,8 @@ export async function toggleCommentLike(
         likerNickname: profile.nickname,
         seriesSlug: comment.series.slug,
         seriesTitle: getWorkTitle(comment.series),
+        // A like on a chapter comment opens that chapter, where the comment lives.
+        href: comment.chapter ? readerHref(comment.series.format as Format, comment.series.slug, comment.chapter.number) : `/series/${comment.series.slug}`,
       });
     }
   }
@@ -838,6 +843,23 @@ export async function markNotificationRead(input: unknown): Promise<ActionResult
     return { ok: false, error: "not_found" }; // not owned / not found — no info leak
   }
   return { ok: true };
+}
+
+export async function deleteNotification(input: unknown): Promise<ActionResult> {
+  const profile = await currentProfileOrNull();
+  if (!profile) return { ok: false, error: "unauthenticated" };
+  const parsed = z.object({ id: z.string().min(1).max(64) }).safeParse(input);
+  if (!parsed.success) return { ok: false, error: "invalid" };
+  const removed = await db.notification.deleteMany({ where: { id: parsed.data.id, profileId: profile.id } });
+  return removed.count ? { ok: true } : { ok: false, error: "not_found" };
+}
+
+/** Delete every notification the reader already read. */
+export async function clearReadNotifications(): Promise<ActionResult & { removed?: number }> {
+  const profile = await currentProfileOrNull();
+  if (!profile) return { ok: false, error: "unauthenticated" };
+  const removed = await db.notification.deleteMany({ where: { profileId: profile.id, readAt: { not: null } } });
+  return { ok: true, removed: removed.count };
 }
 
 export async function markAllNotificationsRead(): Promise<ActionResult> {

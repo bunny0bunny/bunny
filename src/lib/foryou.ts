@@ -36,6 +36,7 @@ const GENRE_WEIGHT = {
   RATING_4: 2,
   RATING_2: -2,
   RATING_1: -3,
+  PREFERRED: 2, // genres the reader picked at onboarding or in settings
 } as const;
 
 export type ForYouItem = {
@@ -54,7 +55,7 @@ function affinityFromRatings(value: number): number {
 }
 
 export async function getForYouSeries(profileId: string, limit = 8): Promise<ForYouItem[]> {
-  const [progress, library, ratings] = await Promise.all([
+  const [progress, library, ratings, owner] = await Promise.all([
     db.readingProgress.findMany({
       where: { profileId, chapter: { deletedAt: null, series: { deletedAt: null } } },
       select: { seriesId: true, percent: true, completed: true, updatedAt: true },
@@ -67,15 +68,18 @@ export async function getForYouSeries(profileId: string, limit = 8): Promise<For
       where: { profileId, series: { deletedAt: null } },
       select: { seriesId: true, value: true },
     }),
+    db.profile.findUnique({ where: { id: profileId }, select: { preferredGenresJson: true } }),
   ]);
+  let preferred: string[] = [];
+  try { const raw = JSON.parse(owner?.preferredGenresJson || "[]"); preferred = Array.isArray(raw) ? normalizeGenres(raw.filter((g): g is string => typeof g === "string")) : []; } catch { preferred = []; }
 
   const historyIds = new Set<string>();
   for (const p of progress) historyIds.add(p.seriesId);
   for (const l of library) historyIds.add(l.seriesId);
   for (const r of ratings) historyIds.add(r.seriesId);
 
-  // Cold start: an anecdote is not a taste profile.
-  if (historyIds.size < 2) return [];
+  // Cold start: an anecdote is not a taste profile, unless the reader told us what they like.
+  if (historyIds.size < 2 && preferred.length === 0) return [];
 
   const historyRows = await db.series.findMany({
     where: { deletedAt: null, id: { in: [...historyIds] } },
@@ -101,6 +105,7 @@ export async function getForYouSeries(profileId: string, limit = 8): Promise<For
       progressBySeries.set(p.seriesId, { percent: p.percent, completed: p.completed, updatedAt: p.updatedAt });
     }
   }
+  addAffinity(preferred, GENRE_WEIGHT.PREFERRED);
   for (const h of history) {
     const p = progressBySeries.get(h.id);
     if (p) addAffinity(h.genres, p.completed ? GENRE_WEIGHT.PROGRESS_COMPLETED : p.percent >= 50 ? GENRE_WEIGHT.PROGRESS_MID : GENRE_WEIGHT.PROGRESS_TOUCHED);
@@ -151,6 +156,8 @@ export async function getForYouSeries(profileId: string, limit = 8): Promise<For
       reasonAr = `لأنك قرأت «${anchor.title}»`;
     } else if (anchor) {
       reasonAr = `يشبه «${anchor.title}» من مكتبتك`;
+    } else if (c.genres.some((g) => preferred.includes(g))) {
+      reasonAr = `لأنك تحب «${c.genres.find((g) => preferred.includes(g))}»`;
     } else {
       const topGenre = [...affinity.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] ?? "ذوقك";
       reasonAr = `يطابق ذوقك في «${topGenre}»`;
