@@ -13,7 +13,7 @@
     "cpu_ms": 30000
   },
   "triggers": {
-    "crons": ["* * * * *"]
+    "crons": ["0 * * * *"]
   },
   "assets": {
     "directory": ".open-next/assets",
