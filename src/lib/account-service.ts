@@ -844,7 +844,7 @@ export async function acceptTeamInvitationService(
             return {
               ok: true,
               message: "تم إنشاء حسابك وتفعيل انضمامك إلى الفريق بنجاح.",
-              next: "/login",
+              next: "/login?next=%2Fstudio",
             };
           }
         },

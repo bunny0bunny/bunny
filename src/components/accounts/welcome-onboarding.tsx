@@ -83,7 +83,9 @@ export function WelcomeOnboarding({
         return;
       }
       try { await updateSession?.({ name: name.trim() }); } catch {}
-      setStep("genres");
+      // Team members go straight to work; reading tastes can be set later from the profile page.
+      if (isStaff) handleFinish(true);
+      else setStep("genres");
     });
   };
 
@@ -110,7 +112,7 @@ export function WelcomeOnboarding({
               {isPending ? <Loader2 className="size-4 animate-spin" aria-hidden /> : <Check className="size-4" aria-hidden />}
               حفظ والمتابعة
             </Button>
-            <Button type="button" variant="outline" disabled={isPending} onClick={() => { setError(null); setStep("genres"); }} className="h-11 w-full gap-2 border-border text-muted-foreground hover:text-foreground">
+            <Button type="button" variant="outline" disabled={isPending} onClick={() => { setError(null); if (isStaff) handleFinish(true); else setStep("genres"); }} className="h-11 w-full gap-2 border-border text-muted-foreground hover:text-foreground">
               <span>تخطي هذه الخطوة</span>
               <ArrowLeft className="size-4 rtl:rotate-180" aria-hidden />
             </Button>
