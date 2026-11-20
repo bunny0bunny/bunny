@@ -420,7 +420,9 @@ disabled; use the studio.
 Scheduling stores an approved revision and a future timestamp. Local preview has a
 manual administrator button to publish due chapters. The Cloudflare deployment uses
 `worker.mjs`, which preserves OpenNext's HTTP handler and runs the configured Cron
-Trigger every minute. It calls `/api/editorial/publish-due` through the existing
+Trigger once an hour (on the hour). Running it every minute kept the Neon compute
+awake around the clock and exhausted the free plan with no traffic, so keep the
+interval coarse. It calls `/api/editorial/publish-due` through the existing
 `WORKER_SELF_REFERENCE` service binding with a private encrypted `EDITORIAL_CRON_SECRET`
 binding. Provision that secret before deploying a new Worker; keep `APP_ORIGIN` set to
 the production HTTPS origin. Do not put secret values in `wrangler.jsonc` or source.
