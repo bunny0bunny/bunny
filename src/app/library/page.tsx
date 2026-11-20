@@ -41,7 +41,7 @@ export default async function LibraryPage({
   // Call requireProfile and getLibrary once for ALL shelves, plus getContinueReading(profile.id, 100)
   const [allEntries, continueReadingItems] = await Promise.all([
     getLibrary(profile.id),
-    getContinueReading(profile.id, 100),
+    getContinueReading(profile.id, 100, { includeNext: false }),
   ]);
 
   // Compute shelf counts from all entries

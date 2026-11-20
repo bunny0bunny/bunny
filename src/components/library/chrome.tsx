@@ -1,9 +1,10 @@
 "use client";
+import { signOutAndForget } from "@/lib/sign-out";
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useSession, signOut } from "next-auth/react";
+import { useSession } from "next-auth/react";
 import { BookOpenText, BookMarked, Compass, Library, Search, LogOut, ShieldCheck, UserRound, PenTool, MessageSquarePlus, UsersRound } from "lucide-react";
 import { BrandMark } from "@/components/library/brand-mark";
 import { NotificationBell } from "@/components/library/notification-bell";
@@ -200,7 +201,7 @@ export function SiteHeader() {
                 <DropdownMenuSeparator />
                 <DropdownMenuItem
                   className="cursor-pointer text-danger focus:text-danger"
-                  onClick={() => signOut({ callbackUrl: "/" })}
+                  onClick={() => signOutAndForget({ callbackUrl: "/" })}
                 >
                   <LogOut className="size-4 me-2" aria-hidden /> تسجيل الخروج
                 </DropdownMenuItem>

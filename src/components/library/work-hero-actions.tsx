@@ -18,6 +18,7 @@ export function WorkHeroActions({
   slug,
   format,
   serverProgress,
+  finishedChapterNumber = null,
   chapters,
   titleAr,
   initialShelf,
@@ -25,6 +26,7 @@ export function WorkHeroActions({
   slug: string;
   format: Format;
   serverProgress: { chapterNumber: number; pageIndex: number; percent: number } | null;
+  finishedChapterNumber?: number | null;
   chapters: ChapterLite[];
   titleAr: string;
   initialShelf: Shelf | null;
@@ -46,11 +48,17 @@ export function WorkHeroActions({
 
   const target = useMemo(() => {
     let p = serverProgress;
-    if (!p && mounted && typeof window !== "undefined") {
+    let finished = finishedChapterNumber;
+    if (!p && finished === null && mounted && typeof window !== "undefined") {
       const local = readLocal(slug);
-      if (local && local.format === format && local.percent > 0 && local.percent < 100) {
+      if (local && local.format === format && (local.completed || local.percent >= 99)) finished = local.chapterNumber;
+      else if (local && local.format === format && local.percent > 0 && local.percent < 100) {
         p = { chapterNumber: local.chapterNumber, pageIndex: local.pageIndex, percent: local.percent };
       }
+    }
+    if (!p && finished !== null) {
+      const next = [...chapters].filter((c) => c.number > finished! && !c.isPremiumDemo).sort((a, b) => a.number - b.number)[0];
+      if (next) return { chapter: next.number, label: `اقرأ الفصل ${next.number}`, resuming: true, percent: 0 };
     }
     const resumeChapter = p && p.percent > 0 && p.percent < 100
       ? chapters.find((c) => c.number === p!.chapterNumber && !c.isPremiumDemo)
@@ -72,7 +80,7 @@ export function WorkHeroActions({
       resuming: false,
       percent: 0,
     };
-  }, [chapters, mounted, serverProgress, slug, format]);
+  }, [chapters, mounted, serverProgress, finishedChapterNumber, slug, format]);
 
   if (!chapters.length || !chapters.some(chapter => !chapter.isPremiumDemo)) {
     return <div className="space-y-3">
@@ -98,7 +106,7 @@ export function WorkHeroActions({
               <Play className="size-4.5 fill-current" aria-hidden />
             )}
             <span>{target.label}</span>
-            {target.resuming && (
+            {target.resuming && target.percent > 0 && (
               <span className="hidden text-xs font-semibold opacity-85 sm:inline">({Math.round(target.percent)}٪)</span>
             )}
           </Link>
@@ -125,7 +133,7 @@ export function WorkHeroActions({
           <div className="min-w-0 flex-1">
             <p className="truncate text-xs font-bold text-foreground">{titleAr}</p>
             <p className="truncate text-[11px] text-muted-foreground">
-              {target.resuming ? `الفصل ${target.chapter} (${Math.round(target.percent)}٪)` : "ابدأ القراءة الآن"}
+              {target.resuming ? (target.percent > 0 ? `الفصل ${target.chapter} (${Math.round(target.percent)}٪)` : `الفصل التالي: ${target.chapter}`) : "ابدأ القراءة الآن"}
             </p>
           </div>
           <Button asChild size="sm" className="h-11 shrink-0 gap-1.5 rounded-lg bg-primary px-4 font-bold text-primary-foreground">

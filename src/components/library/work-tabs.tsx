@@ -1,4 +1,5 @@
 "use client";
+import { useSession } from "next-auth/react";
 import { getChapterLabel } from '@/lib/chapter-title';
 
 import Image from "next/image";
@@ -95,6 +96,7 @@ export function WorkTabs({
   const [searchQuery, setSearchQuery] = useState("");
   const [sortOrder, setSortOrder] = useState<"desc" | "asc">("desc");
   const mounted = useHydrated();
+  const { status } = useSession();
 
   // Determine current active resume chapter and map of chapter progress
   const progressMap = useMemo(() => {
@@ -104,11 +106,15 @@ export function WorkTabs({
       const chapter = local && local.format === format
         ? publishedChapters.find(c => c.number === local.chapterNumber && !c.isPremiumDemo) : null;
       if (local && chapter && !map.has(chapter.id)) {
-        map.set(chapter.id, { pageIndex: local.pageIndex, percent: local.percent, completed: local.percent >= 99 });
+        map.set(chapter.id, { pageIndex: local.pageIndex, percent: local.percent, completed: local.completed === true || local.percent >= 99 });
+      }
+      // Guests only keep their latest position per work; chapters before it count as read.
+      if (local && local.format === format && status === "unauthenticated") {
+        for (const c of publishedChapters) if (c.number < local.chapterNumber && !map.has(c.id)) map.set(c.id, { pageIndex: 0, percent: 100, completed: true });
       }
     }
     return map;
-  }, [progressMapEntries, mounted, slug, format, publishedChapters]);
+  }, [progressMapEntries, mounted, slug, format, publishedChapters, status]);
 
   const activeProgress = useMemo(() => {
     let p = serverProgress;

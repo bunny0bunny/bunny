@@ -417,30 +417,46 @@ export type ContinueReadingItem = {
   chapterTitle: string;
   percent: number;
   updatedAt: Date;
+  /** The previous chapter is finished; this is the next one to start. */
+  nextChapter?: boolean;
 };
 
-export async function getContinueReading(profileId: string, limit = 3): Promise<ContinueReadingItem[]> {
+export async function getContinueReading(profileId: string, limit = 3, options: { includeNext?: boolean } = {}): Promise<ContinueReadingItem[]> {
+  const includeNext = options.includeNext ?? true;
+  const seriesSelect = { slug: true, titleAr: true, titleOriginal: true, coverPath: true, accent: true, format: true, isAdult: true } as const;
+  // Latest position per work first, then de-duplicate: several open chapters of one work must not crowd out other works.
   const rows = await db.readingProgress.findMany({
-    where: { profileId, completed: false, percent: { gt: 0, lt: 99 }, chapter: { ...liveChapterWhere(), isPremiumDemo: false } },
-    orderBy: { updatedAt: "desc" },
-    take: limit,
-    include: {
-      series: { select: { slug: true, titleAr: true, titleOriginal: true, coverPath: true, accent: true, format: true, isAdult: true } },
-      chapter: { select: { number: true, titleAr: true } },
-    },
+    where: { profileId, series: { deletedAt: null }, chapter: { ...liveChapterWhere(), isPremiumDemo: false }, ...(includeNext ? {} : { completed: false, percent: { gt: 0, lt: 99 } }) },
+    orderBy: [{ updatedAt: "desc" }, { id: "desc" }],
+    take: Math.min(500, Math.max(limit * 6, 30)),
+    include: { series: { select: seriesSelect }, chapter: { select: { number: true, titleAr: true } } },
   });
-  return rows.map((r) => ({
-    seriesSlug: r.series.slug,
-    seriesTitle: getWorkTitle(r.series),
-    isAdult: r.series.isAdult,
-    coverPath: displayCover(r.series.coverPath),
-    accent: r.series.accent,
-    format: r.series.format as Format,
-    chapterNumber: r.chapter.number,
-    chapterTitle: getChapterTitle(r.chapter),
-    percent: r.percent,
-    updatedAt: r.updatedAt,
-  }));
+  const latest = new Map<string, (typeof rows)[number]>();
+  for (const row of rows) if (!latest.has(row.seriesId)) latest.set(row.seriesId, row);
+  const finished = (row: (typeof rows)[number]) => row.completed || row.percent >= 99;
+  const unfinished = [...latest.values()].filter((row) => !finished(row) && row.percent > 0);
+  // When the latest chapter of a work is finished, "continue" means its next readable chapter.
+  const done = includeNext ? [...latest.values()].filter(finished) : [];
+  const nextChapters = done.length
+    ? await db.chapter.findMany({
+        where: { ...liveChapterWhere(), isPremiumDemo: false, OR: done.map((row) => ({ seriesId: row.seriesId, number: { gt: row.chapter.number } })) },
+        orderBy: [{ number: "asc" }],
+        select: { seriesId: true, number: true, titleAr: true },
+      })
+    : [];
+  const nextBySeries = new Map<string, (typeof nextChapters)[number]>();
+  for (const chapter of nextChapters) if (!nextBySeries.has(chapter.seriesId)) nextBySeries.set(chapter.seriesId, chapter);
+  const items: ContinueReadingItem[] = [];
+  for (const row of latest.values()) {
+    const base = { seriesSlug: row.series.slug, seriesTitle: getWorkTitle(row.series), isAdult: row.series.isAdult, coverPath: displayCover(row.series.coverPath), accent: row.series.accent, format: row.series.format as Format, updatedAt: row.updatedAt };
+    if (unfinished.includes(row)) items.push({ ...base, chapterNumber: row.chapter.number, chapterTitle: getChapterTitle(row.chapter), percent: row.percent });
+    else {
+      const next = nextBySeries.get(row.seriesId);
+      if (next) items.push({ ...base, chapterNumber: next.number, chapterTitle: getChapterTitle(next), percent: 0, nextChapter: true });
+    }
+    if (items.length >= limit) break;
+  }
+  return items;
 }
 
 /* ------------------------------------------------------------------ */

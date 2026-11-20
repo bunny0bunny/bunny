@@ -1,4 +1,5 @@
 "use client";
+import { signOutAndForget } from "@/lib/sign-out";
 import { normalizeGenres } from "@/lib/genres";
 
 import { EDITORIAL_LABELS } from "@/lib/editorial-state";
@@ -10,7 +11,7 @@ import { useUnsavedChanges } from "@/hooks/use-unsaved-changes";
 import { createSubmissionGate } from "@/lib/unsaved-text";
 import { useRouter } from "next/navigation";
 import { LogOut, Loader2, Plus, Search, PenTool } from "lucide-react";
-import { signOut } from "next-auth/react";
+
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -28,7 +29,7 @@ export function AdminLogoutButton({ compact = false }: { compact?: boolean }) {
       variant="ghost"
       size={compact ? "icon" : "sm"}
       className={compact ? "size-9 text-muted-foreground" : "w-full justify-start gap-2.5 text-muted-foreground hover:text-danger"}
-      onClick={() => signOut({ callbackUrl: "/" })}
+      onClick={() => signOutAndForget({ callbackUrl: "/" })}
       aria-label="تسجيل الخروج"
     >
       <LogOut className="size-4" aria-hidden />

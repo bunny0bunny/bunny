@@ -1,9 +1,10 @@
 "use client";
+import { signOutAndForget } from "@/lib/sign-out";
 
 import { arabicError } from "@/lib/error-messages-ar";
 import { useTransition, useState } from "react";
 import { useRouter } from "next/navigation";
-import { useSession, signOut } from "next-auth/react";
+import { useSession } from "next-auth/react";
 import { Loader2, KeyRound, Check, Eye, EyeOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -122,7 +123,7 @@ export function ProfileSettings({
 
       setPasswordMsg("تم تغيير كلمة المرور بنجاح. يتم تسجيل الخروج لإلغاء الجلسات القديمة...");
       setTimeout(async () => {
-        await signOut({ redirect: false });
+        await signOutAndForget({ redirect: false });
         router.push("/login");
         router.refresh();
       }, 1200);

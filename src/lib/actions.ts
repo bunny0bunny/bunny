@@ -72,6 +72,46 @@ export async function saveReadingProgress(input: unknown): Promise<ActionResult>
   return { ok: true };
 }
 
+const guestProgressSchema = z.array(z.object({
+  seriesSlug: z.string().min(1).max(200),
+  chapterNumber: z.number().refine(isChapterNumber),
+  pageIndex: z.number().int().min(0).max(100000),
+  pageOffset: z.number().finite().min(0).max(1).nullable().optional(),
+  percent: z.number().min(0).max(100),
+  completed: z.boolean().optional(),
+  updatedAt: z.number().int().positive(),
+})).max(50);
+
+/**
+ * After sign-in, copy the positions this device saved as a guest into the account.
+ * The newer position wins; a guest entry never clears a finished chapter. Idempotent.
+ */
+export async function mergeGuestProgress(input: unknown): Promise<ActionResult & { merged?: number }> {
+  const profile = await currentProfileOrNull();
+  if (!profile) return { ok: false, error: "unauthenticated" };
+  const parsed = guestProgressSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: "invalid" };
+  let merged = 0;
+  for (const entry of parsed.data) {
+    const series = await db.series.findUnique({ where: { slug: entry.seriesSlug, deletedAt: null }, select: { id: true } });
+    if (!series) continue;
+    const chapter = await db.chapter.findFirst({ where: { ...liveChapterWhere(), seriesId: series.id, number: entry.chapterNumber, isPremiumDemo: false }, select: { id: true } });
+    if (!chapter) continue;
+    const savedAt = Math.min(entry.updatedAt, Date.now());
+    const existing = await db.readingProgress.findUnique({ where: { profileId_chapterId: { profileId: profile.id, chapterId: chapter.id } } });
+    if (existing && (existing.updatedAt.getTime() >= savedAt || (existing.pageIndex === entry.pageIndex && existing.percent === entry.percent))) continue;
+    const completed = entry.completed === true || entry.percent >= 99;
+    await db.readingProgress.upsert({
+      where: { profileId_chapterId: { profileId: profile.id, chapterId: chapter.id } },
+      update: { pageIndex: entry.pageIndex, pageOffset: entry.pageOffset ?? null, percent: entry.percent, ...(completed ? { completed: true } : {}) },
+      create: { profileId: profile.id, seriesId: series.id, chapterId: chapter.id, pageIndex: entry.pageIndex, pageOffset: entry.pageOffset ?? null, percent: entry.percent, completed },
+    });
+    merged++;
+  }
+  if (merged) { revalidatePath("/"); revalidatePath("/library"); }
+  return { ok: true, merged };
+}
+
 /* ------------------------------------------------------------------ */
 /* Admin: series + chapters (role enforced here, again)                */
 /* ------------------------------------------------------------------ */
