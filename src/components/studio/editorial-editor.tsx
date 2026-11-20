@@ -260,7 +260,7 @@ export function EditorialEditor({
 
   // Reorder pages
   function movePage(index: number, direction: "up" | "down") {
-    if (actionsBlocked || importedPages || isReadOnlyStatus) return;
+    if (actionsBlocked || isReadOnlyStatus) return;
     if (direction === "up" && index === 0) return;
     if (direction === "down" && index === pages.length - 1) return;
     const targetIndex = direction === "up" ? index - 1 : index + 1;
@@ -274,7 +274,7 @@ export function EditorialEditor({
   }
 
   function removePage(index: number) {
-    if (actionsBlocked || importedPages || isReadOnlyStatus) return;
+    if (actionsBlocked || isReadOnlyStatus) return;
     if (pages.length <= 1) {
       toast({ title: "تنبيه", description: "يجب الإبقاء على صفحة واحدة على الأقل.", variant: "destructive" });
       return;
@@ -899,7 +899,7 @@ export function EditorialEditor({
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <h2 className="text-base font-bold text-foreground">صفحات الفصل ({pages.length})</h2>
                   <p className="text-xs text-muted-foreground">
-                    {importedPages ? "صفحات PDF للمعاينة؛ استبدل الملف كاملًا لتعديلها." : "يمكن ترتيب صفحات العرض القديمة أو حذفها، أو استبدالها بملف PDF كامل."}
+                    {importedPages ? "يمكنك ترتيب صفحات PDF أو حذف صفحة زائدة، ثم الحفظ. لإضافة صفحات ارفع ملفًا جديدًا." : "يمكن ترتيب صفحات العرض القديمة أو حذفها، أو استبدالها بملف PDF كامل."}
                   </p>
                 </div>
 
@@ -926,7 +926,7 @@ export function EditorialEditor({
                           </span>
                         </div>
 
-                        {!isReadOnlyStatus && !importedPages && (
+                        {!isReadOnlyStatus && (
                           <div className="mt-2 flex items-center justify-between gap-1">
                             <div className="flex items-center gap-1">
                               <Button

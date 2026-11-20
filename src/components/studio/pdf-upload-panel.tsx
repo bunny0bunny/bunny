@@ -301,7 +301,7 @@ export function PdfUploadPanel(props: Props) {
     <section className="space-y-4 rounded-2xl border border-border/60 bg-card p-5" aria-labelledby={`${inputId}-heading`} aria-busy={busy || cancelling}>
       <h2 id={`${inputId}-heading`} className="text-base font-bold">رفع فصل من PDF</h2>
       <p className="text-sm leading-7 text-muted-foreground">تُجهّز الصفحات في متصفحك دون اشتراك. أبقِ هذه الصفحة مفتوحة حتى اكتمال الرفع. يبقى الملف الأصلي خاصًا، والصفحات مسودة للمعاينة والمراجعة؛ لن تُنشر تلقائيًا.</p>
-      <p className="text-xs leading-6 text-muted-foreground">حتى 30 ميجابايت و200 صفحة. لتعديل الصفحات أو ترتيبها، عدّل PDF خارجيًا ثم استبدل الملف كاملًا.</p>
+      <p className="text-xs leading-6 text-muted-foreground">حتى 30 ميجابايت و200 صفحة. بعد الرفع تقدر ترتب الصفحات أو تحذف صفحة من قائمة الصفحات. لإضافة صفحات ارفع ملفًا جديدًا.</p>
       {!props.uploadsEnabled && <p role="status" className="text-sm text-muted-foreground">رفع PDF غير مفعّل حاليًا على هذا الموقع.</p>}
       {props.unsaved && <div className="space-y-2 rounded-lg border border-gold/30 bg-gold/5 p-3">
         <p id={`${inputId}-save-help`} className="text-sm leading-7 text-gold">يمكنك اختيار الملف الآن. احفظ تغييرات المسودة لتفعيل الرفع؛ سيبقى الملف الذي اخترته جاهزًا.</p>

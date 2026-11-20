@@ -170,8 +170,14 @@ export async function updateDraftSnapshot(input: VersionInput & { titleAr?: stri
     if (input.readingDirection !== undefined && !["rtl", "ltr"].includes(input.readingDirection)) return { ok: false, error: "اتجاه القراءة غير صالح" };
     const pages = input.pages === undefined ? null : validatePagesSnapshot(input.pages);
     const currentPages = validatePagesSnapshot(revision.pagesJson);
-    if (input.pages !== undefined && (currentPages?.some(page => page.imagePath.startsWith("/api/media/")) || pages?.some(page => page.imagePath.startsWith("/api/media/"))) && JSON.stringify(pages) !== JSON.stringify(currentPages)) {
-      return { ok: false, error: "لتغيير صفحات الفصل، استبدل ملف PDF كاملًا" };
+    // Imported (PDF) pages can be removed or reordered, never added or duplicated here:
+    // new pages only arrive through an upload. Assets stay owned by the chapter.
+    if (input.pages !== undefined && pages && (currentPages?.some(page => page.imagePath.startsWith("/api/media/")) || pages.some(page => page.imagePath.startsWith("/api/media/")))) {
+      const current = new Set((currentPages ?? []).map(page => `${page.imagePath}|${page.width}|${page.height}`));
+      const next = pages.map(page => `${page.imagePath}|${page.width}|${page.height}`);
+      if (!pages.length || new Set(next).size !== next.length || next.some(key => !current.has(key))) {
+        return { ok: false, error: "يمكن حذف صفحات النسخة الحالية أو ترتيبها فقط؛ لإضافة صفحات ارفع ملف PDF جديدًا" };
+      }
     }
     if (input.pages !== undefined && (!pages || !await pagesBelongToChapter(tx, revision.chapterId, pages))) return { ok: false, error: "يمكن ترتيب صفحات هذا الفصل الموجودة فقط" };
     const revoked = ["approved", "scheduled"].includes(revision.status);
