@@ -187,11 +187,11 @@ export function SiteHeader() {
                 {isStaff && (
                   <DropdownMenuItem asChild>
                     <Link href="/studio" className="cursor-pointer">
-                      <PenTool className="size-4 me-2" aria-hidden /> استوديو المبدعين
+                      <PenTool className="size-4 me-2" aria-hidden /> استوديو الفريق
                     </Link>
                   </DropdownMenuItem>
                 )}
-                {isStaff && (
+                {isStaff && session.user?.role !== "contributor" && (
                   <DropdownMenuItem asChild>
                     <Link href="/admin" className="cursor-pointer">
                       <ShieldCheck className="size-4 me-2" aria-hidden /> لوحة الإدارة
