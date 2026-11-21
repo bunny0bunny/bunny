@@ -174,7 +174,7 @@ let routeRole = "admin";
 let routeSeries: any[] = [];
 let groupedInput: any;
 mock.module("../../src/lib/queries", () => ({ currentProfileOrNull: async () => ({ id: "actor-a", role: routeRole }), getAdminSeries: async () => routeSeries }));
-mock.module("../../src/lib/db", () => ({ db: { chapter: { groupBy: async (input: any) => { groupedInput = input; return [{ seriesId: "series", _max: { number: 35 } }]; } } } }));
+mock.module("../../src/lib/db", () => ({ db: { chapter: { groupBy: async (input: any) => { groupedInput = input; return [{ seriesId: "series", _max: { number: 35 } }]; }, findMany: async () => [] } } }));
 const { default: NewChapterPage } = await import("../../src/app/admin/chapters/new/page");
 test("real empty new-chapter route offers admins create-work and staff assignment guidance", async () => {
   routeSeries = [];
