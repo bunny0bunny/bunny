@@ -11,6 +11,7 @@ import { AccountAvatar } from "@/components/accounts/account-avatar";
 import { deleteOwnComment, editOwnComment, loadMoreComments, postComment, reportComment, toggleCommentLike } from "@/lib/actions";
 import { arabicError } from "@/lib/error-messages-ar";
 import type { CommentView } from "@/lib/queries";
+import { timeAgoAr as sharedTimeAgo } from "@/lib/time-ago";
 
 /**
  * Relative Arabic time label. Deterministic two-pass rendering via
@@ -28,16 +29,7 @@ const getClientNow = (): number | null => Date.now();
 const getServerNow = (): number | null => null;
 
 function timeAgoAr(date: Date, now: number | null): string {
-  if (now === null) return "";
-  const diff = now - new Date(date).getTime();
-  const days = Math.floor(diff / 86400000);
-  if (days < 1) return "اليوم";
-  if (days === 1) return "قبل يوم";
-  if (days === 2) return "قبل يومين";
-  if (days <= 10) return `قبل ${days} أيام`;
-  if (days < 30) return `قبل ${days} يومًا`;
-  const months = Math.floor(days / 30);
-  return `قبل ${months} شهر`;
+  return now === null ? "" : sharedTimeAgo(date, { now, precision: "day" });
 }
 
 const PAGE_SIZE = 30;

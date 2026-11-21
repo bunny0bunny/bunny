@@ -233,11 +233,12 @@ export default async function SeriesDetailPage({
                   </div>
                 </WorkTabs>
               </div>
-              {related.length > 0 && <Rail title="أعمال مشابهة قد تعجبك">
-                {related.map(work => <SeriesCardItem key={work.id} series={work} />)}
-              </Rail>}
             </div>
           </div>
+          {/* Full page width: the side column ends long before the chapter list does. */}
+          {related.length > 0 && <Rail title="أعمال مشابهة قد تعجبك">
+            {related.map(work => <SeriesCardItem key={work.id} series={work} />)}
+          </Rail>}
         </div>
       </main>
       <SiteFooter />

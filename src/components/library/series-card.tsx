@@ -13,6 +13,7 @@ import {
   STATUS_LABELS,
 } from "@/lib/constants";
 import type { SeriesCard as SeriesCardType } from "@/lib/queries";
+import { RailScroller } from "@/components/library/rail-scroller";
 
 /**
  * Returns user-facing label for category.
@@ -36,6 +37,7 @@ export function SeriesCardItem({
     SeriesCardType,
     "slug" | "titleAr" | "coverPath" | "format" | "ratingAvg" | "genres" | "status" | "chapterCount"
   > & {
+    ratingCount?: number;
     category?: Category | null;
     isAdult?: boolean;
     titleOriginal?: string | null;
@@ -78,6 +80,7 @@ export function SeriesCardItem({
             <span className="flex items-center gap-1 rounded-md bg-background/85 px-1.5 py-0.5 text-[11px] font-semibold text-gold shadow-sm backdrop-blur">
               <Star className="size-3 fill-gold text-gold" aria-hidden />
               {series.ratingAvg.toFixed(1)}
+              {series.ratingCount !== undefined && <span className="font-normal text-foreground/70" aria-label={`${series.ratingCount} تقييم`}>({series.ratingCount})</span>}
             </span>
           ) : (
             <span />
@@ -163,11 +166,13 @@ export function Rail({
   title,
   href,
   actionLabel = 'عرض الكل',
+  autoplay = true,
   children,
 }: {
   title: string;
   href?: string;
   actionLabel?: string;
+  autoplay?: boolean;
   children: React.ReactNode;
 }) {
   return (
@@ -180,9 +185,7 @@ export function Rail({
           </Link>
         )}
       </div>
-      <div className="scrollbar-none -mx-4 flex gap-3.5 overflow-x-auto px-4 pb-2 sm:-mx-6 sm:px-6" role="list">
-        {children}
-      </div>
+      <RailScroller label={title} autoplay={autoplay}>{children}</RailScroller>
     </section>
   );
 }

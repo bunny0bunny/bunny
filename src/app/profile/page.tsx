@@ -19,17 +19,14 @@ import {
 import { getReadingStats } from "@/lib/reading-stats";
 import { EVENT_LABELS } from "@/lib/labels";
 import { db } from "@/lib/db";
+import { timeAgoAr as sharedTimeAgo } from "@/lib/time-ago";
 
 export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = { title: "حسابي" };
 
 function timeAgoAr(date: Date) {
-  const diff = Date.now() - new Date(date).getTime();
-  const days = Math.floor(diff / 86400000);
-  if (days < 1) return "اليوم";
-  if (days < 30) return `قبل ${days === 1 ? "يوم" : days === 2 ? "يومين" : `${days} ${daysUnitAr(days)}`}`;
-  return `قبل ${Math.floor(days / 30)} شهر`;
+  return sharedTimeAgo(date, { precision: "day" });
 }
 
 /** Arabic number agreement for أيام: 1 يوم · 2 يومان · 3–10 أيام · 11+ يومًا */

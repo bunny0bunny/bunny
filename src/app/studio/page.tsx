@@ -24,6 +24,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { PublishDueAdminButton } from "@/components/studio/publish-due-button";
 import { FORMAT_LABELS, type Format } from "@/lib/constants";
+import { timeAgoAr as sharedTimeAgo } from "@/lib/time-ago";
 
 export const dynamic = "force-dynamic";
 
@@ -46,12 +47,7 @@ const ACTIONABLE = ["draft", "changes_requested", "review"];
 const PAGE_SIZE = 50;
 
 function sinceAr(date: Date): string {
-  const minutes = Math.max(0, Math.floor((Date.now() - date.getTime()) / 60000));
-  if (minutes < 60) return minutes <= 1 ? "منذ دقيقة" : `منذ ${minutes} دقيقة`;
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return hours === 1 ? "منذ ساعة" : `منذ ${hours} ساعة`;
-  const days = Math.floor(hours / 24);
-  return days === 1 ? "منذ يوم" : `منذ ${days} يوم`;
+  return sharedTimeAgo(date, { prefix: "منذ" }).replace("الآن", "منذ دقيقة");
 }
 
 const REVISION_BADGE_STYLES: Record<string, string> = {

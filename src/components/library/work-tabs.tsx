@@ -23,6 +23,7 @@ import { readLocal } from "@/lib/progress-local";
 import { useHydrated } from "@/lib/use-hydrated";
 import { readerHref } from "@/lib/reader-route";
 import type { Format } from "@/lib/constants";
+import { timeAgoAr as sharedTimeAgo } from "@/lib/time-ago";
 
 export type ChapterItemView = {
   id: string;
@@ -44,15 +45,7 @@ type ProgressRecord = {
 };
 
 function formatTimeAgo(dateInput: Date | string | null): string {
-  if (!dateInput) return "";
-  const date = typeof dateInput === "string" ? new Date(dateInput) : dateInput;
-  const diff = Date.now() - date.getTime();
-  const days = Math.floor(diff / 86400000);
-  if (days < 1) return "اليوم";
-  if (days < 30) return `قبل ${days} يوم`;
-  const months = Math.floor(days / 30);
-  if (days < 365) return `قبل ${months} شهر`;
-  return `قبل ${Math.floor(months / 12)} سنة`;
+  return dateInput ? sharedTimeAgo(dateInput, { precision: "day" }) : "";
 }
 
 function formatScheduledDate(dateInput: Date | string | null): string {
