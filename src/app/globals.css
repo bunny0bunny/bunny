@@ -184,3 +184,21 @@
     scroll-behavior: auto !important;
   }
 }
+
+/* Legendary badge: a slowly moving aurora border and medal (reduced motion stops it above). */
+@keyframes badge-aurora {
+  0% { background-position: 0% 50%; }
+  100% { background-position: 200% 50%; }
+}
+.badge-legendary {
+  background:
+    linear-gradient(var(--card), var(--card)) padding-box,
+    linear-gradient(90deg, #e879f9, #a78bfa, #fcd34d, #e879f9) border-box;
+  background-size: 100% 100%, 200% 100%;
+  animation: badge-aurora 6s linear infinite;
+}
+.badge-legendary-medal {
+  background: linear-gradient(90deg, #d946ef, #8b5cf6, #f59e0b, #d946ef);
+  background-size: 200% 100%;
+  animation: badge-aurora 6s linear infinite;
+}

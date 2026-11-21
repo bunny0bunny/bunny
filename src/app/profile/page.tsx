@@ -17,6 +17,7 @@ import {
   getFavoriteGenres,
 } from "@/lib/queries";
 import { getReadingStats } from "@/lib/reading-stats";
+import { BadgeCard } from "@/components/library/badge-card";
 import { EVENT_LABELS } from "@/lib/labels";
 import { db } from "@/lib/db";
 import { timeAgoAr as sharedTimeAgo } from "@/lib/time-ago";
@@ -175,34 +176,12 @@ export default async function ProfilePage() {
             <h2 className="mb-3 flex items-center gap-1.5 text-sm font-bold">
               <Trophy className="size-4 text-gold" aria-hidden />
               شاراتك
+              <span className="ms-1 text-xs font-normal text-muted-foreground">
+                {readingStats.badges.filter((b) => b.earned).length} من {readingStats.badges.length} · كل شارة لها أربع درجات: برونزية، فضية، ذهبية، أسطورية
+              </span>
             </h2>
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-              {readingStats.badges.map((b) => (
-                <div
-                  key={b.id}
-                  className={`rounded-2xl border p-3.5 transition ${
-                    b.earned
-                      ? "border-gold/35 bg-gradient-to-b from-gold/10 to-transparent"
-                      : "border-dashed border-border/60 bg-card opacity-70"
-                  }`}
-                >
-                  <p className={`text-sm font-bold ${b.earned ? "text-gold" : "text-muted-foreground"}`}>
-                    {b.labelAr}
-                  </p>
-                  <p className="mt-1 text-[11px] leading-5 text-muted-foreground">{b.descriptionAr}</p>
-                  {!b.earned && b.hintAr && (
-                    <p className="mt-1.5 inline-block rounded-full bg-secondary px-2 py-0.5 text-[10px] tabular-nums text-muted-foreground">
-                      {b.hintAr}
-                    </p>
-                  )}
-                  {b.earned && (
-                    <p className="mt-1.5 flex items-center gap-1 text-[10px] font-medium text-gold/90">
-                      <Check className="size-3" aria-hidden />
-                      مُكتسبة
-                    </p>
-                  )}
-                </div>
-              ))}
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+              {readingStats.badges.map((b) => <BadgeCard key={b.id} badge={b} />)}
             </div>
           </section>
 

@@ -21,14 +21,8 @@ import { db } from "@/lib/db";
  *   • Otherwise → 0. `longestStreak` scans the full 365-day window.
  */
 
-export type BadgeState = {
-  id: string;
-  labelAr: string;
-  descriptionAr: string;
-  earned: boolean;
-  /** Arabic progress hint for locked badges, e.g. "7/10 فصلًا" */
-  hintAr?: string;
-};
+export type { BadgeState } from "./badges";
+import { computeBadges, type BadgeState } from "./badges";
 
 export type ReadingStats = {
   currentStreak: number;
@@ -49,18 +43,20 @@ const dayKey = (d: Date): string => d.toISOString().slice(0, 10);
 export async function getReadingStats(profileId: string): Promise<ReadingStats> {
   const since = new Date(Date.now() - WINDOW_DAYS * 86400000);
 
-  const [events, progress, libraryItems, commentCount, ratingCount] = await Promise.all([
+  const [events, progress, libraryItems, commentCount, ratingCount, signupRank] = await Promise.all([
     db.analyticsEvent.findMany({
       where: { profileId, type: { in: [...READ_TYPES] }, createdAt: { gte: since } },
       select: { type: true, createdAt: true },
     }),
     db.readingProgress.findMany({
       where: { profileId },
-      select: { updatedAt: true, completed: true },
+      select: { updatedAt: true, completed: true, series: { select: { genresJson: true } } },
     }),
     db.libraryItem.findMany({ where: { profileId }, select: { shelf: true } }),
     db.comment.count({ where: { profileId, status: { in: ["visible", "flagged"] } } }),
     db.rating.count({ where: { profileId } }),
+    db.profile.findUnique({ where: { id: profileId }, select: { createdAt: true } })
+      .then(me => me ? db.profile.count({ where: { createdAt: { lte: me.createdAt } } }) : 0),
   ]);
 
   // ── activity days: events ∪ recent progress touches ─────────────
@@ -119,65 +115,22 @@ export async function getReadingStats(profileId: string): Promise<ReadingStats> 
   const libraryCount = libraryItems.length;
   const finishedShelf = libraryItems.filter((l) => l.shelf === "finished").length;
 
-  // ── badges: deterministic, honest, with progress hints when locked ──
-  const badges: BadgeState[] = [
-    {
-      id: "first-step",
-      labelAr: "الخطوة الأولى",
-      descriptionAr: "ابدأ أول فصل لك على المكتبة",
-      earned: startedChapters >= 1,
-      hintAr: startedChapters === 0 ? "ابدأ أي فصل لتُشعل بدايتك" : undefined,
-    },
-    {
-      id: "streak-3",
-      labelAr: "ثلاثة أيام متتالية",
-      descriptionAr: "اقرأ ثلاثة أيام في صف واحد",
-      earned: longestStreak >= 3,
-      hintAr: longestStreak < 3 ? `${currentStreak}/3 أيام` : undefined,
-    },
-    {
-      id: "streak-7",
-      labelAr: "أسبوع كامل",
-      descriptionAr: "حافظ على قراءتك سبعة أيام متتالية",
-      earned: longestStreak >= 7,
-      hintAr: longestStreak < 7 ? `${currentStreak}/7 أيام` : undefined,
-    },
-    {
-      id: "chapters-10",
-      labelAr: "قارئ مجتهد",
-      descriptionAr: "أكمل عشرة فصول",
-      earned: completedChapters >= 10,
-      hintAr: completedChapters < 10 ? `${completedChapters}/10 فصلًا` : undefined,
-    },
-    {
-      id: "finisher",
-      labelAr: "المُتمِّم",
-      descriptionAr: "أضف عملًا إلى رف «أنهيته»",
-      earned: finishedShelf >= 1,
-      hintAr: finishedShelf === 0 ? "أنهِ عملًا وانقله إلى رف «أنهيته»" : undefined,
-    },
-    {
-      id: "first-rating",
-      labelAr: "الناقد",
-      descriptionAr: "قيّم أول عمل لك",
-      earned: ratingCount >= 1,
-      hintAr: ratingCount === 0 ? "قيّم أي عمل ب نجمة واحدة على الأقل" : undefined,
-    },
-    {
-      id: "first-comment",
-      labelAr: "صوت مجتمع",
-      descriptionAr: "شارك أول تعليق لك",
-      earned: commentCount >= 1,
-      hintAr: commentCount === 0 ? "علّق على أي عمل تحبه" : undefined,
-    },
-    {
-      id: "collector",
-      labelAr: "الجامع",
-      descriptionAr: "اجمع خمسة أعمال في مكتبتك",
-      earned: libraryCount >= 5,
-      hintAr: libraryCount < 5 ? `${libraryCount}/5 أعمال` : undefined,
-    },
-  ];
+  // Distinct genres across works the reader has opened.
+  const genres = new Set<string>();
+  for (const p of progress) {
+    try { for (const g of JSON.parse(p.series.genresJson) as unknown[]) if (typeof g === "string" && g.trim()) genres.add(g.trim()); }
+    catch { /* Malformed legacy genre data counts as none. */ }
+  }
+  // Most chapters finished on one (UTC) day.
+  const completesByDay = new Map<string, number>();
+  for (const e of events) if (e.type === "read_complete") completesByDay.set(dayKey(e.createdAt), (completesByDay.get(dayKey(e.createdAt)) ?? 0) + 1);
+  const bestDay = Math.max(0, ...completesByDay.values());
+
+  // ── badges: deterministic, honest, tiered ──
+  const badges: BadgeState[] = computeBadges({
+    startedChapters, completedChapters, longestStreak, finishedWorks: finishedShelf, libraryCount,
+    ratingCount, commentCount, genresRead: genres.size, bestDay, signupRank,
+  });
 
   return {
     currentStreak,
