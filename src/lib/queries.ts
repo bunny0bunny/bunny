@@ -1,3 +1,4 @@
+import { publicProfileHref } from "@/lib/public-profile-policy";
 import { getChapterTitle } from '@/lib/chapter-title';
 import { normalizeGenre, normalizeGenres } from "@/lib/genres";
 import "server-only";
@@ -786,7 +787,7 @@ export type CommentView = {
   body: string;
   createdAt: Date;
   status: CommentStatus;
-  author: { id: string; nickname: string; avatarSeed: string; role: string; avatarPath: string | null };
+  author: { id: string; nickname: string; avatarSeed: string; role: string; avatarPath: string | null; profileHref?: string | null };
   chapterNumber: number | null;
   likeCount: number;
   likedByMe: boolean;
@@ -811,7 +812,7 @@ export async function getVisibleComments(
     skip: offset,
     take: limit,
     include: {
-      profile: { select: { id: true, nickname: true, avatarSeed: true, role: true, avatarKey: true, disabledAt: true } },
+      profile: { select: { id: true, nickname: true, avatarSeed: true, role: true, avatarKey: true, disabledAt: true, handle: true, profilePublic: true } },
       chapter: { select: { number: true } },
       _count: { select: { likes: true } },
       likes: { select: { profileId: true } },
@@ -822,7 +823,7 @@ export async function getVisibleComments(
     body: c.body,
     createdAt: c.createdAt,
     status: c.status as CommentStatus,
-    author: { id: c.profile.id, nickname: c.profile.nickname, avatarSeed: c.profile.avatarSeed, role: c.profile.role, avatarPath: c.profile.disabledAt ? null : profileAvatarPath(c.profile.id, c.profile.avatarKey) },
+    author: { id: c.profile.id, nickname: c.profile.nickname, avatarSeed: c.profile.avatarSeed, role: c.profile.role, avatarPath: c.profile.disabledAt ? null : profileAvatarPath(c.profile.id, c.profile.avatarKey), profileHref: publicProfileHref(c.profile) },
     chapterNumber: c.chapter?.number ?? null,
     likeCount: c._count.likes,
     likedByMe: viewerProfileId ? c.likes.some((l) => l.profileId === viewerProfileId) : false,

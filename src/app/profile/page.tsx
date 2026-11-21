@@ -18,6 +18,8 @@ import {
 } from "@/lib/queries";
 import { getReadingStats } from "@/lib/reading-stats";
 import { BadgeCard } from "@/components/library/badge-card";
+import { PublicProfileEditor } from "@/components/library/public-profile-editor";
+import { coverClass, isCoverTheme, parseIdList, publicProfileHref, MAX_FEATURED_BADGES, MAX_FEATURED_SERIES } from "@/lib/public-profile-policy";
 import { EVENT_LABELS } from "@/lib/labels";
 import { db } from "@/lib/db";
 import { timeAgoAr as sharedTimeAgo } from "@/lib/time-ago";
@@ -42,13 +44,18 @@ export default async function ProfilePage() {
   const profile = await requireProfile("/profile");
   // Retire the old seeded placeholder without hiding user-written biographies.
   const bio = profile.bio === "حساب تجريبي ضمن النسخة التجريبية من مكتبة باني." ? "" : (profile.bio ?? "");
-  const [stats, activity, genres, readingStats, ownsTeam] = await Promise.all([
+  const [stats, activity, genres, readingStats, ownsTeam, libraryWorks] = await Promise.all([
     getProfileStats(profile.id),
     getProfileActivity(profile.id),
     getFavoriteGenres(profile.id),
     getReadingStats(profile.id),
     db.publicIdentity.count({ where: { ownerProfileId: profile.id, kind: "team" } }).then((n) => n > 0),
+    db.libraryItem.findMany({
+      where: { profileId: profile.id, series: { deletedAt: null } }, orderBy: { updatedAt: "desc" }, take: 60,
+      select: { series: { select: { id: true, titleAr: true, titleOriginal: true, coverPath: true } } },
+    }),
   ]);
+  const publicHref = publicProfileHref(profile);
   let preferredGenres: string[] = [];
   try { const raw = JSON.parse(profile.preferredGenresJson || "[]"); preferredGenres = Array.isArray(raw) ? raw.filter((g): g is string => (GENRES as readonly string[]).includes(g)) : []; } catch { preferredGenres = []; }
 
@@ -66,29 +73,28 @@ export default async function ProfilePage() {
       <main className="flex-1 pb-20 md:pb-0">
         <div className="mx-auto max-w-4xl px-4 py-8 sm:px-6">
           {/* identity */}
-          <header className="flex items-center gap-4">
-            <AccountAvatar
-              seed={profile.avatarSeed}
-              src={profileAvatarPath(profile.id, profile.avatarKey)}
-              name={profile.nickname}
-              className="size-16 text-2xl font-bold border border-border"
-              brandMarkSize="size-10"
-            />
-            <div>
-              <h1 className="text-2xl font-bold">{profile.nickname}</h1>
-              <div className="flex items-center gap-2">
-                <p className="text-xs text-muted-foreground font-mono" dir="ltr">{profile.email}</p>
-                {profile.emailVerifiedAt ? (
-                  <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-2 py-0.5 text-[10px] font-semibold text-emerald-400">
-                    <Check className="size-3" aria-hidden /> مفعّل
-                  </span>
-                ) : (
-                  <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/10 px-2 py-0.5 text-[10px] font-semibold text-amber-400">
-                    بانتظار التأكيد
-                  </span>
-                )}
+          <header className="overflow-hidden rounded-3xl border border-border/60 bg-card">
+            <div className={`relative h-24 sm:h-32 ${coverClass(profile.coverTheme)}`} aria-hidden>
+              <div className="absolute inset-x-0 bottom-0 h-12 bg-gradient-to-t from-card to-transparent" />
+            </div>
+            <div className="-mt-10 flex flex-col gap-3 px-4 pb-4 sm:flex-row sm:items-end sm:justify-between sm:px-5">
+              <div className="flex items-end gap-4">
+                <AccountAvatar
+                  seed={profile.avatarSeed}
+                  src={profileAvatarPath(profile.id, profile.avatarKey)}
+                  name={profile.nickname}
+                  className="size-20 border-4 border-card text-2xl font-bold shadow-lg"
+                  brandMarkSize="size-12"
+                />
+                <div className="min-w-0 pb-1">
+                  <h1 className="text-2xl font-bold">{profile.nickname}</h1>
+                  {profile.handle && <p className="text-xs text-muted-foreground" dir="ltr">@{profile.handle}</p>}
+                  {bio && <p className="mt-1 max-w-md text-sm leading-7 text-foreground/85">{bio}</p>}
+                </div>
               </div>
-              {bio && <p className="mt-1.5 max-w-md text-sm leading-7 text-foreground/85">{bio}</p>}
+              {publicHref
+                ? <Link href={publicHref} className="inline-flex min-h-11 items-center self-start rounded-xl border border-border px-4 text-sm hover:border-primary/50 hover:text-primary sm:self-auto">بروفايلي العام</Link>
+                : <span className="self-start text-xs text-muted-foreground sm:self-auto">بروفايلك خاص</span>}
             </div>
           </header>
 
@@ -183,6 +189,24 @@ export default async function ProfilePage() {
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
               {readingStats.badges.map((b) => <BadgeCard key={b.id} badge={b} />)}
             </div>
+          </section>
+
+          <section id="public-profile" aria-label="البروفايل العام" className="mt-7 scroll-mt-24 rounded-2xl border border-border/60 bg-card p-4 sm:p-5">
+            <h2 className="mb-1 text-sm font-bold">بروفايلك العام</h2>
+            <p className="mb-4 text-xs text-muted-foreground">
+              بريدك <span dir="ltr" className="font-mono">{profile.email}</span>{" "}
+              {profile.emailVerifiedAt ? <span className="text-emerald-400">(مفعّل)</span> : <span className="text-amber-400">(بانتظار التأكيد)</span>} ولا يظهر لأي حد غيرك.
+            </p>
+            <PublicProfileEditor
+              profileId={profile.id}
+              handle={profile.handle}
+              profilePublic={profile.profilePublic}
+              coverTheme={isCoverTheme(profile.coverTheme) ? profile.coverTheme : "dusk"}
+              library={libraryWorks.map((item) => ({ id: item.series.id, title: getWorkTitle(item.series), coverPath: item.series.coverPath }))}
+              featuredSeriesIds={parseIdList(profile.featuredSeriesJson, MAX_FEATURED_SERIES)}
+              earnedBadges={readingStats.badges.filter((b) => b.earned).map((b) => ({ id: b.id, labelAr: b.labelAr }))}
+              featuredBadgeIds={parseIdList(profile.featuredBadgesJson, MAX_FEATURED_BADGES)}
+            />
           </section>
 
           <div className="mt-7 grid gap-6 lg:grid-cols-2">

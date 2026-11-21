@@ -226,7 +226,9 @@ export function CommentsSection({
               <AccountAvatar seed={c.author.avatarSeed} src={c.author.avatarPath} name={c.author.nickname} className="size-9 text-sm" />
               <div className="min-w-0 flex-1">
                 <div className="flex flex-wrap items-center gap-2">
-                  <span className="text-sm font-semibold text-foreground">{c.author.nickname}</span>
+                  {c.author.profileHref
+                    ? <Link href={c.author.profileHref} className="text-sm font-semibold text-foreground hover:text-primary hover:underline">{c.author.nickname}</Link>
+                    : <span className="text-sm font-semibold text-foreground">{c.author.nickname}</span>}
                   {c.author.role !== "reader" && (
                     <span className="flex items-center gap-1 rounded-md bg-gold/15 px-1.5 py-0.5 text-[10px] font-medium text-gold">
                       <ShieldAlert className="size-3" aria-hidden />
