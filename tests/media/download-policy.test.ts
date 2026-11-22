@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test';
 import { createHash } from 'node:crypto';
-import { contentFingerprint, downloadFilename, canDownloadChapter, type DownloadManifestPage } from '../../src/lib/downloads/policy';
+import { contentFingerprint, downloadFilename, canDownloadChapter, hasDownloadablePages, mediaPageAssetId, type DownloadManifestPage } from '../../src/lib/downloads/policy';
 
 const page = (pageIndex = 0): DownloadManifestPage => ({ assetId: `asset${pageIndex}`, objectKey: `media/test/upload1/asset${pageIndex}.webp`, mime: 'image/webp', width: 800, height: 1200, bytes: 100, pageIndex });
 
@@ -68,4 +68,13 @@ test('download filename uses English first, Arabic fallback and preserves decima
 // A terminal line break must not slip through JavaScript's end-of-line anchor.
 test('asset IDs reject trailing line breaks', () => {
   expect(() => contentFingerprint([{ ...page(), assetId: 'asset0\n' }])).toThrow();
+});
+
+test('only chapters made entirely of managed media pages are downloadable', () => {
+  expect(mediaPageAssetId('/api/media/abc123')).toBe('abc123');
+  for (const path of ['/series/solo/1/p01.webp', '/api/media/abc123?x=1', '/api/media/../x', 'https://cdn.example/api/media/abc', '']) expect(mediaPageAssetId(path)).toBeNull();
+  expect(hasDownloadablePages(['/api/media/a1', '/api/media/a2'])).toBe(true);
+  expect(hasDownloadablePages(['/api/media/a1', '/series/solo/1/p02.webp'])).toBe(false);
+  expect(hasDownloadablePages([])).toBe(false);
+  expect(hasDownloadablePages(Array.from({ length: 201 }, (_, i) => `/api/media/a${i}`))).toBe(false);
 });

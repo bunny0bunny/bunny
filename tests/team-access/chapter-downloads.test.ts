@@ -2,10 +2,15 @@ import { afterAll, beforeAll, beforeEach, expect, test, mock } from 'bun:test';
 import { db, setActor } from './session-fixture';
 import { hashRateLimitKey } from '../../src/lib/account-ratelimit';
 const signed: string[] = [];
+let bindingObject: { body: ReadableStream<Uint8Array>; size: number; contentType: string | null } | null | undefined;
 let upstream: () => Response = () => new Response(new Uint8Array([1,2,3]), { headers: { 'content-type': 'image/webp', 'content-length': '3' } });
 let fetchOptions: RequestInit | undefined;
-mock.module('../../src/lib/media/storage', () => ({ getMediaStorage: async () => ({ signGet: async (key: string, options: { expiresIn: number }) => { expect(options.expiresIn).toBe(120); signed.push(key); return 'https://storage.invalid/private'; } }) }));
+mock.module('../../src/lib/media/storage', () => ({ getMediaStorage: async () => ({
+  signGet: async (key: string, options: { expiresIn: number }) => { expect(options.expiresIn).toBe(120); signed.push(key); return 'https://storage.invalid/private'; },
+  ...(bindingObject !== undefined ? { getObject: async (key: string) => { signed.push(`binding:${key}`); return bindingObject; } } : {}),
+}) }));
 const { getChapterDownload, fetchChapterDownloadPage } = await import('../../src/lib/downloads/service');
+const { getDownloadableChapterIds } = await import('../../src/lib/queries');
 const { POST } = await import('../../src/app/api/chapters/[chapterId]/download/route');
 const { GET } = await import('../../src/app/api/chapters/[chapterId]/download/pages/[assetId]/route');
 const tag = `downloads${Date.now()}`;
@@ -25,12 +30,13 @@ beforeAll(async () => {
   await db.chapterPage.create({ data: { chapterId: chapter, pageIndex: 0, imagePath: `/api/media/${asset}`, width: 800, height: 1200 } });
 });
 beforeEach(async () => {
-  setActor(null); signed.length = 0;
+  setActor(null); signed.length = 0; bindingObject = undefined;
   globalThis.fetch = (async (_url: unknown, options: RequestInit) => { fetchOptions = options; return upstream(); }) as typeof fetch;
   upstream = () => new Response(new Uint8Array([1,2,3]), { headers: { 'content-type': 'image/webp', 'content-length': '3' } });
   await db.profile.update({ where: { id: admin }, data: { role: 'admin', disabledAt: null, authVersion: 0 } });
   await db.series.update({ where: { id: series }, data: { downloadsEnabled: true, deletedAt: null, format: 'manga' } });
   await db.chapter.update({ where: { id: chapter }, data: { workflow: 'published', deletedAt: null, scheduledFor: null, isPremiumDemo: false } });
+  await db.chapterPage.deleteMany({ where: { chapterId: chapter, pageIndex: { gt: 0 } } });
   await db.chapterPage.update({ where: { chapterId_pageIndex: { chapterId: chapter, pageIndex: 0 } }, data: { imagePath: `/api/media/${asset}`, width: 800, height: 1200 } });
   await db.mediaAsset.update({ where: { id: asset }, data: { chapterId: chapter, readyAt: new Date(), width: 800, mime: 'image/webp' } });
   await db.accountRateLimit.deleteMany({ where: { keyHash: hashRateLimitKey('client:chapter-download:unidentified') } });
@@ -115,4 +121,38 @@ test('oversized chapters return an actionable page-limit error', async () => {
   const response = await post();
   expect(response.status).toBe(409);
   expect((await response.json()).error).toBe('too_many_pages');
+});
+
+test('chapters with static page paths report legacy_pages and are excluded from downloadable chapters', async () => {
+  expect([...await getDownloadableChapterIds([chapter, foreignChapter])]).toEqual([chapter]);
+  await db.chapterPage.update({ where: { chapterId_pageIndex: { chapterId: chapter, pageIndex: 0 } }, data: { imagePath: '/series/qa/1/p01.webp' } });
+  const response = await post();
+  expect(response.status).toBe(409);
+  expect((await response.json()).error).toBe('legacy_pages');
+  expect((await getDownloadableChapterIds([chapter])).size).toBe(0);
+});
+
+test('browsers without fetch metadata fall back to Origin (manifest) and the custom header (pages)', async () => {
+  const bare = (headers: Record<string, string>) => POST(new Request(`http://localhost/api/chapters/${chapter}/download`, { method: 'POST', headers }), context());
+  expect((await bare({ origin: 'http://localhost' })).status).toBe(200);
+  expect((await bare({})).status).toBe(403);
+  expect((await bare({ origin: 'https://evil.example' })).status).toBe(403);
+  const data = await manifest();
+  const page = (headers: Record<string, string>) => GET(new Request(`http://localhost/api/chapters/${chapter}/download/pages/${asset}?fingerprint=${data.fingerprint}`, { headers }), { params: Promise.resolve({ chapterId: chapter, assetId: asset }) });
+  expect((await page({ 'x-chapter-download': '1' })).status).toBe(200);
+  expect((await page({})).status).toBe(403);
+  expect((await page({ 'x-chapter-download': '1', 'sec-fetch-site': 'same-site' })).status).toBe(403);
+});
+
+test('the R2 binding path streams pages without signing and enforces size and type', async () => {
+  const data = await manifest();
+  const body = () => new ReadableStream<Uint8Array>({ start(controller) { controller.enqueue(new Uint8Array([1, 2, 3])); controller.close(); } });
+  bindingObject = { body: body(), size: 3, contentType: 'image/webp' };
+  const response = await fetchChapterDownloadPage(chapter, asset, data.fingerprint);
+  expect(response.status).toBe(200); expect([...new Uint8Array(await response.arrayBuffer())]).toEqual([1, 2, 3]);
+  expect(signed.every(key => key.startsWith('binding:'))).toBe(true);
+  for (const object of [null, { body: body(), size: 4, contentType: 'image/webp' }, { body: body(), size: 3, contentType: 'application/pdf' }]) {
+    bindingObject = object;
+    expect((await fetchChapterDownloadPage(chapter, asset, data.fingerprint)).status).toBe(503);
+  }
 });

@@ -45,6 +45,19 @@ export function downloadFilename(title: { titleOriginal?: string | null; titleAr
   return `${safeTitle.slice(0, 180 - suffix.length)}${suffix}`;
 }
 
+/** Only pages stored as managed media assets can be exported. */
+export const MEDIA_PAGE_PATH = /^\/api\/media\/([A-Za-z0-9]{1,128})$/;
+export const MAX_DOWNLOAD_PAGES = 200;
+
+export function mediaPageAssetId(imagePath: string): string | null {
+  return MEDIA_PAGE_PATH.exec(imagePath)?.[1] ?? null;
+}
+
+/** True when every page is a managed media asset and the page count is within the export limit. */
+export function hasDownloadablePages(imagePaths: readonly string[]): boolean {
+  return imagePaths.length >= 1 && imagePaths.length <= MAX_DOWNLOAD_PAGES && imagePaths.every(path => mediaPageAssetId(path) !== null);
+}
+
 type DownloadChapter = {
   workflow: string;
   deletedAt: Date | null;

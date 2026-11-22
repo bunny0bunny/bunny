@@ -110,3 +110,16 @@ test("binding cover listing cannot silently truncate its manifest", async () => 
   const storage = createBindingStorage({ put: async () => null, delete: async () => {}, list: async () => ({ objects: [], truncated: true }) }, async () => "signed-url");
   await expect(storage.listObjects!(prefix)).rejects.toThrow("Invalid storage listing");
 });
+
+test("binding reads validate the key and expose size and stored content type", async () => {
+  const body = stream(new Uint8Array([1, 2, 3]));
+  const storage = createBindingStorage({ put: async () => ({}), delete: async () => {},
+    get: async (requested: string) => requested === "media/test/upload1/page1.webp" ? { body, size: 3, httpMetadata: { contentType: "image/webp" } } : null,
+  }, async () => "signed-url", () => new TransformStream<Uint8Array,Uint8Array>());
+  const object = await storage.getObject!("media/test/upload1/page1.webp");
+  expect(object?.size).toBe(3); expect(object?.contentType).toBe("image/webp");
+  expect(await storage.getObject!("media/test/upload1/missing.webp")).toBeNull();
+  await expect(storage.getObject!("media/test/../page1.webp")).rejects.toThrow();
+  const withoutGet = createBindingStorage({ put: async () => ({}), delete: async () => {} }, async () => "signed-url", () => new TransformStream<Uint8Array,Uint8Array>());
+  expect(withoutGet.getObject).toBeUndefined();
+});

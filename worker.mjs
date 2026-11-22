@@ -12,7 +12,12 @@ const worker = {
     return await serveRouteChunk(request, env, routeChunkAliases) ?? nextWorker.fetch(request, env, ctx);
   },
   async scheduled(_controller, env) {
+    const jobs = ['scheduled-publication', 'media-maintenance', 'publication-delivery'];
     const results = await Promise.allSettled([runScheduledPublication(env), runMediaMaintenance(env), runPublicationDelivery(env)]);
+    results.forEach((result, index) => {
+      if (result.status === 'rejected') console.error(JSON.stringify({ level: 'error', scope: 'cron', job: jobs[index],
+        errorName: result.reason?.name, errorMessage: String(result.reason?.message ?? result.reason).slice(0, 300) }));
+    });
     for (const result of results) if (result.status === 'rejected') throw result.reason;
   },
 };

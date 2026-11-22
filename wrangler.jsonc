@@ -39,7 +39,8 @@
     }
   ],
   "observability": {
-    "enabled": false
+    "enabled": true,
+    "head_sampling_rate": 1
   },
   "account_id": "bb0d8a6aac4da656fc72c011819cafb7"
 }

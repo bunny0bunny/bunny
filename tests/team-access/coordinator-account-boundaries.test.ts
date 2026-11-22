@@ -17,7 +17,8 @@ const changedPassword = "Changed-password-2026!";
 async function mailedToken(to: string, route: string) {
   const root = process.env.ACCOUNT_MAIL_LOCAL_DIR!;
   const files = await readdir(root);
-  for (const filename of files.reverse()) {
+  // readdir order is filesystem-specific; names start with a timestamp, so sort newest first.
+  for (const filename of files.sort().reverse()) {
     if (!filename.endsWith(".json")) continue;
     const message = JSON.parse(await readFile(path.join(root, filename), "utf8"));
     if (message.to !== to || !message.text.includes(route)) continue;
@@ -157,11 +158,11 @@ test("profile updates reject arbitrary avatars and password changes require the 
   const profile = await db.profile.findUniqueOrThrow({ where: { email: address } });
   setActor(profile.id);
   expect((await libraryActions.updateProfile({ nickname: "قارئ", bio: "", avatarSeed: "https://external.example/avatar" })).ok).toBe(false);
-  expect((await libraryActions.updateProfile({ nickname: "قارئ", bio: "نبذة", avatarSeed: "bunny" })).ok).toBe(true);
+  expect((await libraryActions.updateProfile({ nickname: "قارئ", bio: "نبذة", avatarSeed: "scholar" })).ok).toBe(true);
   expect((await accounts.changeAccountPassword({ currentPassword: changedPassword, password: changedPassword })).ok).toBe(false);
   expect((await accounts.changeAccountPassword({ currentPassword: originalPassword, password: changedPassword })).ok).toBe(true);
   const changed = await db.profile.findUniqueOrThrow({ where: { id: profile.id } });
-  expect(changed.avatarSeed).toBe("bunny");
+  expect(changed.avatarSeed).toBe("scholar");
   expect(changed.authVersion).toBe(1);
   expect(await currentProfileOrNull()).toBeNull();
 });

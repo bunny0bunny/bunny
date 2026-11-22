@@ -1,3 +1,4 @@
+import { publicProfileHref } from "@/lib/public-profile-policy";
 import { getChapterTitle } from '@/lib/chapter-title';
 import { normalizeGenre, normalizeGenres } from "@/lib/genres";
 import "server-only";
@@ -328,6 +329,20 @@ export async function getSeriesBySlug(slug: string) {
     publishedChapters: live.map(mapChapter),
     scheduledChapters: scheduled.map(mapChapter),
   };
+}
+
+/**
+ * Chapter IDs whose pages can be exported as PDF (every page is a managed media asset).
+ * Static or migrated pages (for example /series/...) are excluded, so the UI hides the button.
+ */
+export async function getDownloadableChapterIds(chapterIds: string[]): Promise<Set<string>> {
+  if (!chapterIds.length) return new Set();
+  const [all, legacy] = await Promise.all([
+    db.chapterPage.groupBy({ by: ["chapterId"], where: { chapterId: { in: chapterIds } }, _count: { _all: true } }),
+    db.chapterPage.groupBy({ by: ["chapterId"], where: { chapterId: { in: chapterIds }, NOT: { imagePath: { startsWith: "/api/media/" } } }, _count: { _all: true } }),
+  ]);
+  const blocked = new Set(legacy.map(row => row.chapterId));
+  return new Set(all.filter(row => row._count._all >= 1 && row._count._all <= 200 && !blocked.has(row.chapterId)).map(row => row.chapterId));
 }
 
 export async function getRelatedSeries(seriesId: string, genres: string[], limit = 6) {
@@ -772,7 +787,7 @@ export type CommentView = {
   body: string;
   createdAt: Date;
   status: CommentStatus;
-  author: { id: string; nickname: string; avatarSeed: string; role: string; avatarPath: string | null };
+  author: { id: string; nickname: string; avatarSeed: string; role: string; avatarPath: string | null; profileHref?: string | null };
   chapterNumber: number | null;
   likeCount: number;
   likedByMe: boolean;
@@ -797,7 +812,7 @@ export async function getVisibleComments(
     skip: offset,
     take: limit,
     include: {
-      profile: { select: { id: true, nickname: true, avatarSeed: true, role: true, avatarKey: true, disabledAt: true } },
+      profile: { select: { id: true, nickname: true, avatarSeed: true, role: true, avatarKey: true, disabledAt: true, handle: true, profilePublic: true } },
       chapter: { select: { number: true } },
       _count: { select: { likes: true } },
       likes: { select: { profileId: true } },
@@ -808,7 +823,7 @@ export async function getVisibleComments(
     body: c.body,
     createdAt: c.createdAt,
     status: c.status as CommentStatus,
-    author: { id: c.profile.id, nickname: c.profile.nickname, avatarSeed: c.profile.avatarSeed, role: c.profile.role, avatarPath: c.profile.disabledAt ? null : profileAvatarPath(c.profile.id, c.profile.avatarKey) },
+    author: { id: c.profile.id, nickname: c.profile.nickname, avatarSeed: c.profile.avatarSeed, role: c.profile.role, avatarPath: c.profile.disabledAt ? null : profileAvatarPath(c.profile.id, c.profile.avatarKey), profileHref: publicProfileHref(c.profile) },
     chapterNumber: c.chapter?.number ?? null,
     likeCount: c._count.likes,
     likedByMe: viewerProfileId ? c.likes.some((l) => l.profileId === viewerProfileId) : false,

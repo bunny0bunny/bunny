@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { markAllNotificationsRead, markNotificationRead } from "@/lib/actions";
 import type { NotificationView } from "@/lib/notifications";
+import { timeAgoAr as sharedTimeAgo } from "@/lib/time-ago";
 
 /**
  * Header notification bell (Release E). Polls the bell feed on mount, on a
@@ -34,15 +35,7 @@ const TYPE_META: Record<string, { icon: typeof Bell; classes: string }> = {
 };
 
 function timeAgoClient(iso: string): string {
-  const diff = Date.now() - new Date(iso).getTime();
-  const mins = Math.floor(diff / 60000);
-  if (mins < 1) return "الآن";
-  if (mins < 60) return `قبل ${mins} دقيقة`;
-  const hours = Math.floor(mins / 60);
-  if (hours < 24) return `قبل ${hours} ساعة`;
-  const days = Math.floor(hours / 24);
-  if (days < 30) return `قبل ${days} يوم`;
-  return "قديم";
+  return sharedTimeAgo(iso);
 }
 
 export function NotificationBell() {

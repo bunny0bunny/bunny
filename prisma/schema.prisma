@@ -135,6 +135,12 @@ model Profile {
   authVersion           Int                @default(0)
   onboardingCompletedAt DateTime?
   preferredGenresJson   String             @default("[]")
+  /// Public profile (/u/<handle or id>). Lowercase latin handle; null until chosen.
+  handle                String?            @unique
+  profilePublic         Boolean            @default(true)
+  coverTheme            String             @default("dusk")
+  featuredSeriesJson    String             @default("[]")
+  featuredBadgesJson    String             @default("[]")
   createdAt             DateTime           @default(now())
   updatedAt             DateTime           @updatedAt
   readingProgress       ReadingProgress[]

@@ -3,7 +3,7 @@ mock.module("server-only", () => ({}));
 mock.module("../../src/lib/editorial", () => ({ withSerializableTx: () => { throw Error("unused"); }, checkStaffSeriesAccess: () => false }));
 const now = new Date("2026-10-10");
 function fixture() { return { id: "upload1", chapterId: "chapter1", state: "failed", expectedPages: 1, expiresAt: new Date("2026-10-08"), sourceSha256: "a".repeat(64), processingProfile: "balanced-v1" }; }
-function assetFixture() { return { id: "asset1", uploadId: "upload1", chapterId: "chapter1", pageIndex: 0, objectKey: "media/test/upload1/asset1.webp", mime: "image/webp", createdAt: new Date("2026-10-08") }; }
+function assetFixture() { return { id: "asset1", uploadId: "upload1", chapterId: "chapter1", pageIndex: 0, objectKey: "media/test/upload1/asset1.webp", mime: "image/webp", createdAt: new Date("2026-10-08"), chapter: { deletedAt: null as Date | null, series: { deletedAt: null as Date | null } } }; }
 let upload = fixture(), asset = assetFixture();
 let currentRef = false, historicRef = false, coverRef = false, lockFails = false, storageFails = false, records = 1, detached = 0;
 let storagePending: Promise<void> | undefined;

@@ -9,12 +9,16 @@ export interface MediaStorage {
   putSource(key: string, body: ReadableStream<Uint8Array>, expectedBytes: number, expectedSha256?: string): Promise<{ bytes: number }>;
   signGet(key: string, options?: SignGetOptions): Promise<string>;
   deleteObject(key: string): Promise<void>;
+  /** Direct read, available only on the Workers R2 binding; returns null when the object is missing. */
+  getObject?(key: string): Promise<StoredObject | null>;
   listObjects?(prefix: string, cursor?: string): Promise<{ keys: string[]; cursor?: string }>;
 }
+export type StoredObject = { body: ReadableStream<Uint8Array>; size: number; contentType: string | null };
 type HttpMetadata = { contentType: string; cacheControl: string; contentDisposition?: string };
 export interface MediaBinding {
   put(key: string, value: Uint8Array | ReadableStream<Uint8Array>, options: { onlyIf: { etagDoesNotMatch: string }; httpMetadata: HttpMetadata }): Promise<unknown | null>;
   delete(key: string): Promise<void>;
+  get?(key: string): Promise<{ body: ReadableStream<Uint8Array>; size: number; httpMetadata?: { contentType?: string } } | null>;
   list?(options: { prefix: string; cursor?: string; limit: number }): Promise<{ objects: { key: string }[]; truncated: boolean; cursor?: string }>;
 }
 type BytePipe = { readable: ReadableStream<Uint8Array>; writable: WritableStream<Uint8Array> };
@@ -113,6 +117,11 @@ export function createBindingStorage(binding: MediaBinding, signGet: MediaStorag
     },
     async signGet(key, options) { validateMediaKey(key); return signGet(key, options); },
     async deleteObject(key) { validateMediaKey(key); await binding.delete(key); },
+    ...(binding.get ? { async getObject(key: string) {
+      validateMediaKey(key);
+      const object = await binding.get!(key);
+      return object ? { body: object.body, size: object.size, contentType: object.httpMetadata?.contentType ?? null } : null;
+    } } : {}),
     async listObjects(prefix, cursor) {
       validateManagedPrefix(prefix);
       if (!binding.list) throw new Error("Storage listing unavailable");

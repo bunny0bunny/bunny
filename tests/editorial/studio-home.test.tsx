@@ -36,7 +36,7 @@ test("contributors land on the work that needs them, newest first, with a new-ch
   const chapterLinks = hrefs(tree).filter((h) => h.startsWith("/studio/chapters/"));
   expect([...new Set(chapterLinks)]).toEqual(["/studio/chapters/c3", "/studio/chapters/c2"]);
   expect(hrefs(tree)).toContain("/admin/chapters/new?series=s1");
-  expect(text(tree)).toContain("آخر تعديل منذ 5 دقيقة");
+  expect(text(tree)).toContain("آخر تعديل منذ 5 دقائق");
 });
 
 test("the mine filter and the empty state for people with no works", async () => {

@@ -5,6 +5,7 @@ import { Clock, LockKeyhole } from "lucide-react";
 import type { Category, Format } from "@/lib/constants";
 import { getCategoryLabel } from "@/components/library/series-card";
 import { readerHref } from "@/lib/reader-route";
+import { timeAgoAr as sharedTimeAgo } from "@/lib/time-ago";
 
 export type GroupedSeriesUpdate = {
   series: {
@@ -27,15 +28,7 @@ export type GroupedSeriesUpdate = {
 };
 
 function timeAgoAr(date: Date) {
-  const diff = Date.now() - new Date(date).getTime();
-  const mins = Math.floor(diff / 60000);
-  if (mins < 60) return `منذ ${Math.max(mins, 1)} دقيقة`;
-  const hours = Math.floor(mins / 60);
-  if (hours < 24) return `منذ ${hours} ساعة`;
-  const days = Math.floor(hours / 24);
-  if (days < 30) return `منذ ${days} يوم`;
-  const months = Math.floor(days / 30);
-  return `منذ ${months} شهر`;
+  return sharedTimeAgo(date, { prefix: "منذ" });
 }
 
 export function HomeLatestUpdates({
